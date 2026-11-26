@@ -38,6 +38,7 @@ workspace "Macaw"
 
 filter "configurations:*Debug"
     symbols "On"
+    debugformat "c7"
     runtime "Debug"
     defines { "_DEBUG" }
 
@@ -140,6 +141,8 @@ for _, Name in ipairs(ModuleNames) do
     if Name == "Engine" then
         includedirs { "vcpkg_installed/x64-windows/include/luajit" }
         defines { "SOL_ALL_SAFETIES_ON=1" }
+        -- sol2 바인딩은 템플릿 인스턴스가 많아 기본 COFF 섹션 한도(65,279)를 넘습니다.
+        buildoptions { "/bigobj" }
     end
 end
 
@@ -172,8 +175,8 @@ Configure("NativeIDE", "StaticLib")
     links(Modules.NativeIDE.Private)
 
 Configure("Shaders", "Utility")
-    files { "Templates/Project/Content/Shaders/**.hlsl", "Templates/Project/Content/Shaders/**.hlsli" }
-    vpaths { ["*"] = "Templates/Project/Content/Shaders" }
+    files { "Engine/Shaders/**.hlsl", "Engine/Shaders/**.hlsli" }
+    vpaths { ["*"] = "Engine/Shaders" }
     filter "files:**"
         buildaction "None"
     filter {}
@@ -204,7 +207,7 @@ ConfigureRuntimeExecutable("MacawGame", "WindowedApp", "Source/Game")
     targetdir "Binaries/%{cfg.buildcfg}/GameRuntime"
     files { "Source/App/**.rc", "Macaw.ico" }
     resincludedirs { "." }
-    postbuildcommands { '{COPYDIR} "%{wks.location}/Templates/Project/Content" "%{cfg.targetdir}/Templates/Project/Content"' }
+    postbuildcommands { 'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}/Scripts/StageRuntimeContent.ps1" -RuntimeDirectory "%{cfg.targetdir}" -WorkspaceRoot "%{wks.location}."' }
     postbuildcommands { 'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}/Scripts/StageGameRuntime.ps1" -RuntimeDirectory "%{cfg.targetdir}" -RedistDirectory "$(VCToolsRedistInstallDir)." -Configuration "%{cfg.buildcfg}"' }
 
 ConfigureRuntimeExecutable("Macaw", "WindowedApp", "Source/App")
@@ -220,5 +223,5 @@ ConfigureRuntimeExecutable("Macaw", "WindowedApp", "Source/App")
     dependson { "MacawGame" }
     files { "Source/App/**.rc", "Resources/Editor.rc", "Macaw.ico" }
     resincludedirs { "." }
-    postbuildcommands { 'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}/Scripts/StageProjectTemplates.ps1" -RuntimeDirectory "%{cfg.targetdir}" -WorkspaceRoot "%{wks.location}."' }
+    postbuildcommands { 'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}/Scripts/StageRuntimeContent.ps1" -RuntimeDirectory "%{cfg.targetdir}" -WorkspaceRoot "%{wks.location}." -IncludeTemplates' }
     postbuildcommands { 'powershell -NoProfile -ExecutionPolicy Bypass -File "%{wks.location}/Scripts/StageLanguageServers.ps1" -RuntimeDirectory "%{cfg.targetdir}" -WorkspaceRoot "%{wks.location}."' }

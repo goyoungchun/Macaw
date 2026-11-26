@@ -37,8 +37,15 @@ namespace Renderer {
         FVector4 mUVTransform{1.0f, 1.0f, 0.0f, 0.0f};
     };
 
+    struct FMeshInstanceData {
+    public:
+        Renderer::FObjectConstants mObject{};
+        FVector4 mParticleColor{1.0f, 1.0f, 1.0f, 1.0f};
+    };
+
     static_assert(sizeof(FMatrix) == 64 && alignof(FMatrix) == 16 && std::is_trivially_copyable_v<FMatrix>);
     static_assert(std::is_standard_layout_v<Renderer::FObjectConstants> && sizeof(Renderer::FObjectConstants) == 144);
     static_assert(offsetof(Renderer::FObjectConstants, mWorld) == 0 && offsetof(Renderer::FObjectConstants, mWorldInverse) == 64);
+    static_assert(std::is_standard_layout_v<Renderer::FMeshInstanceData> && offsetof(Renderer::FMeshInstanceData, mObject) == 0);
 
 }

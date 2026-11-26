@@ -6,7 +6,7 @@
 #pragma once
 #include "Core/Common.h"
 #include "Math/FMath.h"
-#include <array>
+#include "Core/Types.h"
 #include <bit>
 #include <cmath>
 #include <limits>
@@ -52,8 +52,8 @@ namespace BVH8 {
      */
     template <class TNode>
     double EstimateWideBuildCost(const TArray<TNode>& Nodes) {
-        const auto Evaluate = [&](auto&& Self, Uint32 Index) -> std::array<double, 9> {
-            std::array<double, 9> Cost;
+        const auto Evaluate = [&](auto&& Self, Uint32 Index) -> Core::TStaticArray<double, 9> {
+            Core::TStaticArray<double, 9> Cost;
 
             Cost.fill(std::numeric_limits<double>::infinity());
 

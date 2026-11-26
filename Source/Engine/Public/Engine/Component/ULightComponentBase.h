@@ -117,13 +117,13 @@ namespace Engine {
         /**
          * @brief 광원의 밝기 배율입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetIntensity, Setter = SetIntensity)
+        UPROPERTY(Edit, Serialize, Category = "Light", Getter = GetIntensity, Setter = SetIntensity)
         float mIntensity{1.0f};
 
         /**
          * @brief 광원의 RGBA 색상입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetLightColor, Setter = SetLightColor)
+        UPROPERTY(Edit, Serialize, Category = "Light", Getter = GetLightColor, Setter = SetLightColor)
         FVector4 mLightColor{1.0f, 1.0f, 1.0f, 1.0f};
 
         /**

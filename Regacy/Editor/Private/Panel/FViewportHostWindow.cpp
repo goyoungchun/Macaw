@@ -6,6 +6,7 @@
 #include "Editor/Input/FMouseInput.h"
 #include "Editor/View/FEditorViewport.h"
 #include "Editor/View/EditorViewport.h"
+#include "Core/Types.h"
 
 FViewportHostWindow::FViewportHostWindow(ID3D11Device* Device, FWorldEditorContext& EditorContext)
 	: FEditorWindow{"Viewports###SplitSceneViewport", ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse},
@@ -68,7 +69,7 @@ void FViewportHostWindow::ApplyLayoutSettings() {
 
     mLayout.SetPreset(Preset);
 
-    const std::array<float, FViewportPresetLayout::MaximumSplitterCount> Ratios{Settings.mViewportSplitterRatio0, Settings.mViewportSplitterRatio1, Settings.mViewportSplitterRatio2};
+    const Core::TStaticArray<float, FViewportPresetLayout::MaximumSplitterCount> Ratios{Settings.mViewportSplitterRatio0, Settings.mViewportSplitterRatio1, Settings.mViewportSplitterRatio2};
 
     mLayout.RestoreSplitterRatios(Ratios, Settings.mViewportSplitterCount);
 
@@ -78,7 +79,7 @@ void FViewportHostWindow::ApplyLayoutSettings() {
 void FViewportHostWindow::CaptureLayoutSettings() const {
     FEditorSettings& Settings{FEditorConfigManager::Get().GetSettings()};
 
-    std::array<float, FViewportPresetLayout::MaximumSplitterCount> Ratios{0.5f, 0.5f, 0.5f};
+    Core::TStaticArray<float, FViewportPresetLayout::MaximumSplitterCount> Ratios{0.5f, 0.5f, 0.5f};
 
     Uint32 RatioCount{0};
 

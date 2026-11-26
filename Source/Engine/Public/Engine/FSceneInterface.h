@@ -17,6 +17,8 @@ namespace Engine {
     struct FPrimitiveSceneProxy;
     struct FLightSceneProxy;
     struct FHeightFogSceneProxy;
+    struct FSkyAtmosphereSceneProxy;
+    struct FSkyDomeSceneProxy;
     struct FDecalSceneProxy;
 
     /**
@@ -56,6 +58,12 @@ namespace Engine {
          * @param[in] Id 제거할 안개 컴포넌트의 GUID입니다.
          */
         virtual void RemoveHeightFog(const Core::FGuid& Id);
+
+        virtual void AddSkyAtmosphere(const Engine::FSkyAtmosphereSceneProxy& Proxy);
+        virtual void RemoveSkyAtmosphere(const Core::FGuid& Id);
+
+        virtual void AddSkyDome(const Engine::FSkyDomeSceneProxy& Proxy);
+        virtual void RemoveSkyDome(const Core::FGuid& Id);
 
         /**
          * @brief GUID가 같은 데칼 프록시를 갱신하거나 새로 등록합니다.

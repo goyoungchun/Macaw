@@ -5,6 +5,7 @@
 
 #pragma once
 #include "Core/Memory/TEngineAllocator.h"
+#include "Core/Types.h"
 
 // 1. C/C++ 표준 수학 라이브러리
 #include <cmath>
@@ -19,7 +20,6 @@
 #include <map>
 #include <set>
 #include <functional>
-#include <array>
 #include <algorithm>
 #include <optional>
 
@@ -64,4 +64,4 @@ using TSet = std::unordered_set<T, std::hash<T>, std::equal_to<T>, TEngineAlloca
  * @tparam N 컴파일 시 결정되는 원소 개수입니다.
  */
 template <typename T, std::size_t N>
-using TFixedArray = std::array<T, N>;
+using TFixedArray = Core::TStaticArray<T, N>;

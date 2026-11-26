@@ -67,7 +67,7 @@ namespace Engine {
      */
     void Engine::ALevelSequenceActor::Tick(float DeltaTime) {
         Engine::AActor::Tick(DeltaTime);
-        mPlayer.Advance(DeltaTime);
+        mPlayer.Advance(Core::FTime::FromBase(DeltaTime));
     }
 
     /**

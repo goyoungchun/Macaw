@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Core/Types.h"
+#include "FMessageBox.h"
 #include <filesystem>
 #include <functional>
 
@@ -35,7 +36,7 @@ namespace Editor {
          * @param[in] ViewportLayout 뷰포트 분할과 입력을 관리하는 서비스입니다.
          * @param[in] Platform 창·입력·파일 대화상자를 제공하는 플랫폼 애플리케이션입니다.
          */
-        FEditorCommands(Editor::FEditorContext* Context, Editor::FPlayInEditorSession* PlaySession, Editor::FEditorViewportLayout& ViewportLayout, Platform::FWindowsApplication* Platform);
+        FEditorCommands(Editor::FEditorContext* Context, Editor::FPlayInEditorSession* PlaySession, Editor::FEditorViewportLayout& ViewportLayout, Platform::FWindowsApplication* Platform, Editor::FMessageBox& Messages);
 
         /**
          * @brief 객체를 소멸하고 소유 멤버와 연결 상태를 정리합니다.
@@ -50,10 +51,10 @@ namespace Editor {
         void SetContentChanged(std::function<void()> Handler);
 
         /**
-         * @brief 열린 에셋 편집기를 닫을 수 있는지 확인할 콜백을 지정합니다.
-         * @param[in] Handler 열린 에셋 편집기를 닫을 수 있으면 true를 반환할 콜백입니다.
+         * @brief 열린 에셋 편집기의 저장 확인 항목을 수집할 콜백을 지정합니다.
+         * @param[in] Handler 저장 확인 항목을 수집할 콜백입니다.
          */
-        void SetCanCloseAssets(std::function<bool()> Handler);
+        void SetCollectAssetSavePrompts(std::function<Core::TArray<Editor::FMessageBox::FSavePrompt>()> Handler);
 
         /**
          * @brief 에디터 종료가 요청되었는지 검사합니다.
@@ -89,6 +90,8 @@ namespace Editor {
          * @brief 변경 처리 확인 뒤 파일을 선택해 레벨을 엽니다.
          */
         void OpenLevel();
+        void OpenLevel(const std::filesystem::path& Path);
+        void NewLevel();
 
         /**
          * @brief PIE 실행을 요청합니다.
@@ -101,12 +104,6 @@ namespace Editor {
         void ExportGame();
 
         /**
-         * @brief 레벨 전환 전에 저장하지 않은 변경의 처리 여부를 확인합니다.
-         * @return 레벨을 전환해도 되면 true입니다.
-         */
-        bool ConfirmSceneChange();
-
-        /**
          * @brief 프로젝트 생성 또는 열기 선택을 처리합니다.
          * @param[in] Create 새 프로젝트 생성 여부입니다.
          */
@@ -117,6 +114,15 @@ namespace Editor {
          * @note 결과는 프로젝트의 Saved/ProjectThumbnail.png에 원자적으로 기록하며 성공 여부를 로그에 남깁니다.
          */
         void CaptureProjectThumbnail();
+
+    private:
+        /**
+         * @brief 레벨 전환 전에 저장하지 않은 변경의 처리 여부를 확인합니다.
+         * @param[in] Action 변경 확인이 끝나면 실행할 작업입니다.
+         */
+        void ConfirmSceneChange(std::function<void()> Action);
+
+        void ExportGameTo(const std::filesystem::path& Destination);
 
     private:
         /**
@@ -139,6 +145,8 @@ namespace Editor {
          */
         Platform::FWindowsApplication* mPlatform{};
 
+        Editor::FMessageBox& mMessages;
+
         /**
          * @brief 변경 확인을 마친 에디터 종료 요청 여부입니다.
          */
@@ -150,9 +158,9 @@ namespace Editor {
         std::function<void()> mContentChanged{};
 
         /**
-         * @brief 열린 에셋 편집기를 닫아도 되는지 확인하는 콜백입니다.
+         * @brief 열린 에셋 편집기의 저장 확인 항목을 수집하는 콜백입니다.
          */
-        std::function<bool()> mCanCloseAssets{};
+        std::function<Core::TArray<Editor::FMessageBox::FSavePrompt>()> mCollectAssetSavePrompts{};
     };
 
 }

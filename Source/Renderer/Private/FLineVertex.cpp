@@ -15,7 +15,7 @@ namespace Renderer {
     Renderer::FLineVertex::FLineVertex(const Engine::FDrawLine& Line)
 		: mStartAndWidth{Line.mStart, Line.mThickness},
 		  mEnd{Line.mEnd, 0.0f},
-		  mColor{Line.mColor, 1.0f} {
+		  mColor{Line.mColor, Line.mOpacity} {
     }
 
 }

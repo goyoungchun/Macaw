@@ -205,6 +205,8 @@ namespace RenderCore {
          */
         static RenderCore::UShader* FindBuiltin(const Core::FString& SourcePath);
 
+        static void ReleaseBuiltins();
+
     private:
         /**
          * @brief 셰이더 관리자가 컴파일 결과를 교체하도록 접근을 허용합니다.
@@ -239,25 +241,25 @@ namespace RenderCore {
         /**
          * @brief HLSL 원본 파일의 경로이며, 에셋 저장 시 Content 상대 경로로 정규화합니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "Source", Getter = GetSourcePath, Setter = SetSourcePath)
-        Core::FString mSourcePath{"Shaders/Lit.hlsl"};
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "Source", Getter = GetSourcePath, Setter = SetSourcePath)
+        Core::FString mSourcePath{"/Engine/Shaders/Lit.hlsl"};
 
         /**
          * @brief 원본 HLSL에서 사용할 진입 함수 이름입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "EntryPoint", Getter = GetEntryPoint, Setter = SetEntryPoint)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "EntryPoint", Getter = GetEntryPoint, Setter = SetEntryPoint)
         Core::FString mEntryPoint{"PixelMain"};
 
         /**
          * @brief 조명 계산을 생략하는 렌더링 정책입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "Unlit", Getter = IsUnlit, Setter = SetUnlit)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "Unlit", Getter = IsUnlit, Setter = SetUnlit)
         bool mUnlit{};
 
         /**
          * @brief 불투명 렌더링에서 GBuffer 출력을 지원하는지 나타냅니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "WritesGBuffer", Getter = WritesGBuffer, Setter = SetWritesGBuffer)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "WritesGBuffer", Getter = WritesGBuffer, Setter = SetWritesGBuffer)
         bool mWritesGBuffer{};
 
         /**

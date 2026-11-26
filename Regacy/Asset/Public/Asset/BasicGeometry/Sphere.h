@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Core/CoreMinimal.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <numbers>
 #include <cmath>
 
@@ -16,10 +16,10 @@ namespace BasicGeometry {
         constexpr Uint32 IndexCount{Rings * Segments * 6};
 
         struct FSphereGeometry {
-            std::array<FVector3, VertexCount> mPositions{};
-            std::array<FVector3, VertexCount> mNormals{};
-            std::array<FVector2D, VertexCount> mTexCoords{};
-            std::array<Uint32, IndexCount> mIndices{};
+            Core::TStaticArray<FVector3, VertexCount> mPositions{};
+            Core::TStaticArray<FVector3, VertexCount> mNormals{};
+            Core::TStaticArray<FVector2D, VertexCount> mTexCoords{};
+            Core::TStaticArray<Uint32, IndexCount> mIndices{};
         };
 
         FSphereGeometry GenerateSphere();

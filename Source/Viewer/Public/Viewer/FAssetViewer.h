@@ -17,6 +17,7 @@
 
 namespace Asset {
     class FAssetManager;
+    class UTexture2D;
 }
 
 namespace RenderCore {
@@ -89,7 +90,7 @@ namespace Viewer {
         /**
          * @brief 현재 콘텐츠와 렌더 타깃을 해제합니다.
          */
-        void Close();
+        void Close(bool ReleaseTarget = true);
 
         /**
          * @brief 현재 에셋의 형식별 콘텐츠를 조회합니다.
@@ -139,14 +140,14 @@ namespace Viewer {
          * @param BackgroundOverlay 배경 깊이와 함께 표시할 외부 소유 오버레이이며 없으면 nullptr입니다.
          * @return 현재 콘텐츠의 표시 결과를 준비했으면 true입니다.
          */
-        bool Render(const Engine::FPrimitiveDrawInterface* EditorElements = nullptr, const Engine::FPrimitiveDrawInterface* BackgroundOverlay = nullptr);
+        bool Render(const Engine::FPrimitiveDrawInterface* EditorElements = nullptr, const Engine::FPrimitiveDrawInterface* BackgroundOverlay = nullptr, bool CheckerboardBackground = false);
 
         /**
          * @brief 현재 콘텐츠를 렌더링한 뒤 독립된 최종 컬러 이미지를 만듭니다.
          * @param Error 실패 원인을 기록할 출력 문자열입니다.
          * @return 호출자가 소유하는 캡처이며 실패하면 nullptr이고 Error에 원인을 기록합니다.
          */
-        std::unique_ptr<Viewer::FViewerCapture> Capture(Core::FString& Error);
+        std::unique_ptr<Viewer::FViewerCapture> Capture(Core::FString& Error, bool CheckerboardBackground = false);
 
         /**
          * @brief 궤도 카메라의 상태와 조작 인터페이스를 제공합니다.
@@ -247,6 +248,17 @@ namespace Viewer {
          * @brief 배경 격자의 월드 단위 간격이며 0은 표시하지 않습니다.
          */
         float mGridSpacing{};
+
+        /**
+         * @brief sRGB 텍스처를 UI에 저장된 색 그대로 보이도록 디코딩·인코딩을 거쳐 복사한 표시용 이미지입니다.
+         * @details sRGB 텍스처의 셰이더 리소스 뷰는 샘플링할 때 선형으로 디코딩하므로, 그대로 UI에 그리면 어둡게 보입니다.
+         */
+        mutable std::unique_ptr<Asset::UTexture2D> mDisplayTexture{};
+
+        /**
+         * @brief 표시용 이미지를 만든 원본 텍스처의 비소유 주소입니다. 원본이 바뀌면 다시 만듭니다.
+         */
+        mutable const Asset::UTexture2D* mDisplaySource{};
 
         /**
          * @brief 2D 이미지 Fit에 적용할 여백 배율입니다.

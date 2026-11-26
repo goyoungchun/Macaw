@@ -7,7 +7,6 @@
 #include "Engine/AAmbientLightActor.h"
 #include "Engine/Component/UAmbientLightComponent.h"
 #include "CoreUObject/Reflection/NewObject.h"
-#include "CoreUObject/Reflection/Cast.h"
 
 namespace Engine {
 
@@ -39,7 +38,7 @@ namespace Engine {
      * @brief 액터의 기본 광원 컴포넌트를 조회합니다.
      */
     Engine::UAmbientLightComponent* Engine::AAmbientLightActor::GetLightComponent() const {
-        return CoreUObject::Cast<Engine::UAmbientLightComponent>(GetRootComponent());
+        return static_cast<Engine::UAmbientLightComponent*>(FindDefaultComponent(Engine::UAmbientLightComponent::StaticClass(), Core::FName{"AmbientLightComponent"}));
     }
 
 }

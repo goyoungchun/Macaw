@@ -5,6 +5,7 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "FAnimGraphEditor.h"
 #include "FAnimGraphNodeBuilder.h"
 #include "Asset/Animation/UAnimGraph.h"
@@ -14,10 +15,11 @@
 #include <imgui_node_editor.h>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <format>
 #include <utility>
+
+using namespace Core::Literals;
 
 namespace Editor {
 
@@ -63,7 +65,7 @@ namespace Editor {
          * @return 입력 문자열이 변경되었으면 true입니다.
          */
         bool EditString(const char* Label, Core::FString& Value) {
-            std::array<char, 256> Buffer{};
+            Core::TStaticArray<char, 256> Buffer{};
             std::copy_n(Value.begin(), std::min(Value.size(), Buffer.size() - 1), Buffer.begin());
 
             if (ImGui::InputText(Label, Buffer.data(), Buffer.size())) {
@@ -349,8 +351,8 @@ namespace Editor {
         }
 
         ed::EndDelete();
-        std::array<ed::NodeId, 1> SelectedNodes{};
-        std::array<ed::LinkId, 1> SelectedLinks{};
+        Core::TStaticArray<ed::NodeId, 1> SelectedNodes{};
+        Core::TStaticArray<ed::LinkId, 1> SelectedLinks{};
 
         if (ed::GetSelectedNodes(SelectedNodes.data(), 1) == 1) {
             mSelectedNode = StateNodeId(SelectedNodes[0].Get());
@@ -502,7 +504,13 @@ namespace Editor {
             const auto* From{Machine->FindState(Transition->mFromState)};
             const auto* To{Machine->FindState(Transition->mToState)};
             ImGui::Text("%s -> %s", From != nullptr ? From->mName.c_str() : "?", To != nullptr ? To->mName.c_str() : "?");
-            mDirty |= ImGui::DragFloat("Blend Duration", &Transition->mDuration, 0.01f, 0.0f, 10.0f, "%.3f s", ImGuiSliderFlags_AlwaysClamp);
+            float Duration{Transition->mDuration.GetBase()};
+
+            if (ImGui::DragFloat("Blend Duration", &Duration, (0.01_s).GetBase(), (0_s).GetBase(), (10_s).GetBase(), "%.3f s", ImGuiSliderFlags_AlwaysClamp)) {
+                Transition->mDuration = Core::FTime::FromBase(Duration);
+                mDirty = true;
+            }
+
             mDirty |= ImGui::InputInt("Priority", &Transition->mPriority);
             ImGui::TextDisabled("Lower priority values are checked first");
         }
@@ -637,7 +645,7 @@ namespace Editor {
         }
 
         ed::EndDelete();
-        std::array<ed::NodeId, 1> Selected{};
+        Core::TStaticArray<ed::NodeId, 1> Selected{};
         mSelectedNode = ed::GetSelectedNodes(Selected.data(), 1) == 1 ? StateNodeId(Selected[0].Get()) : -2;
         const ImVec2 Mouse{ImGui::GetMousePos()};
         ed::NodeId ContextNode{};

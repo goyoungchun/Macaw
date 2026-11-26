@@ -13,7 +13,6 @@
 #include "Core/FilePath.h"
 
 #include <algorithm>
-#include <array>
 #include <d3d11.h>
 #include <limits>
 #include <utility>
@@ -139,7 +138,7 @@ namespace Asset {
         for (const Asset::FMeshMaterialSlot& Slot : MeshData.GetMaterialSlots()) {
             const std::filesystem::path Path{Core::FilePath::FromUtf8(Slot.GetMaterialPath())};
 
-            if (Slot.GetMaterialPath().find('\0') != Core::FString::npos || (!Path.empty() && (Path.has_root_path() || Path.extension() != L".masset"))) {
+            if (Slot.GetMaterialPath().find('\0') != Core::FString::npos || (!Path.empty() && (Core::FilePath::GetContentMount(Path) == Core::FilePath::EContentMount::Invalid || Path.extension() != L".masset"))) {
                 return false;
             }
 
@@ -262,7 +261,7 @@ namespace Asset {
      * @brief 원본 파일 확장자에 등록된 임포터 팩토리를 찾습니다.
      */
     Asset::IMeshImporter::FImporterFactory Asset::IMeshImporter::FindFactory(const std::filesystem::path& Source) {
-        static constexpr std::array<FImporterEntry, 4> Importers{FImporterEntry{L".obj", &CreateAssimp}, FImporterEntry{L".fbx", &CreateFBX}, FImporterEntry{L".gltf", &CreateAssimp}, FImporterEntry{L".glb", &CreateAssimp}};
+        static constexpr Core::TStaticArray<FImporterEntry, 4> Importers{FImporterEntry{L".obj", &CreateAssimp}, FImporterEntry{L".fbx", &CreateFBX}, FImporterEntry{L".gltf", &CreateAssimp}, FImporterEntry{L".glb", &CreateAssimp}};
         const std::wstring Extension{Core::FilePath::ToLowerExtension(Source)};
 
         for (const FImporterEntry& Entry : Importers) {

@@ -7,6 +7,7 @@
 #pragma once
 
 #include "CoreUObject/TObjectRef.h"
+#include "Core/Literals/AngleFunctions.h"
 
 #include "Core/Guid.h"
 #include "Core/ReflectionMacros.h"
@@ -69,7 +70,7 @@ namespace Engine {
         /**
          * @brief 점광원·스포트라이트의 영향 반경입니다.
          */
-        float mAttenuationRadius{10.0f};
+        Core::FLength mAttenuationRadius{mDefaultAttenuationRadius};
 
         /**
          * @brief 거리에 따른 광원 감쇠 지수입니다.
@@ -79,12 +80,12 @@ namespace Engine {
         /**
          * @brief 스포트라이트 내부 원뿔의 반각(도)입니다.
          */
-        float mInnerConeAngle{20.0f};
+        Core::FAngle mInnerConeAngle{mDefaultInnerConeAngle};
 
         /**
          * @brief 스포트라이트 외부 원뿔의 반각(도)입니다.
          */
-        float mOuterConeAngle{35.0f};
+        Core::FAngle mOuterConeAngle{mDefaultOuterConeAngle};
 
         /**
          * @brief 광원의 표시 여부입니다.
@@ -129,12 +130,12 @@ namespace Engine {
         /**
          * @brief PCSS 반그림자 계산에 쓰는 점광원·스포트라이트 광원의 반지름(m)입니다.
          */
-        float mShadowSourceRadius{0.1f};
+        Core::FLength mShadowSourceRadius{mDefaultShadowSourceRadius};
 
         /**
          * @brief PCSS 반그림자 계산에 쓰는 방향광 광원의 각반지름(도)입니다.
          */
-        float mShadowSourceAngle{1.0f};
+        Core::FAngle mShadowSourceAngle{mDefaultShadowSourceAngle};
 
         /**
          * @brief 방향광 그림자의 캐스케이드 개수입니다.
@@ -144,12 +145,22 @@ namespace Engine {
         /**
          * @brief 방향광 그림자의 최대 표시 거리입니다.
          */
-        float mShadowDistance{100.0f};
+        Core::FLength mShadowDistance{mDefaultShadowDistance};
 
         /**
          * @brief 각 캐스케이드 구간에서 전환에 사용하는 비율입니다.
          */
         float mCascadeTransitionFraction{0.25f};
+
+        bool mAtmosphereSunLight{};
+
+    private:
+        static const Core::FLength mDefaultAttenuationRadius;
+        static const Core::FAngle mDefaultInnerConeAngle;
+        static const Core::FAngle mDefaultOuterConeAngle;
+        static const Core::FLength mDefaultShadowSourceRadius;
+        static const Core::FAngle mDefaultShadowSourceAngle;
+        static const Core::FLength mDefaultShadowDistance;
     };
 
 }

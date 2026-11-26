@@ -11,6 +11,8 @@
 
 #include "Core/ReflectionMacros.h"
 #include "CoreUObject/UObject.h"
+#include "Core/Math/FVector.h"
+#include "Engine/Tick/FTickFunction.h"
 #include "AActor.generated.h"
 
 struct FTransform;
@@ -64,11 +66,18 @@ namespace Engine {
         Engine::UWorld* GetWorld() const;
 
         /**
+         * @brief 액터의 직접 외부 객체가 레벨이면 해당 레벨을 반환합니다.
+         * @return 레벨의 비소유 주소이며, 레벨 밖의 액터는 nullptr입니다.
+         */
+        Engine::ULevel* GetLevel() const;
+
+        /**
          * @brief 컴포넌트의 소유권을 액터로 옮기고 필요하면 월드에 등록합니다.
          * @param[in] Component 액터가 소유권을 넘겨받을 컴포넌트입니다.
          * @return 조건을 만족하거나 작업이 성공하면 true, 그렇지 않으면 false입니다.
          */
         bool AddComponent(std::unique_ptr<Engine::UActorComponent> Component);
+        bool RemoveComponent(Engine::UActorComponent* Component);
 
         /**
          * @brief 액터가 소유한 컴포넌트 목록을 반환합니다.
@@ -91,6 +100,9 @@ namespace Engine {
          */
         bool SetRootComponent(Engine::USceneComponent* Component);
 
+        bool CanPromoteRootComponent(const Engine::USceneComponent* Component) const;
+        bool PromoteRootComponent(Engine::USceneComponent* Component);
+
         /**
          * @brief 루트 공간 컴포넌트에 액터의 변환을 적용합니다.
          * @param[in] Transform 적용할 위치, 회전과 스케일입니다.
@@ -103,6 +115,31 @@ namespace Engine {
          * @return 루트 컴포넌트의 변환이며, 루트가 없으면 기본 변환입니다.
          */
         FTransform GetActorTransform() const;
+
+        /**
+         * @brief 루트 컴포넌트의 월드 위치를 반환합니다.
+         * @return 루트가 없으면 원점입니다.
+         */
+        FVector GetActorLocation() const;
+
+        /**
+         * @brief 액터를 지정한 월드 위치로 옮기고, 요청하면 이동 경로를 쓸어 막히는 지점에서 멈춥니다.
+         * @param[in] NewLocation 루트 컴포넌트의 새 월드 위치입니다.
+         * @param[in] Sweep true이면 루트 컴포넌트의 바디로 이동 경로를 쓸어 막히는 지점에서 멈춥니다.
+         * @param[out] OutSweepHitResult 막힌 지점의 정보를 받을 주소이며, nullptr이면 받지 않습니다.
+         * @return 루트가 있고 이동을 적용했으면 true입니다. 막혀서 덜 움직였어도 true입니다.
+         */
+        bool SetActorLocation(const FVector& NewLocation, bool Sweep = false, Engine::FHitResult* OutSweepHitResult = nullptr);
+
+        /**
+         * @brief 액터를 월드 변위만큼 옮기고, 요청하면 이동 경로를 쓸어 막히는 지점에서 멈춥니다.
+         * @param[in] DeltaLocation 이동할 월드 변위(m)입니다.
+         * @param[in] Sweep true이면 루트 컴포넌트의 바디로 이동 경로를 쓸어 막히는 지점에서 멈춥니다.
+         * @param[out] OutSweepHitResult 막힌 지점의 정보를 받을 주소이며, nullptr이면 받지 않습니다.
+         * @return 루트가 있고 이동을 적용했으면 true입니다. 막혀서 덜 움직였어도 true입니다.
+         * @note 언리얼처럼 루트 컴포넌트의 바디만 쓸고, 나머지 컴포넌트는 함께 옮기기만 합니다.
+         */
+        bool AddActorWorldOffset(const FVector& DeltaLocation, bool Sweep = false, Engine::FHitResult* OutSweepHitResult = nullptr);
 
         /**
          * @brief 월드에서 이 액터를 제거합니다. 실행 전달 중이면 안전한 시점까지 미룹니다.
@@ -123,8 +160,8 @@ namespace Engine {
         virtual void BeginPlay();
 
         /**
-         * @brief 액터의 실행 또는 허용된 편집 갱신 시 호출되는 확장 지점입니다.
-         * @param[in] DeltaTime 이번 갱신이 진행하는 초 단위 시간입니다.
+         * @brief 기본 액터 Tick 함수가 실행 차례에 호출하는 갱신 확장 지점입니다.
+         * @param[in] DeltaTime 호출에 전달된 초 단위 시간 간격입니다.
          */
         virtual void Tick(float DeltaTime);
 
@@ -164,6 +201,26 @@ namespace Engine {
          */
         void SetEditorTickable(bool EditorTickable);
 
+        /** @brief 이 액터의 Tick()을 호출하는 기본 Tick 함수의 참조를 반환합니다. */
+        Engine::FActorTickFunction& GetPrimaryActorTick();
+
+        /** @brief 액터의 기본 Tick에 설정된 그룹을 반환합니다. */
+        Engine::ETickingGroup GetTickGroup() const;
+
+        /**
+         * @brief 액터의 기본 Tick에 설정할 그룹을 지정합니다.
+         * @param[in] Group 액터의 기본 Tick이 시작할 수 있는 가장 이른 그룹입니다.
+         * @return 지정할 수 있는 그룹이면 true입니다.
+         */
+        bool SetTickGroup(Engine::ETickingGroup Group);
+
+        /**
+         * @brief 이 액터의 기본 Tick을 소속 레벨에 등록하거나 등록을 해제합니다.
+         * @param[in] Register 등록할 때 true이고 해제할 때 false입니다.
+         * @details 별도의 Tick 함수를 소유하는 파생 클래스는 이 함수를 재정의해 함께 등록하고 해제할 수 있습니다.
+         */
+        virtual void RegisterActorTickFunctions(bool Register);
+
         /**
          * @brief 액터의 표시 여부를 반환합니다.
          * @return 액터와 소유 컴포넌트를 표시하도록 설정했으면 true입니다.
@@ -177,10 +234,14 @@ namespace Engine {
          */
         void SetVisible(bool Visible);
 
+    protected:
+        Engine::UActorComponent* FindDefaultComponent(const CoreUObject::UClass* Class, const Core::FName& Name) const;
+
     private:
         /**
          * @brief 객체가 소속된 월드 연결을 지정합니다.
          * @param[in] World 연결할 월드이며, nullptr이면 연결을 해제합니다.
+         * @details 기존 월드에서 액터와 컴포넌트의 Tick 등록을 해제하고 새 월드에 연결된 뒤 다시 등록합니다.
          */
         void SetWorld(Engine::UWorld* World);
 
@@ -200,13 +261,6 @@ namespace Engine {
         void DispatchBeginPlay();
 
         /**
-         * @brief 액터와 각 컴포넌트의 실행 상태 및 편집 Tick 설정에 따라 갱신을 전달합니다.
-         * @param[in] DeltaTime 이번 갱신의 초 단위 시간입니다.
-         * @param[in] EditorTick BeginPlay 없이 편집 Tick 설정을 검사할지 지정합니다.
-         */
-        void DispatchTick(float DeltaTime, bool EditorTick);
-
-        /**
          * @brief 시작된 액터의 종료 콜백과 컴포넌트 역순 종료를 전달합니다.
          */
         void DispatchEndPlay();
@@ -216,6 +270,7 @@ namespace Engine {
          * @return 현재 소유 컴포넌트의 전역 핸들 목록입니다.
          */
         Core::TArray<CoreUObject::TObjectRef<Engine::UActorComponent>> GetComponentRefs() const;
+        void UpdateRootMovementComponents();
 
     private:
         /**
@@ -258,8 +313,12 @@ namespace Engine {
         /**
          * @brief 정지한 편집 월드에서도 이 객체의 Tick을 허용하는 설정입니다.
          */
-        UPROPERTY(Edit, Serialize)
+        UPROPERTY(Edit, Serialize, Category = "Actor Tick")
         bool mEditorTickable{};
+
+        /** @brief 액터의 Tick()을 호출하는 기본 함수이며, 설정 그룹을 편집 및 직렬화에 노출합니다. */
+        UPROPERTY(Edit, Serialize, Category = "Actor Tick", Name = "TickGroup", Getter = GetTickGroup, Setter = SetTickGroup)
+        Engine::FActorTickFunction mPrimaryActorTick{*this};
 
         /**
          * @brief 액터와 소유 컴포넌트의 표시 여부이며 아웃라이너에서 변경합니다.

@@ -6,8 +6,8 @@
 
 #pragma once
 
-#include "Engine/Component/UActorComponent.h"
-#include "Core/Math/FVector.h"
+#include "Engine/Component/UMovementComponent.h"
+#include "Core/Literals/QuantityTypes.h"
 #include "UProjectileMovementComponent.generated.h"
 
 namespace Engine {
@@ -16,7 +16,7 @@ namespace Engine {
      * @brief Game과 PIE 월드에서 초기 속도·중력·최대 속도에 따라 소유 액터를 이동하는 발사체 컴포넌트입니다.
      */
     UCLASS()
-    class UProjectileMovementComponent final : public Engine::UActorComponent {
+    class UProjectileMovementComponent final : public Engine::UMovementComponent {
         GENERATED_BODY()
 
     public:
@@ -51,6 +51,7 @@ namespace Engine {
          * @brief 현재 속도를 0으로 만들고 다음 속도 설정 또는 실행 시작까지 이동을 정지합니다.
          */
         void StopMovement();
+        void StopMovementImmediately() override;
 
         /**
          * @brief 실행 시작에 사용할 초기 속도 설정을 반환합니다.
@@ -66,30 +67,24 @@ namespace Engine {
         bool SetInitialVelocity(const FVector& Velocity);
 
         /**
-         * @brief 현재 월드 공간 발사체 속도를 조회합니다.
-         * @return 컴포넌트가 보관하는 월드 단위/초 속도의 읽기 전용 참조입니다.
-         */
-        const FVector& GetVelocity() const;
-
-        /**
          * @brief 현재 월드 속도를 설정하고 최대 속도로 제한한 뒤 정지 상태를 해제합니다.
          * @param[in] Velocity 유한한 월드 단위/초 속도 벡터입니다.
          * @return 모든 성분이 유한하면 true이며 그렇지 않으면 false입니다.
          */
-        bool SetVelocity(const FVector& Velocity);
+        bool SetVelocity(const FVector& Velocity) override;
 
         /**
          * @brief 속도 크기의 상한을 반환합니다.
          * @return 월드 단위/초의 최대 속도이며 0이면 상한이 없습니다.
          */
-        float GetMaxSpeed() const;
+        Core::FSpeed GetMaxSpeed() const;
 
         /**
          * @brief 0 이상의 유한한 최대 속도를 저장하고 필요한 경우 현재 속도를 제한합니다.
          * @param[in] Speed 0 이상의 유한한 최대 속도이며 0이면 제한을 해제합니다.
          * @return 유효한 값을 적용하면 true이며 음수 또는 비유한 값이면 false입니다.
          */
-        bool SetMaxSpeed(float Speed);
+        bool SetMaxSpeed(Core::FSpeed Speed);
 
         /**
          * @brief -Z 방향 기본 중력 9.81에 곱할 배율을 반환합니다.
@@ -105,7 +100,7 @@ namespace Engine {
         bool SetGravityScale(float Scale);
 
         /**
-         * @brief 초기 속도를 루트의 로컬 회전으로 변환하는지 조회합니다.
+         * @brief 초기 속도를 이동 대상의 로컬 회전으로 변환하는지 조회합니다.
          * @return 초기 속도를 로컬 공간으로 해석하면 true입니다.
          */
         bool GetInitialVelocityInLocalSpace() const;
@@ -118,53 +113,77 @@ namespace Engine {
         bool SetInitialVelocityInLocalSpace(bool LocalSpace);
 
         /**
-         * @brief 루트의 전방을 현재 속도 방향에 맞추는지 조회합니다.
-         * @return 속도 방향으로 루트를 회전시키면 true입니다.
+         * @brief 이동 대상의 전방을 현재 속도 방향에 맞추는지 조회합니다.
          */
         bool GetRotationFollowsVelocity() const;
 
         /**
-         * @brief 이동 후 속도가 충분히 클 때 루트 회전이 속도 방향을 따르도록 설정합니다.
-         * @param[in] FollowsVelocity 속도 방향으로 루트를 회전시킬지 나타냅니다.
+         * @brief 이동 후 속도가 충분히 클 때 이동 대상의 회전이 속도 방향을 따르도록 설정합니다.
+         * @param[in] FollowsVelocity 속도 방향으로 이동 대상을 회전시킬지 나타냅니다.
          * @return 설정을 반영하면 항상 true입니다.
          */
         bool SetRotationFollowsVelocity(bool FollowsVelocity);
+
+        /** @brief 차단 형상의 스윕을 서브스텝마다 수행할지 설정합니다. */
+        bool GetSweepCollision() const;
+        void SetSweepCollision(bool SweepCollision);
+
+        /** @brief 스윕 중 차단 충돌을 반동으로 처리할지 설정합니다. */
+        bool GetShouldBounce() const;
+        void SetShouldBounce(bool ShouldBounce);
+
+        /** @brief 충돌면에 수직인 속도 성분에 적용하는 0~1 반발 계수입니다. */
+        float GetBounciness() const;
+        bool SetBounciness(float Bounciness);
+
+    private:
+        FVector LimitVelocity(const FVector& Velocity) const;
+        FVector ComputeVelocity(const FVector& Velocity, Core::FTime StepTime) const;
+        static FVector ComputeMoveDelta(const FVector& Velocity, const FVector& NextVelocity, Core::FTime StepTime);
+        FQuat ComputeMoveRotation(const FQuat& Rotation, const FVector& Velocity) const;
+        bool SimulateSweptStep(Core::FTime StepTime);
+        bool HandleImpact(const Engine::FHitResult& Hit, const FVector& ImpactVelocity);
+        void StopSimulating();
 
     private:
         /**
          * @brief 게임 실행 시작 시 적용할 초기 속도이며 월드 단위/초입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetInitialVelocity, Setter = SetInitialVelocity)
-        FVector mInitialVelocity{10.0f, 0.0f, 5.0f};
+        UPROPERTY(Edit, Serialize, Category = "Movement", Getter = GetInitialVelocity, Setter = SetInitialVelocity)
+        FVector mInitialVelocity{};
 
         /**
          * @brief 발사체 속도 크기의 상한이며 0이면 제한하지 않습니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetMaxSpeed, Setter = SetMaxSpeed)
-        float mMaxSpeed{100.0f};
+        UPROPERTY(Edit, Serialize, Category = "Movement", Getter = GetMaxSpeed, Setter = SetMaxSpeed)
+        Core::FSpeed mMaxSpeed{};
 
         /**
          * @brief 월드 -Z 방향의 기본 중력 9.81에 곱할 0~100 배율입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetGravityScale, Setter = SetGravityScale)
+        UPROPERTY(Edit, Serialize, Category = "Movement", Getter = GetGravityScale, Setter = SetGravityScale)
         float mGravityScale{1.0f};
 
         /**
-         * @brief 실행 시작 시 초기 속도를 소유 액터의 루트 회전으로 월드 공간에 변환할지 나타냅니다.
+         * @brief 실행 시작 시 초기 속도를 이동 대상의 회전으로 월드 공간에 변환할지 나타냅니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetInitialVelocityInLocalSpace, Setter = SetInitialVelocityInLocalSpace)
+        UPROPERTY(Edit, Serialize, Category = "Movement", Getter = GetInitialVelocityInLocalSpace, Setter = SetInitialVelocityInLocalSpace)
         bool mInitialVelocityInLocalSpace{true};
 
         /**
-         * @brief 속도가 충분히 클 때 루트의 전방을 현재 속도 방향에 맞출지 나타냅니다.
+         * @brief 속도가 충분히 클 때 이동 대상의 전방을 현재 속도 방향에 맞출지 나타냅니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetRotationFollowsVelocity, Setter = SetRotationFollowsVelocity)
+        UPROPERTY(Edit, Serialize, Category = "Movement", Getter = GetRotationFollowsVelocity, Setter = SetRotationFollowsVelocity)
         bool mRotationFollowsVelocity{true};
 
-        /**
-         * @brief 현재 월드 공간 속도이며 실행 시작·중력·속도 제한에 따라 갱신됩니다.
-         */
-        FVector mVelocity{};
+        UPROPERTY(Edit, Serialize, Getter = GetSweepCollision, Setter = SetSweepCollision)
+        bool mSweepCollision{};
+
+        UPROPERTY(Edit, Serialize, Getter = GetShouldBounce, Setter = SetShouldBounce)
+        bool mShouldBounce{};
+
+        UPROPERTY(Edit, Serialize, Getter = GetBounciness, Setter = SetBounciness)
+        float mBounciness{0.6f};
 
         /**
          * @brief 정지 요청 또는 EndPlay 이후 이동 적분을 생략할지 나타냅니다.

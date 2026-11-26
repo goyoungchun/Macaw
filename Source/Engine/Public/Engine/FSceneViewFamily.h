@@ -68,6 +68,8 @@ namespace Engine {
          * @brief true이면 장면 하늘 대신 에셋 뷰어용 미리 보기 파노라마로 하늘을 그립니다.
          */
         bool mPreviewSky{};
+
+        bool mCheckerboardBackground{};
     };
 
 }

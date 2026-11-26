@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "Core/Literals/QuantityTypes.h"
+
 #include "Core/Types.h"
 #include "Core/ReflectionMacros.h"
 #include "Core/Math/FVector.h"
@@ -136,6 +138,7 @@ public:
      * @return 연산을 적용한 새 값입니다.
      */
     static FMatrix Perspective(float FieldOfView, float Aspect, float NearPlane, float FarPlane);
+    static FMatrix Perspective(Core::FAngle FieldOfView, float Aspect, Core::FLength NearPlane, Core::FLength FarPlane);
 
     /**
      * @brief 지정한 가로·세로 범위와 깊이 구간의 정사영 행렬을 만듭니다.
@@ -146,6 +149,7 @@ public:
      * @return 계산하거나 조회한 값입니다.
      */
     static FMatrix Orthographic(float Width, float Height, float NearPlane, float FarPlane);
+    static FMatrix Orthographic(Core::FLength Width, Core::FLength Height, Core::FLength NearPlane, Core::FLength FarPlane);
 
     /**
      * @brief 대응 성분을 더한 값을 반환합니다.

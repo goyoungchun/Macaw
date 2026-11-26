@@ -11,6 +11,7 @@
 #include "Render/FSceneRenderOutput.h"
 #include "Render/FOverlayTextRenderer.h"
 #include "RenderCore/FOverlayRenderData.h"
+#include "Core/Types.h"
 
 class FOverLayRenderer {
 private:
@@ -18,8 +19,8 @@ private:
         FMeshDrawBatch mBatch{};
         const FMeshRenderResource* mMesh{nullptr};
         const FPipelineRenderResource* mPipeline{nullptr};
-        std::array<ID3D11ShaderResourceView*, MaxMaterialTextureFields> mTextures{};
-        std::array<Uint32, 4> mVertexStrides{};
+        Core::TStaticArray<ID3D11ShaderResourceView*, MaxMaterialTextureFields> mTextures{};
+        Core::TStaticArray<Uint32, 4> mVertexStrides{};
         ERenderMode mMode{ERenderMode::Lit};
     };
 

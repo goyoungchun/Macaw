@@ -5,9 +5,9 @@
  */
 
 #include "Asset/Import/FMeshImportMaterial.h"
+#include "Core/Types.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <utility>
 
@@ -133,7 +133,7 @@ namespace Asset {
      * @brief 조명 색상·세기·정반사 지수를 검증하고 임포트한 조명 텍스처 참조와 함께 저장합니다.
      */
     bool Asset::FMeshImportMaterial::SetLighting(const FVector4& SpecularColor, float SpecularStrength, float Shininess, const FVector4& AmbientColor, const FVector4& EmissiveColor, const FVector4& ReflectionColor, float ReflectionStrength, Asset::FMeshImportTexture SpecularTexture, Asset::FMeshImportTexture EmissiveTexture, Asset::FMeshImportTexture ReflectionTexture) {
-        const std::array<FVector4, 4> Colors{SpecularColor, AmbientColor, EmissiveColor, ReflectionColor};
+        const Core::TStaticArray<FVector4, 4> Colors{SpecularColor, AmbientColor, EmissiveColor, ReflectionColor};
 
         if (!std::all_of(Colors.begin(), Colors.end(), [](const FVector4& Color) {
             return Color.IsFinite() && Color.x >= 0.0f && Color.y >= 0.0f && Color.z >= 0.0f && Color.w >= 0.0f && Color.w <= 1.0f;

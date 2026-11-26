@@ -76,7 +76,7 @@ namespace Editor {
          * @param[in] DeltaTime 이전 프레임 이후 경과한 시간(초)입니다.
          * @return 다음 프레임을 계속 실행할 수 있으면 true입니다.
          */
-        bool TickFrame(float DeltaTime);
+        bool TickFrame(Core::FTime DeltaTime);
 
         /**
          * @brief UI와 뷰포트가 공유하는 편집 컨텍스트를 반환합니다.

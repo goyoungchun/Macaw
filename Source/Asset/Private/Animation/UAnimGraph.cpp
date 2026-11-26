@@ -446,7 +446,7 @@ namespace Asset {
         }
     }
 
-    void UAnimGraph::SerializeStateMachines(Core::FArchive& Archive) {
+    void UAnimGraph::SerializeStateMachines(Core::FArchive& Archive, Uint32 Depth) {
         if (Archive.HasError()) {
             return;
         }
@@ -464,8 +464,6 @@ namespace Asset {
                 return;
             }
         }
-
-        static thread_local Uint32 Depth{};
 
         if (Depth >= 16) {
             Archive.SetError("Animation state machine nesting limit exceeded");
@@ -493,8 +491,6 @@ namespace Asset {
             std::sort(Ids.begin(), Ids.end());
         }
 
-        ++Depth;
-
         for (Index_t Index{}; Index < Count && !Archive.HasError(); ++Index) {
             if (!Archive.BeginObject(std::to_string(Index))) {
                 break;
@@ -507,13 +503,12 @@ namespace Asset {
             if (Node == nullptr || Node->mType != "StateMachine" || (Archive.IsLoading() && mStateMachines.contains(Id))) {
                 Archive.SetError("Invalid or duplicate state machine node");
             } else {
-                mStateMachines[Id].Serialize(Archive);
+                mStateMachines[Id].Serialize(Archive, Depth + 1);
             }
 
             Archive.EndObject();
         }
 
-        --Depth;
         Archive.EndArray();
 
         if (!Archive.HasError()) {
@@ -571,6 +566,10 @@ namespace Asset {
     }
 
     void UAnimGraph::Serialize(Core::FArchive& Archive) {
+        SerializeGraph(Archive, 0);
+    }
+
+    void UAnimGraph::SerializeGraph(Core::FArchive& Archive, Uint32 Depth) {
         Uint32 Version{AnimGraphFormatVersion};
 
         Archive.Serialize("FormatVersion", Version);
@@ -735,7 +734,7 @@ namespace Asset {
 
         Archive.EndArray();
 
-        SerializeStateMachines(Archive);
+        SerializeStateMachines(Archive, Depth);
 
         if (!Archive.IsLoading() || Archive.HasError()) {
             return;

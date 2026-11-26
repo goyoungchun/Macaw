@@ -71,6 +71,27 @@ namespace Core {
     using FEnergy = Core::TQuantity<Core::Dim::Energy, float>;
 
     /**
+     * @brief 토크(N·m)입니다.
+     * @details 엔진에서 회전각과 곱하면 에너지가 됩니다.
+     */
+    using FTorque = Core::TQuantity<Core::Dim::Torque, float>;
+
+    /**
+     * @brief 회전 관성(kg·m²)입니다.
+     */
+    using FMomentOfInertia = Core::TQuantity<Core::Dim::MomentOfInertia, float>;
+
+    /**
+     * @brief 스프링 강성(N/m)입니다.
+     */
+    using FSpringStiffness = Core::TQuantity<Core::Dim::SpringStiffness, float>;
+
+    /**
+     * @brief 선형 감쇠 계수(N·s/m)입니다.
+     */
+    using FLinearDampingCoefficient = Core::TQuantity<Core::Dim::LinearDampingCoefficient, float>;
+
+    /**
      * @brief 일률(W)입니다.
      */
     using FPower = Core::TQuantity<Core::Dim::Power, float>;
@@ -84,6 +105,9 @@ namespace Core {
      * @brief 각가속도(rad/s²)입니다.
      */
     using FAngularAcceleration = Core::TQuantity<Core::Dim::AngularAcceleration, float>;
+
+    using FDensity = Core::TQuantity<Core::Dim::Mass - Core::Dim::Volume, float>;
+    using FInverseLength = Core::TQuantity<Core::Dim::None - Core::Dim::Length, float>;
 
     static_assert(sizeof(Core::FLength) == sizeof(float) && std::is_trivially_copyable_v<Core::FLength>);
 

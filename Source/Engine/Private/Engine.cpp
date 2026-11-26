@@ -12,6 +12,7 @@
 #include "Engine/EngineStats.h"
 #include "Engine/ULevel.h"
 #include "Engine/FProject.h"
+#include "Asset/FAssetManager.h"
 #include "Engine/FSceneInterface.h"
 #include "Engine/UWorld.h"
 #include "Engine/FWorldContext.h"
@@ -25,7 +26,6 @@
 #include "CoreUObject/FObjectRegistry.h"
 #include "CoreUObject/Reflection/Cast.h"
 
-#include <atomic>
 #include <cmath>
 #include <utility>
 
@@ -38,7 +38,7 @@ namespace Engine {
         /**
          * @brief 프로세스 내 엔진 및 월드 슬롯 재사용을 구분하는 다음 세대입니다.
          */
-        std::atomic<Uint64> NextWorldGeneration{1};
+        Uint64 NextWorldGeneration{1};
 
         DEFINE_LOG_CATEGORY_STATIC(LogEngine, Log, All);
     }
@@ -87,6 +87,12 @@ namespace Engine {
         MACAW_LOG(LogEngine, Log, "Engine reflection types registered.");
 
         if (!mPhysicsRuntime.Initialize()) {
+            return false;
+        }
+
+        if (!mClothingSystem.StartupModule()) {
+            mPhysicsRuntime.Shutdown();
+
             return false;
         }
 
@@ -166,6 +172,13 @@ namespace Engine {
         }
 
         mWorldContexts.clear();
+
+        // 프로젝트의 에셋 관리자는 엔진보다 오래 남으므로 런타임을 해제하기 전에 연결을 끊습니다.
+        if (Asset::FAssetManager* Assets{mProject != nullptr ? mProject->GetAssets() : nullptr}) {
+            Assets->SetPhysicsRuntime(nullptr);
+        }
+
+        mClothingSystem.ShutdownModule();
         mPhysicsRuntime.Shutdown();
 
         mUpdating = false;
@@ -176,8 +189,8 @@ namespace Engine {
     /**
      * @brief 등록된 월드의 핸들 스냅샷을 순회하여 실행을 갱신합니다.
      */
-    void Engine::UEngine::Tick(float DeltaTime, bool TickEditorWorlds) {
-        if (!mInitialized || IsDispatching() || !std::isfinite(DeltaTime) || DeltaTime < 0.0f) {
+    void Engine::UEngine::Tick(Core::FTime DeltaTime, bool TickEditorWorlds) {
+        if (!mInitialized || IsDispatching() || !DeltaTime.IsFinite() || DeltaTime < Core::FTime{}) {
             return;
         }
 
@@ -272,7 +285,17 @@ namespace Engine {
             return {};
         }
 
-        Context->GetWorld()->SetAssets(mProject != nullptr ? mProject->GetAssets() : nullptr);
+        Asset::FAssetManager* Assets{mProject != nullptr ? mProject->GetAssets() : nullptr};
+
+        // 메시를 임포트할 때 볼록 충돌 형상을 계산하도록 에셋 관리자에도 런타임을 연결합니다.
+        if (Assets != nullptr) {
+            Assets->SetPhysicsRuntime(&mPhysicsRuntime);
+        }
+
+        // 에셋을 연결하면 스켈레탈 메시가 메시를 해석하며 천을 만들므로 천 시스템을 먼저 연결합니다.
+        Context->GetWorld()->SetClothingSystem(&mClothingSystem);
+        Context->GetWorld()->SetAssets(Assets);
+        Context->GetWorld()->SetPhysicsRuntime(&mPhysicsRuntime);
 
         if (mRenderer != nullptr && !Context->GetWorld()->AttachScene(mRenderer->AllocateScene())) {
             return {};
@@ -284,7 +307,7 @@ namespace Engine {
             ++Index;
         }
 
-        const Uint64 Generation{NextWorldGeneration.fetch_add(1, std::memory_order_relaxed)};
+        const Uint64 Generation{NextWorldGeneration++};
         const Engine::FWorldHandle Handle{static_cast<Int32>(Index), Generation};
 
         Context->SetHandle(Handle);
@@ -467,6 +490,20 @@ namespace Engine {
     }
 
     /**
+     * @brief 엔진이 소유한 PhysX 런타임을 반환합니다.
+     */
+    PhysicsRuntime::FPhysicsRuntime& Engine::UEngine::GetPhysicsRuntime() {
+        return mPhysicsRuntime;
+    }
+
+    /**
+     * @brief 엔진이 소유한 천 시스템 모듈을 반환합니다.
+     */
+    PhysicsRuntime::FClothingSystemRuntimeModuleNv& Engine::UEngine::GetClothingSystem() {
+        return mClothingSystem;
+    }
+
+    /**
      * @brief 새 월드 컨텍스트를 검증하고 장면을 연결한 뒤 현재 월드를 교체합니다.
      */
     bool Engine::UEngine::ReplaceWorld(std::unique_ptr<Engine::FWorldContext> Context) {
@@ -491,7 +528,7 @@ namespace Engine {
         return true;
     }
 
-    bool Engine::UEngine::ProcessSceneTransition(Engine::FWorldHandle Source, Engine::FWorldHandle& Replacement, Core::FString& Error) {
+    bool Engine::UEngine::ProcessSceneTransition(Engine::FWorldHandle Source, Engine::FWorldHandle& Replacement, Core::FString& Error, bool RequireActiveCamera) {
         Replacement = {};
         Error.clear();
 
@@ -530,7 +567,7 @@ namespace Engine {
             return false;
         }
 
-        if (Context->GetWorld()->GetActiveCamera() == nullptr) {
+        if (RequireActiveCamera && Context->GetWorld()->GetActiveCamera() == nullptr) {
             Error = "Scene transition requires an active camera in the destination scene";
 
             return false;
@@ -561,7 +598,7 @@ namespace Engine {
 
         mUpdating = true;
 
-        const bool Started{!mShutdownRequested && NextWorld->BeginPlay() && NextWorld->GetPlayState() == Engine::EWorldPlayState::Playing && NextWorld->GetActiveCamera() != nullptr && !mShutdownRequested};
+        const bool Started{!mShutdownRequested && NextWorld->BeginPlay() && NextWorld->GetPlayState() == Engine::EWorldPlayState::Playing && (!RequireActiveCamera || NextWorld->GetActiveCamera() != nullptr) && !mShutdownRequested};
 
         mUpdating = false;
 

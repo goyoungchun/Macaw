@@ -54,6 +54,8 @@ namespace RenderCore {
          */
         virtual bool Initialize(void* WindowHandle, Uint32 Width, Uint32 Height) = 0;
 
+        virtual bool UsesForwardShading() const;
+
         /**
          * @brief 종속 객체를 역순으로 정리하고 여러 번 호출해도 안전한 종료 상태로 만듭니다.
          */
@@ -98,7 +100,7 @@ namespace RenderCore {
          * @param Error 실패 원인을 기록할 출력 문자열입니다.
          * @return 호출자가 소유하는 출력 텍스처이며 실패하면 nullptr이고 Error에 원인을 기록합니다.
          */
-        virtual std::unique_ptr<Asset::UTexture2D> CaptureTexture(const Asset::UTexture2D& Texture, Uint32 Width, Uint32 Height, const FVector4& Region, Core::FString& Error) = 0;
+        virtual std::unique_ptr<Asset::UTexture2D> CaptureTexture(const Asset::UTexture2D& Texture, Uint32 Width, Uint32 Height, const FVector4& Region, Core::FString& Error, bool CheckerboardBackground = false) = 0;
 
         /**
          * @brief 기존 오프스크린 렌더 타깃을 새 픽셀 크기로 변경합니다.
@@ -192,6 +194,7 @@ namespace RenderCore {
          * @return 요청한 처리를 완료하면 true, 실패하면 false입니다.
          */
         virtual bool ReloadChangedShaders() = 0;
+        virtual bool ReloadAllShaders() = 0;
         virtual Core::TArray<RenderCore::FShaderDescription> GetShaderValidationTargets(const std::filesystem::path& Path) const = 0;
 
         /**

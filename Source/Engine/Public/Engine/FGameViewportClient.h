@@ -48,6 +48,10 @@ namespace Engine {
          */
         bool CalcSceneView(const FVector2& Size, Engine::FSceneView& View) const;
 
+        /** @brief 이 게임 뷰포트의 피사계 심도 표시 플래그를 설정합니다. */
+        void SetDepthOfFieldShowFlag(bool Enabled);
+        void SetPhysicsBodiesView(bool Enabled, float LineThickness);
+
         /**
          * @brief 게임 뷰포트가 연결된 월드에 프레임 입력을 전달합니다.
          * @param[in] Input 키·마우스 상태를 조회할 공통 입력입니다.
@@ -71,6 +75,8 @@ namespace Engine {
          * @brief 클라이언트가 사용하는 실행 월드의 세대 핸들입니다.
          */
         Engine::FWorldHandle mWorld{};
+        bool mShowDepthOfField{true};
+        float mPhysicsBodyLineThickness{};
     };
 
 }

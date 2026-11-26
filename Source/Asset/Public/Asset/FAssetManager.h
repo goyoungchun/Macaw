@@ -15,6 +15,7 @@
 #include "Core/ReflectionMacros.h"
 
 #include <filesystem>
+#include <functional>
 #include <memory>
 
 namespace CoreUObject {
@@ -25,6 +26,11 @@ namespace CoreUObject {
 
 namespace RenderCore {
     class UShader;
+}
+
+namespace PhysicsRuntime {
+    class FPhysicsRuntime;
+    class UPhysicsAsset;
 }
 
 namespace Asset {
@@ -38,6 +44,33 @@ namespace Asset {
     class UAnimSequence;
     class UBlendSpace;
     class UAnimGraph;
+
+    /**
+     * @brief 이 모듈이 모르는 에셋 종류를 소유 모듈이 등록할 때 쓰는 생성·로드 방법입니다.
+     * @details 에셋은 JSON 본문으로 저장하며 객체의 Serialize로 읽고 씁니다.
+     */
+    struct FAssetTypeHandler {
+    public:
+        /**
+         * @brief 에셋 객체의 클래스이며 CreateInstance로 생성할 수 있어야 합니다.
+         */
+        const CoreUObject::UClass* mClass{};
+
+        /**
+         * @brief 새 에셋 파일 이름이 비었을 때 쓸 이름입니다.
+         */
+        Core::FString mDefaultName{"Asset"};
+
+        /**
+         * @brief 새로 만든 에셋에 기본 내용을 채웁니다. 비어 있으면 생략합니다.
+         */
+        std::function<void(CoreUObject::UObject&)> mInitialize{};
+
+        /**
+         * @brief 생성이나 로드 직후 캐시에 넣기 전에 부릅니다. false를 돌려주면 로드가 실패합니다.
+         */
+        std::function<bool(CoreUObject::UObject&, Core::FString&)> mPostLoad{};
+    };
 
     /**
      * @brief 프로젝트 콘텐츠 경로와 메시·텍스처 에셋의 로드 및 캐시를 담당합니다.
@@ -69,6 +102,7 @@ namespace Asset {
     public:
 
         bool RefreshAssetRegistry(Core::FString& Error);
+        static bool IsTextureSource(const std::filesystem::path& Path);
         std::filesystem::path FindAssetPath(const Core::FGuid& Guid, Core::FString& Error);
         CoreUObject::UObject* LoadAsset(const Core::FGuid& Guid, Core::FString& Error, const CoreUObject::UClass* ExpectedClass = nullptr);
 
@@ -86,6 +120,17 @@ namespace Asset {
          * @return 객체가 보유한 데이터의 참조이며 소유 객체의 수명 동안 유효합니다.
          */
         const std::filesystem::path& GetContentRoot() const;
+        const std::filesystem::path& GetEngineContentRoot() const;
+        const std::filesystem::path& GetEngineShaderRoot() const;
+
+        /**
+         * @brief 메시를 임포트할 때 볼록 충돌 형상을 계산할 PhysX 런타임을 설정합니다.
+         * @param[in] Runtime 엔진이 소유한 런타임의 비소유 주소이며, nullptr이면 볼록 형상을 만들지 않고 경계 상자를 사용합니다.
+         * @note 런타임은 이 관리자가 임포트하는 동안 유지되어야 하며, 엔진은 런타임을 종료하기 전에 nullptr로 되돌립니다.
+         */
+        void SetPhysicsRuntime(PhysicsRuntime::FPhysicsRuntime* Runtime);
+        void SetAssetSavedHandler(std::function<void(const std::filesystem::path&, Asset::EAssetType)> Handler);
+        bool MigrateAsset(const std::filesystem::path& Path, Core::FString& Error);
 
         /**
          * @brief 이 관리자가 보유한 메시의 경로를 조회합니다.
@@ -131,6 +176,10 @@ namespace Asset {
          * @return 검증한 콘텐츠 내부 경로이며 실패하면 비어 있습니다.
          */
         std::filesystem::path ResolvePath(const std::filesystem::path& Path, Core::FString& Error) const;
+        std::filesystem::path ResolveWritablePath(const std::filesystem::path& Path, Core::FString& Error) const;
+        std::filesystem::path ResolveRedirectedPath(const std::filesystem::path& Path, Core::TArray<std::filesystem::path>& Redirectors, Core::FString& Error) const;
+        bool RewriteBinaryAssetReferences(Asset::EAssetType Type, Core::TArray<Uint8>& Payload, const std::function<Core::FString(const Core::FString&, bool)>& Remap, bool& Changed, Core::FString& Error) const;
+        bool IsRedirectorDirectory(const std::filesystem::path& Path) const;
 
         /**
          * @brief 경로가 콘텐츠 폴더 안에 있는지 검증하고 UTF-8 상대 경로를 반환합니다.
@@ -177,6 +226,14 @@ namespace Asset {
          * @return 캐시 소유의 비소유 포인터이며 없으면 nullptr입니다.
          */
         Asset::USkeleton* FindLegacySkeleton(const std::filesystem::path& MeshPath) const;
+
+        /**
+         * @brief 물리 에셋을 캐시에서 찾거나 파일에서 읽어 캐시에 보관합니다.
+         * @param Path 처리할 에셋 또는 파일 경로입니다.
+         * @param Error 실패 원인을 기록할 출력 문자열입니다.
+         * @return 관리자가 소유하는 물리 에셋이며 실패하면 nullptr입니다.
+         */
+        PhysicsRuntime::UPhysicsAsset* LoadPhysicsAsset(const std::filesystem::path& Path, Core::FString& Error);
 
         /**
          * @brief 애니메이션 시퀀스 에셋을 캐시에서 조회하거나 파일에서 로드하여 보관합니다.
@@ -292,6 +349,50 @@ namespace Asset {
         bool SaveAnimGraph(const std::filesystem::path& Path, Asset::UAnimGraph& Graph, Core::FString& Error);
 
         /**
+         * @brief 다른 모듈이 소유한 에셋 종류의 생성·로드 방법을 등록합니다.
+         * @param[in] Type 등록할 에셋 종류입니다.
+         * @param[in] Handler 생성·로드 방법입니다.
+         * @return 이미 등록됐거나 클래스가 생성 불가능하면 false입니다.
+         */
+        bool RegisterAssetType(Asset::EAssetType Type, Asset::FAssetTypeHandler Handler);
+
+        /**
+         * @brief 등록된 에셋 종류의 생성·로드 방법을 찾습니다.
+         * @return 등록되지 않았으면 nullptr입니다.
+         */
+        const Asset::FAssetTypeHandler* FindAssetTypeHandler(Asset::EAssetType Type) const;
+
+        /**
+         * @brief 등록된 종류의 에셋을 로드해 캐시에 보관합니다. 캐시된 객체는 바꾸지 않습니다.
+         * @param[in] Path 프로젝트 에셋 경로입니다.
+         * @param[in] Type 파일에 기록됐어야 하는 에셋 종류입니다.
+         * @param[out] Error 실패 원인입니다.
+         * @return 캐시 소유 객체의 비소유 주소이며 실패하면 nullptr입니다.
+         */
+        CoreUObject::UObject* LoadRegisteredAsset(const std::filesystem::path& Path, Asset::EAssetType Type, Core::FString& Error);
+
+        /**
+         * @brief 등록된 종류의 새 에셋을 기본 내용으로 만들어 저장하고 캐시에 보관합니다.
+         * @param[in] Directory Content 기준 폴더입니다.
+         * @param[in] Name 파일 이름으로 사용할 이름이며 중복되면 번호를 붙입니다.
+         * @param[in] Type 만들 에셋 종류입니다.
+         * @param[out] Path 생성한 에셋의 Content 상대 경로입니다.
+         * @param[out] Error 실패 원인입니다.
+         * @return 캐시 소유 객체의 비소유 주소이며 실패하면 nullptr입니다.
+         */
+        CoreUObject::UObject* CreateRegisteredAsset(const std::filesystem::path& Directory, const Core::FString& Name, Asset::EAssetType Type, std::filesystem::path& Path, Core::FString& Error);
+
+        /**
+         * @brief 등록된 종류의 에셋을 저장합니다. 같은 경로에 다른 객체가 캐시돼 있으면 거부합니다.
+         * @param[in] Path 프로젝트 에셋 경로입니다.
+         * @param[in] Type 기록할 에셋 종류입니다.
+         * @param[in] Object 저장할 객체이며 등록한 클래스여야 합니다.
+         * @param[out] Error 실패 원인입니다.
+         * @return 저장에 성공하면 true입니다.
+         */
+        bool SaveRegisteredAsset(const std::filesystem::path& Path, Asset::EAssetType Type, CoreUObject::UObject& Object, Core::FString& Error, bool ReplaceCached = false);
+
+        /**
          * @brief 캐시 객체의 주소를 유지하면서 파일의 최신 설정을 다시 적용합니다.
          * @param[in] Path 다시 읽을 프로젝트 머티리얼 경로입니다.
          * @param[out] Error 실패 원인입니다.
@@ -307,6 +408,15 @@ namespace Asset {
          * @return 저장과 캐시 갱신에 성공하면 true입니다.
          */
         bool SaveMaterial(const std::filesystem::path& Path, const Asset::UMaterial& Material, Core::FString& Error);
+
+        /**
+         * @brief 캐시 객체의 주소를 유지하면서 머티리얼 설정과 텍스처 참조를 갱신합니다.
+         * @param[in,out] Target 설정을 적용할 기존 객체입니다.
+         * @param[in] Source 복사할 설정을 제공하는 객체입니다.
+         * @param[out] Error 텍스처 참조를 해석할 수 없는 경우의 원인입니다.
+         * @return 텍스처 참조까지 복원하면 true입니다.
+         */
+        bool ApplyMaterialSettings(Asset::UMaterial& Target, const Asset::UMaterial& Source, Core::FString& Error);
 
         /**
          * @brief 검증한 CPU 메시 데이터를 바이너리 에셋 파일로 저장합니다.
@@ -334,6 +444,15 @@ namespace Asset {
          * @return 저장에 성공하면 true이며 실패 원인은 Error에 기록합니다.
          */
         bool SaveSkeleton(const std::filesystem::path& Path, const Asset::USkeleton& Skeleton, Core::FString& Error);
+
+        /**
+         * @brief 물리 에셋의 바디 설계도와 관절 설정을 지정한 에셋 파일에 저장합니다.
+         * @param Path 처리할 에셋 또는 파일 경로입니다.
+         * @param PhysicsAsset 호출자가 수명을 보장하는 물리 에셋입니다.
+         * @param Error 실패 원인을 기록할 출력 문자열입니다.
+         * @return 저장에 성공하면 true이며 실패 원인은 Error에 기록합니다.
+         */
+        bool SavePhysicsAsset(const std::filesystem::path& Path, const PhysicsRuntime::UPhysicsAsset& PhysicsAsset, Core::FString& Error);
 
         /**
          * @brief 애니메이션 시퀀스의 트랙과 시간 정보를 에셋 파일에 저장하고 같은 경로의 캐시 객체를 갱신합니다.
@@ -390,9 +509,17 @@ namespace Asset {
          * @param[in] Path 은퇴시킬 에셋 파일 또는 폴더 경로입니다.
          */
         void RetireAssets(const std::filesystem::path& Path);
+        bool RenameContentPath(const std::filesystem::path& Path, const std::filesystem::path& Destination, Core::FString& Error);
 
     private:
 
+        std::filesystem::path ResolveContentPath(const std::filesystem::path& Path, std::filesystem::path& ReferencePath, Core::FString& Error) const;
+        std::filesystem::path ResolveAssetPath(const std::filesystem::path& Path, std::filesystem::path& ReferencePath, Core::FString& Error, Core::TArray<std::filesystem::path>* Redirectors = nullptr) const;
+        std::filesystem::path ResolveAssetLoadPath(const std::filesystem::path& Path, Core::FString& Key, Core::FString& Error) const;
+        std::filesystem::path FindContentRedirector(const std::filesystem::path& Resolved, const std::filesystem::path& ReferencePath, std::filesystem::path& Suffix) const;
+        std::filesystem::path GetPathWithinRoot(const std::filesystem::path& Root, const std::filesystem::path& Path) const;
+
+        bool SaveAssetFile(const std::filesystem::path& Path, Asset::EAssetType Type, std::span<const Uint8> Payload, Core::FString& Error, const Core::FGuid& Guid);
         Core::FGuid GetSaveIdentity(const std::filesystem::path& Path, const Core::FGuid& Guid) const;
         bool ValidateAssetIdentity(const std::filesystem::path& Path, const Core::FGuid& Guid, Core::FString& Error);
 
@@ -407,15 +534,6 @@ namespace Asset {
          */
         bool ImportMesh(const std::filesystem::path& Source, std::filesystem::path& Target, const Asset::FAssetImportOption& Option, Core::FString& Error);
 
-        /**
-         * @brief 캐시 객체의 주소를 유지하면서 머티리얼 설정과 텍스처 참조를 갱신합니다.
-         * @param[in,out] Target 설정을 적용할 기존 객체입니다.
-         * @param[in] Source 복사할 설정을 제공하는 객체입니다.
-         * @param[out] Error 텍스처 참조를 해석할 수 없는 경우의 원인입니다.
-         * @return 텍스처 참조까지 복원하면 true입니다.
-         */
-        bool ApplyMaterialSettings(Asset::UMaterial& Target, const Asset::UMaterial& Source, Core::FString& Error);
-
     private:
 
         Core::TMap<Core::FGuid, std::filesystem::path, Core::FGuidHash> mAssetPaths{};
@@ -425,6 +543,14 @@ namespace Asset {
          * @brief 에셋 접근을 제한하는 프로젝트 콘텐츠 폴더의 절대 경로입니다.
          */
         std::filesystem::path mContentRoot{};
+        std::filesystem::path mEngineContentRoot{};
+        std::filesystem::path mEngineShaderRoot{};
+        std::function<void(const std::filesystem::path&, Asset::EAssetType)> mAssetSaved{};
+
+        /**
+         * @brief 메시 임포트 때 볼록 충돌 형상을 계산하는 PhysX 런타임이며, 엔진이 주입하지 않으면 nullptr입니다.
+         */
+        PhysicsRuntime::FPhysicsRuntime* mPhysicsRuntime{};
 
         /**
          * @brief 정규화한 상대 경로별로 소유하는 메시 에셋 캐시입니다.
@@ -445,6 +571,11 @@ namespace Asset {
          * @brief 구형 스켈레탈 메시에서 분리한 스켈레톤의 소유 캐시입니다.
          */
         Core::TMap<Core::FString, std::unique_ptr<Asset::USkeleton>> mLegacySkeletons{};
+
+        /**
+         * @brief 경로별로 로드한 물리 에셋의 소유 캐시입니다.
+         */
+        Core::TMap<Core::FString, std::unique_ptr<PhysicsRuntime::UPhysicsAsset>> mPhysicsAssets{};
 
         /**
          * @brief 프로젝트 상대 경로별로 소유하는 애니메이션 시퀀스 캐시입니다.
@@ -480,6 +611,16 @@ namespace Asset {
          * @brief 경로별로 캐시한 애니메이션 그래프의 소유 저장소입니다.
          */
         Core::TMap<Core::FString, std::unique_ptr<Asset::UAnimGraph>> mAnimGraphs{};
+
+        /**
+         * @brief 다른 모듈이 등록한 에셋 종류별 생성·로드 방법입니다.
+         */
+        Core::TMap<Asset::EAssetType, Asset::FAssetTypeHandler> mTypeHandlers{};
+
+        /**
+         * @brief 등록된 종류의 에셋 캐시이며 키는 Content 상대 경로입니다.
+         */
+        Core::TMap<Core::FString, std::unique_ptr<CoreUObject::UObject>> mRegisteredAssets{};
 
         /**
          * @brief 경로 캐시에서 빠졌지만 기존 참조를 위해 매니저 수명 동안 유지하는 에셋 객체입니다.

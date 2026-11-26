@@ -5,10 +5,17 @@
  */
 
 #include "Engine/FHeightFogSceneProxy.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Engine/FPrimitiveSceneProxy.h"
 #include "Core/Math/FTransform.h"
 
+using namespace Core::Literals;
+
 namespace Engine {
+
+    constinit const Core::FInverseLength Engine::FHeightFogSceneProxy::mDefaultDensity{0.02f / 1_m};
+    constinit const Core::FInverseLength Engine::FHeightFogSceneProxy::mDefaultHeightFalloff{0.2f / 1_m};
+    constinit const Core::FLength Engine::FHeightFogSceneProxy::mDefaultEndDistance{1000_m};
 
     /**
      * @brief 안개 위치와 아이콘으로 카메라를 향하는 에디터 빌보드 프록시를 구성합니다.

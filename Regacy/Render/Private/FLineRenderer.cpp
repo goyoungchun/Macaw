@@ -2,9 +2,9 @@
 #include "Render/FLineRenderer.h"
 #include "Render/FRenderBuffers.h"
 #include "Core/Base/ErrorHandler.h"
+#include "Core/Types.h"
 
 #include <algorithm>
-#include <array>
 #include <limits>
 
 void FLineRenderer::Initialize(ID3D11Device* InDevice, Uint32 InitialLineCapacity) {
@@ -110,7 +110,7 @@ bool FLineRenderer::IsEmpty() const {
 }
 
 bool FLineRenderer::CreateQuadGeometry(ID3D11Device* InDevice) {
-    const std::array<FQuadVertex, 6> Vertices{FQuadVertex{FVector2D{0.0f, -1.0f}}, FQuadVertex{FVector2D{0.0f, 1.0f}}, FQuadVertex{FVector2D{1.0f, -1.0f}}, FQuadVertex{FVector2D{1.0f, -1.0f}}, FQuadVertex{FVector2D{0.0f, 1.0f}}, FQuadVertex{FVector2D{1.0f, 1.0f}}};
+    const Core::TStaticArray<FQuadVertex, 6> Vertices{FQuadVertex{FVector2D{0.0f, -1.0f}}, FQuadVertex{FVector2D{0.0f, 1.0f}}, FQuadVertex{FVector2D{1.0f, -1.0f}}, FQuadVertex{FVector2D{1.0f, -1.0f}}, FQuadVertex{FVector2D{0.0f, 1.0f}}, FQuadVertex{FVector2D{1.0f, 1.0f}}};
 
     FGraphicsBufferDescription VertexBufferDescription{};
 

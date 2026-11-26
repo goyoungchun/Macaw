@@ -390,3 +390,6 @@ imgui.ini
 /Saved/
 !/Regacy/Core/Public/Core/Debug/
 !/Regacy/Core/Public/Core/Debug/**
+
+# Personal learning notes inside the game project
+/PhysicsProj/Notes/

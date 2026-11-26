@@ -11,6 +11,8 @@
 | 마우스 왼쪽 버튼, F, H | 펀치 또는 사격, 춤, 피격 |
 | Delete, Backspace | 사망, 시작 위치로 초기화 |
 
-`Content/Scripts/ThirdPersonController.lua`의 `Settings`에서 이동 속도, 점프, 중력, 카메라 거리와 감도를 조정할 수 있습니다. 캐릭터의 `Controller` 컴포넌트에서 스크립트를 열 수 있습니다.
+캐릭터의 루트는 `CapsuleComponent`(반지름 0.3 m, 반높이 0.9 m, `BlockAll`)입니다. 컨트롤러는 `Actor:AddActorWorldOffset(Delta, true)`로 이 캡슐을 PhysX로 쓸어 이동하므로, 벽과 블록에 막히고 면을 따라 미끄러지며, `StepHeight` 이하의 턱은 올라서고 `WalkableFloorZ` 이상인 경사로는 걸어 오릅니다. 레벨의 바닥·벽·블록은 기본 프리셋 `BlockAll`인 스태틱 메시입니다.
+
+`Content/Scripts/ThirdPersonController.lua`의 `Settings`에서 이동 속도, 점프, 중력, 계단 높이, 걸을 수 있는 경사, 카메라 거리와 감도를 조정할 수 있습니다. 캐릭터의 `Controller` 컴포넌트에서 스크립트를 열 수 있습니다.
 
 애니메이션 그래프와 Blend Space는 `Content/Animation`, 캐릭터와 모션 에셋은 `Content/Characters`, 레벨 재질은 `Content/Materials`에 있습니다.

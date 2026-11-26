@@ -12,6 +12,7 @@
 #include "Engine/EPrimitiveType.h"
 #include "Asset/UStaticMesh.h"
 #include "Asset/UMaterial.h"
+#include "Asset/UTexture2D.h"
 #include "Asset/USkeletalMesh.h"
 #include "FObjectConstants.h"
 #include "FScenePrimitive.h"
@@ -67,6 +68,74 @@ namespace Renderer {
      */
     const Core::TArray<Engine::FHeightFogSceneProxy>& Renderer::FScene::GetHeightFogs() const {
         return mHeightFogs;
+    }
+
+    void Renderer::FScene::AddSkyAtmosphere(const Engine::FSkyAtmosphereSceneProxy& Proxy) {
+        const auto Existing{std::find_if(mSkyAtmospheres.begin(), mSkyAtmospheres.end(), [&Proxy](const Engine::FSkyAtmosphereSceneProxy& Atmosphere) {
+            return Atmosphere.mId == Proxy.mId;
+        })};
+
+        if (Existing != mSkyAtmospheres.end()) {
+            *Existing = Proxy;
+        } else {
+            mSkyAtmospheres.push_back(Proxy);
+        }
+
+        ++mRevision;
+    }
+
+    void Renderer::FScene::RemoveSkyAtmosphere(const Core::FGuid& Id) {
+        if (std::erase_if(mSkyAtmospheres, [&Id](const Engine::FSkyAtmosphereSceneProxy& Atmosphere) {
+            return Atmosphere.mId == Id;
+        }) > 0) {
+            ++mRevision;
+        }
+    }
+
+    const Engine::FSkyAtmosphereSceneProxy* Renderer::FScene::GetSkyAtmosphere() const {
+        const auto Active{std::find_if(mSkyAtmospheres.begin(), mSkyAtmospheres.end(), [](const Engine::FSkyAtmosphereSceneProxy& Atmosphere) {
+            return Atmosphere.mVisible;
+        })};
+
+        return Active != mSkyAtmospheres.end() ? &*Active : nullptr;
+    }
+
+    const Engine::FLightSceneProxy* Renderer::FScene::GetAtmosphereSunLight() const {
+        const auto Sun{std::find_if(mLights.begin(), mLights.end(), [](const Engine::FLightSceneProxy& Light) {
+            return Light.mType == Engine::ELightType::Directional && Light.mAtmosphereSunLight && Light.mVisible;
+        })};
+
+        return Sun != mLights.end() ? &*Sun : nullptr;
+    }
+
+    void Renderer::FScene::AddSkyDome(const Engine::FSkyDomeSceneProxy& Proxy) {
+        const auto Existing{std::find_if(mSkyDomes.begin(), mSkyDomes.end(), [&Proxy](const Engine::FSkyDomeSceneProxy& SkyDome) {
+            return SkyDome.mId == Proxy.mId;
+        })};
+
+        if (Existing != mSkyDomes.end()) {
+            *Existing = Proxy;
+        } else {
+            mSkyDomes.push_back(Proxy);
+        }
+
+        ++mRevision;
+    }
+
+    void Renderer::FScene::RemoveSkyDome(const Core::FGuid& Id) {
+        if (std::erase_if(mSkyDomes, [&Id](const Engine::FSkyDomeSceneProxy& SkyDome) {
+            return SkyDome.mId == Id;
+        }) > 0) {
+            ++mRevision;
+        }
+    }
+
+    const Engine::FSkyDomeSceneProxy* Renderer::FScene::GetSkyDome() const {
+        const auto Active{std::find_if(mSkyDomes.begin(), mSkyDomes.end(), [](const Engine::FSkyDomeSceneProxy& SkyDome) {
+            return SkyDome.mVisible && SkyDome.mPanorama != nullptr;
+        })};
+
+        return Active != mSkyDomes.end() ? &*Active : nullptr;
     }
 
     void Renderer::FScene::AddDecal(const Engine::FDecalSceneProxy& Proxy) {
@@ -279,6 +348,12 @@ namespace Renderer {
      * @brief 프리미티브의 객체 상수 버퍼를 현재 프록시 값으로 갱신합니다.
      */
     void Renderer::FScene::Upload(Renderer::FScenePrimitive& Primitive) {
+        if (Primitive.mProxy.mParticles != nullptr) {
+            Primitive.mObjectBuffer.Reset();
+
+            return;
+        }
+
         if (Primitive.mProxy.mText.has_value() || Primitive.mProxy.mSprite.has_value()) {
             Primitive.mObjectBuffer.Reset();
 
@@ -291,6 +366,8 @@ namespace Renderer {
 
             return;
         }
+
+        UploadCloth(Primitive);
 
         Renderer::FObjectConstants& Constants{Primitive.mObjectConstants};
         Constants.mWorld = Primitive.mProxy.mWorld;
@@ -311,9 +388,6 @@ namespace Renderer {
         ++mTransformUpdates;
     }
 
-    /**
-     * @brief 객체별 본 행렬과 법선 변환을 구조화 버퍼에 반영합니다.
-     */
     bool Renderer::FScene::UploadSkinning(Renderer::FScenePrimitive& Primitive) {
         if (Primitive.mProxy.mSkeletalMesh == nullptr) {
             Primitive.mSkinBuffer.Reset();
@@ -328,7 +402,7 @@ namespace Renderer {
 
         // 각 본의 위치 변환과 법선 역전치를 함께 올려 비균일 스케일도 처리합니다.
         // 한 원소의 배치(행렬 2개)는 Skinning.hlsl의 FSkinBone과 일치해야 합니다.
-        Core::TArray<std::array<FMatrix, 2>> Bones{};
+        Core::TArray<Core::TStaticArray<FMatrix, 2>> Bones{};
         Bones.reserve(Primitive.mProxy.mSkinMatrices.size());
 
         for (const FMatrix& Skin : Primitive.mProxy.mSkinMatrices) {
@@ -354,6 +428,66 @@ namespace Renderer {
         Primitive.mUploadedPoseRevision = Primitive.mProxy.mPoseRevision;
 
         return true;
+    }
+
+    /**
+     * @brief 천 에셋마다 입자 위치와 법선, 천 상수를 GPU에 반영합니다.
+     */
+    void Renderer::FScene::UploadCloth(Renderer::FScenePrimitive& Primitive) {
+        if (Primitive.mProxy.mSkeletalMesh == nullptr || Primitive.mProxy.mClothSimData.empty()) {
+            Primitive.mClothResources.clear();
+            Primitive.mUploadedClothRevision = {};
+
+            return;
+        }
+
+        // 프록시가 다시 만들어져도 천 결과가 그대로이면 다시 올리지 않습니다.
+        if (Primitive.mProxy.mClothRevision.IsValid() && Primitive.mUploadedClothRevision == Primitive.mProxy.mClothRevision) {
+            return;
+        }
+
+        // 결과에 없는 천 에셋의 자원은 버립니다.
+        std::erase_if(Primitive.mClothResources, [&Primitive](const auto& Entry) {
+            return !Primitive.mProxy.mClothSimData.contains(Entry.first);
+        });
+
+        Core::TArray<Renderer::FClothParticleGpu> Particles{};
+
+        for (const auto& [AssetIndex, SimData] : Primitive.mProxy.mClothSimData) {
+            if (SimData.mPositions.empty() || SimData.mPositions.size() != SimData.mNormals.size()) {
+                Primitive.mClothResources.erase(AssetIndex);
+
+                continue;
+            }
+
+            Particles.resize(SimData.mPositions.size());
+
+            for (Index_t ParticleIndex{}; ParticleIndex < Particles.size(); ++ParticleIndex) {
+                const FVector& Position{SimData.mPositions[ParticleIndex]};
+                const FVector& Normal{SimData.mNormals[ParticleIndex]};
+
+                Particles[ParticleIndex].mPosition = {Position.x, Position.y, Position.z};
+                Particles[ParticleIndex].mNormal = {Normal.x, Normal.y, Normal.z};
+            }
+
+            Renderer::FScenePrimitive::FClothResources& Resources{Primitive.mClothResources[AssetIndex]};
+            Core::FString Error{};
+
+            if (!Resources.mParticles.Upload(mContext, Particles, Error) || (!Resources.mConstants.IsCreated() && !Resources.mConstants.Create(mDevice, Error))) {
+                Core::ErrorHandler::Report("Cloth", "Cannot upload cloth particles: " + Error, Core::ErrorHandler::EErrorLevel::Warning);
+                Primitive.mClothResources.erase(AssetIndex);
+
+                continue;
+            }
+
+            Renderer::FClothConstants Constants{};
+            Constants.mClothLocalToComponent = SimData.mComponentRelativeTransform.ToMatrix();
+            Constants.mClothBlendWeight = Primitive.mProxy.mClothBlendWeight;
+
+            Resources.mConstants.Update(mContext, Constants);
+        }
+
+        Primitive.mUploadedClothRevision = Primitive.mProxy.mClothRevision;
     }
 
     /**

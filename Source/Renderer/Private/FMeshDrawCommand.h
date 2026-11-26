@@ -14,6 +14,10 @@ namespace Asset {
     class UStaticMesh;
 }
 
+namespace Engine {
+    struct FParticleMeshInstance;
+}
+
 namespace Renderer {
 
     class FRenderer;
@@ -34,8 +38,9 @@ namespace Renderer {
          * @param[in] Primitive 월드 행렬과 UV가 저장된 렌더 프리미티브입니다.
          * @param[in] FirstIndex SubMesh의 첫 인덱스 오프셋입니다.
          * @param[in] IndexCount SubMesh의 삼각형 인덱스 개수입니다.
+         * @param[in] ClothAssetIndex 천 섹션이면 그 섹션의 천 에셋 번호이고, 아니면 InvalidIndex입니다.
          */
-        FMeshDrawCommand(Renderer::FMaterialPipeline* Pipeline, Asset::UMaterial* Material, Asset::UStaticMesh* Mesh, const Renderer::FScenePrimitive* Primitive, Index_t FirstIndex, Uint32 IndexCount);
+        FMeshDrawCommand(Renderer::FMaterialPipeline* Pipeline, Asset::UMaterial* Material, Asset::UStaticMesh* Mesh, const Renderer::FScenePrimitive* Primitive, Index_t FirstIndex, Uint32 IndexCount, Index_t ClothAssetIndex = InvalidIndex);
 
     private:
         /**
@@ -74,6 +79,8 @@ namespace Renderer {
          */
         const Renderer::FScenePrimitive* mPrimitive{};
 
+        const Engine::FParticleMeshInstance* mParticleInstance{};
+
         /**
          * @brief 이 드로의 첫 인덱스 오프셋입니다.
          */
@@ -83,6 +90,11 @@ namespace Renderer {
          * @brief 이 드로의 삼각형 인덱스 개수입니다.
          */
         Uint32 mIndexCount{};
+
+        /**
+         * @brief 천 섹션이면 입자 버퍼를 찾을 천 에셋 번호이고, 아니면 InvalidIndex입니다.
+         */
+        Index_t mClothAssetIndex{InvalidIndex};
     };
 
 }

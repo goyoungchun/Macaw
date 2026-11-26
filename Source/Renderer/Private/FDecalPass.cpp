@@ -14,7 +14,6 @@
 #include "RenderTarget.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 
 namespace Renderer {
@@ -80,7 +79,7 @@ namespace Renderer {
         Constants.mScreenAndOpacity = {1.0f / static_cast<float>(Width), 1.0f / static_cast<float>(Height), 0.0f, 0.0f};
 
         Asset::UTexture2D* SurfaceNormals{Target.GetGBuffer()[Renderer::GBuffer::NormalAttachment].get()};
-        const std::array<ID3D11RenderTargetView*, 2> Outputs{Target.GetGBuffer().front()->GetRenderTargetView(), SurfaceNormals->GetRenderTargetView()};
+        const Core::TStaticArray<ID3D11RenderTargetView*, 2> Outputs{Target.GetGBuffer().front()->GetRenderTargetView(), SurfaceNormals->GetRenderTargetView()};
         ID3D11ShaderResourceView* Depth{Target.GetSceneDepth()->GetShaderResourceView()};
         ID3D11SamplerState* Sampler{mSampler.Get()};
 
@@ -128,7 +127,7 @@ namespace Renderer {
                     Context->CopyResource(ReceiverSource->GetTexture(), SurfaceNormals->GetTexture());
                     Context->OMSetRenderTargets(static_cast<UINT>(Outputs.size()), Outputs.data(), Target.GetReadOnlyDepthView());
 
-                    const std::array<ID3D11ShaderResourceView*, 2> Receivers{ReceiverSource->GetShaderResourceView(), Target.GetStencilResource()};
+                    const Core::TStaticArray<ID3D11ShaderResourceView*, 2> Receivers{ReceiverSource->GetShaderResourceView(), Target.GetStencilResource()};
                     Context->PSSetShaderResources(NormalMapSlot + 1, static_cast<UINT>(Receivers.size()), Receivers.data());
                 } else {
                     AllowNormals = false;
@@ -164,7 +163,7 @@ namespace Renderer {
             Constants.mTextureFlags = {Color != nullptr, DrawColor, 0u, 0u};
             mConstants.Update(Context, Constants);
 
-            const std::array<ID3D11ShaderResourceView*, 2> Textures{Color != nullptr ? Color->GetShaderResourceView() : nullptr, Depth};
+            const Core::TStaticArray<ID3D11ShaderResourceView*, 2> Textures{Color != nullptr ? Color->GetShaderResourceView() : nullptr, Depth};
             Context->RSSetScissorRects(1, &Scissor);
             Context->PSSetShaderResources(0, static_cast<UINT>(Textures.size()), Textures.data());
 
@@ -185,7 +184,7 @@ namespace Renderer {
             ++DrawCalls;
         }
 
-        const std::array<ID3D11ShaderResourceView*, 4> Empty{};
+        const Core::TStaticArray<ID3D11ShaderResourceView*, 4> Empty{};
         Context->PSSetShaderResources(0, 2, Empty.data());
         Context->PSSetShaderResources(NormalMapSlot, static_cast<UINT>(Empty.size()), Empty.data());
         Context->OMSetRenderTargets(0, nullptr, nullptr);

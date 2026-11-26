@@ -7,8 +7,10 @@
 #include "Core/Types.h"
 #include "Engine/ALevelSequenceActor.h"
 #include "Editor/Widget/FDetailsWidget.h"
+#include "Editor/Widget/FEditorQuantityInputWidget.h"
 #include "Editor/FEditorContext.h"
 #include "Editor/FAssetDragDrop.h"
+#include "Editor/FGizmoCore.h"
 #include "Engine/AActor.h"
 #include "Engine/Component/UActorComponent.h"
 #include "Engine/Component/ULuaScriptComponent.h"
@@ -18,12 +20,15 @@
 #include "Engine/Component/USkeletalMeshComponent.h"
 #include "Engine/Animation/UAnimInstance.h"
 #include "Engine/Animation/UAnimGraphInstance.h"
+#include "Engine/FDepthOfFieldSettings.h"
 #include "RenderCore/IRendererModule.h"
 #include "Engine/FProject.h"
 #include "Asset/FAssetManager.h"
 #include "Asset/FAssetFile.h"
 #include "Asset/UStaticMesh.h"
 #include "Core/FilePath.h"
+#include "Core/Literals/AngleFunctions.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "CoreUObject/TObjectIterator.h"
 #include "Editor/FEditorAssetCatalog.h"
 #include "Editor/FAssetThumbnailCache.h"
@@ -43,10 +48,13 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cmath>
 #include <format>
 #include <string>
 #include <string_view>
 #include <type_traits>
+
+using namespace Core::Literals;
 
 namespace Editor {
 
@@ -121,72 +129,106 @@ namespace Editor {
         }
 
         /**
-         * @brief 선언 클래스와 프로퍼티 이름에 맞는 표시 분류를 선택합니다.
-         * @param Owner 새 상태에 복사할 변수 정의를 가진 소유 그래프입니다.
-         * @param Name 조회하거나 표시할 이름입니다.
-         * @return 정적 분류 이름 또는 메타데이터의 문자열 뷰입니다.
+         * @brief 프로퍼티를 표시할 카테고리를 반환합니다.
+         * @param Owner 프로퍼티를 선언한 클래스입니다.
+         * @param Property 표시할 프로퍼티 메타데이터입니다.
+         * @return 리플렉션에 적은 카테고리이며, 없으면 선언 클래스 이름에서 U·A 접두어를 뗀 이름입니다.
          */
-        std::string_view DetailCategory(const CoreUObject::UClass* Owner, std::string_view Name) {
-            if (Name == "Transform") {
-                return "Transform";
-            }
-
-            if (Name == "Material") {
-                return "Materials";
-            }
-
-            if (Name == "Mesh" || Name == "SkeletalMesh" || Name == "Skeleton" || Name == "PrimitiveType") {
-                return "Mesh";
-            }
-
-            if (Name == "AnimClass" || Name == "Animation" || Name == "AnimGraph" || (Owner == Engine::USkeletalMeshComponent::StaticClass() && (Name == "Looping" || Name == "PlayRate"))) {
-                return "Animation";
-            }
-
-            if (Name == "EditorTickable") {
-                return "Component Tick";
-            }
-
-            if (Owner->IsChildOf(Engine::ULightComponent::StaticClass()) || Owner->GetName() == "ULightComponentBase") {
-                return "Light";
-            }
-
-            if (Name == "Visible" || Name == "CastShadow" || Name == "ReceiveShadow" || Name == "ReceivesDecals") {
-                return "Rendering";
+        std::string_view DetailCategory(const CoreUObject::UClass* Owner, const CoreUObject::FProperty* Property) {
+            if (!Property->GetCategory().empty()) {
+                return Property->GetCategory();
             }
 
             const std::string_view ClassName{Owner->GetName()};
 
-            if (Owner == Engine::ULuaScriptComponent::StaticClass()) {
-                return "Script";
+            return ClassName.size() > 1 && (ClassName.front() == 'U' || ClassName.front() == 'A') && std::isupper(static_cast<unsigned char>(ClassName[1])) ? ClassName.substr(1) : ClassName;
+        }
+
+        /**
+         * @brief 디테일 패널 섹션 버튼 하나와 그 섹션이 묶는 카테고리입니다.
+         */
+        struct FDetailSection {
+            /**
+             * @brief 버튼에 표시할 섹션 이름입니다.
+             */
+            std::string_view mName;
+
+            /**
+             * @brief 섹션에 속한 카테고리 이름입니다. 한 카테고리가 여러 섹션에 속할 수 있습니다.
+             */
+            Core::TArray<std::string_view> mCategories;
+        };
+
+        /**
+         * @brief 버튼 순서대로 정렬한 섹션 목록을 반환합니다.
+         * @return 정적 섹션 목록의 참조입니다. All은 목록에 없고 항상 마지막에 표시합니다.
+         * @details Misc는 적어 둔 카테고리와 함께 다른 섹션에 속하지 않는 카테고리를 모두 받습니다.
+         */
+        const Core::TArray<FDetailSection>& GetDetailSections() {
+            static const Core::TArray<FDetailSection> Sections{
+                {"General", {"Transform", "Mesh", "Materials", "Shape", "Light", "Atmosphere", "Camera", "Fog", "Script", "General", "Settings"}},
+                {"Actor", {"Actor Tick"}},
+                {"Animation", {"Animation"}},
+                {"Physics", {"Physics", "Collision"}},
+                {"Rendering", {"Rendering", "Materials", "Light", "Atmosphere", "Fog"}},
+                {"Misc", {"Movement", "Component Tick"}},
+            };
+
+            return Sections;
+        }
+
+        /**
+         * @brief 카테고리가 섹션에 속하는지 검사합니다.
+         * @param Section 섹션 이름이며, All이면 모든 카테고리가 속합니다.
+         * @param Category 검사할 카테고리 이름입니다.
+         * @return 섹션에 속하면 true입니다.
+         */
+        bool IsCategoryInSection(std::string_view Section, std::string_view Category) {
+            if (Section == "All") {
+                return true;
             }
 
-            if (ClassName == "UCameraComponent") {
-                return "Camera";
+            bool Listed{};
+
+            for (const FDetailSection& Entry : GetDetailSections()) {
+                const bool Contains{std::find(Entry.mCategories.begin(), Entry.mCategories.end(), Category) != Entry.mCategories.end()};
+
+                if (Entry.mName == Section && Contains) {
+                    return true;
+                }
+
+                Listed = Listed || Contains;
             }
 
-            if (ClassName == "UHeightFogComponent") {
-                return "Fog";
-            }
-
-            if (ClassName == "UShapeComponent" || ClassName == "UBoxComponent" || ClassName == "USphereComponent" || ClassName == "UCapsuleComponent") {
-                return "Shape";
-            }
-
-            if (ClassName == "UProjectileMovementComponent" || ClassName == "URotationMovementComponent") {
-                return "Movement";
-            }
-
-            return Owner == CoreUObject::UObject::StaticClass() || Owner == Engine::AActor::StaticClass() || Owner == Engine::UActorComponent::StaticClass() ? "General" : "Settings";
+            return Section == "Misc" && !Listed;
         }
 
         /**
          * @brief 리플렉션 메타데이터와 이름 규칙으로 프로퍼티 표시 이름을 만듭니다.
          * @param Property 표시·직렬화·조회할 프로퍼티 메타데이터입니다.
+         * @param Struct 구조체 필드를 표시할 때 해당 필드를 선언한 구조체입니다.
          * @return 상세 패널에 표시할 이름입니다.
          */
-        Core::FString PropertyLabel(const CoreUObject::FProperty* Property) {
+        Core::FString PropertyLabel(const CoreUObject::FProperty* Property, const CoreUObject::UScriptStruct* Struct = nullptr) {
             const Core::FString& Name{Property->GetName()};
+
+            if (Struct != nullptr && Struct == Engine::FDepthOfFieldSettings::StaticStruct()) {
+                if (Name == "MaxBlurRadius") {
+                    return "Max Blur Radius (px)";
+                }
+
+                if (Name == "FStop") {
+                    return "F-stop";
+                }
+
+                if (Name == "FocalDistance") {
+                    return "Focus Distance";
+                }
+            }
+
+            if (Name == "UseFieldOfView") {
+                return "Use Field of View";
+            }
 
             if (Name == "ShadowBiasPreset") {
                 return "Depth Bias Preset";
@@ -270,7 +312,29 @@ namespace Editor {
             }
 
             return std::visit([&Archive](auto& Field) {
-                if constexpr (requires { Archive.Serialize("Value", Field); }) {
+                using FValue = std::decay_t<decltype(Field)>;
+
+                if constexpr (std::is_same_v<FValue, CoreUObject::FQuantityPropertyValue>) {
+                    if (!Archive.BeginObject("Value")) {
+                        return false;
+                    }
+
+                    CoreUObject::FQuantityPropertyValue Quantity{Field};
+                    Archive.Serialize("Length", Quantity.mDimension.mLength);
+                    Archive.Serialize("Mass", Quantity.mDimension.mMass);
+                    Archive.Serialize("Time", Quantity.mDimension.mTime);
+                    Archive.Serialize("Angle", Quantity.mDimension.mAngle);
+                    Archive.Serialize("BaseValue", Quantity.mBaseValue);
+                    Archive.EndObject();
+
+                    if (Archive.HasError() || Quantity.mDimension != Field.mDimension || !std::isfinite(Quantity.mBaseValue)) {
+                        return false;
+                    }
+
+                    Field = Quantity;
+
+                    return true;
+                } else if constexpr (requires { Archive.Serialize("Value", Field); }) {
                     Archive.Serialize("Value", Field);
 
                     return !Archive.HasError();
@@ -285,7 +349,7 @@ namespace Editor {
          * @return 버튼을 눌렀으면 true입니다.
          */
         bool DrawResetButton() {
-            return Editor::EditorStyle::IconButton("Reset to Default", Editor::EditorStyle::EIcon::Rotate);
+            return Editor::EditorStyle::IconButton("Reset to Default", Editor::EditorStyle::EIcon::Reset, false, true, false, nullptr, 0.0f, Editor::EditorStyle::EIconSelectionStyle::Icon);
         }
 
         /**
@@ -470,15 +534,28 @@ namespace Editor {
 
         DrawToolbar(Targets);
 
+        // 섹션 버튼이 이번 프레임의 대상과 검색·옵션을 기준으로 나오도록, 툴바 입력을 반영한 뒤 그리기 전에 행을 모읍니다.
+        const FDetailLayout Layout{Targets.empty() ? FDetailLayout{} : BuildDetailLayout(Targets)};
+
+        DrawSectionBar(Layout.mAvailableCategories);
+        ImGui::Separator();
+
         if (ImGui::BeginChild("##DetailProperties")) {
             if (Targets.empty()) {
                 ImGui::TextDisabled("Select an actor or component to view its details.");
             } else {
-                DrawReflectedObjects(Targets);
+                DrawDetailLayout(Layout, Targets);
             }
         }
 
         ImGui::EndChild();
+
+        const ImGuiIO& Input{ImGui::GetIO()};
+
+        if (IsEnabled() && mLockedContext == nullptr && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::IsAnyItemActive() && !Input.WantTextInput && Input.KeyMods == 0 && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup) && ImGui::IsKeyPressed(ImGuiKey_Delete, false)) {
+            Context->DestroySelectedComponent();
+        }
+
         mExpandCategories.reset();
     }
 
@@ -519,8 +596,50 @@ namespace Editor {
 
             ImGui::EndPopup();
         }
+    }
 
-        ImGui::Separator();
+    void Editor::FDetailsWidget::DrawSectionBar(const Core::TArray<Core::FString>& AvailableCategories) {
+        Core::TArray<std::string_view> Visible{};
+
+        for (const FDetailSection& Section : GetDetailSections()) {
+            if (std::any_of(AvailableCategories.begin(), AvailableCategories.end(), [&Section](const Core::FString& Category) {
+                return IsCategoryInSection(Section.mName, Category);
+            })) {
+                Visible.push_back(Section.mName);
+            }
+        }
+
+        if (Visible.empty()) {
+            return;
+        }
+
+        Visible.push_back("All");
+
+        const std::string_view Effective{GetEffectiveSection(AvailableCategories)};
+        const ImGuiStyle& Style{ImGui::GetStyle()};
+        const float Right{ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x};
+
+        for (Index_t Index{}; Index < Visible.size(); ++Index) {
+            const Core::FString Label{Visible[Index]};
+            const float Width{ImGui::CalcTextSize(Label.c_str()).x + Style.FramePadding.x * 2.0f};
+
+            // 남은 폭에 버튼이 들어가지 않으면 다음 줄로 넘깁니다.
+            if (Index > 0 && ImGui::GetItemRectMax().x + Style.ItemSpacing.x + Width <= Right) {
+                ImGui::SameLine();
+            }
+
+            if (Editor::EditorStyle::Button(Label.c_str(), {}, Visible[Index] == Effective)) {
+                mSelectedSection = Label;
+            }
+        }
+    }
+
+    std::string_view Editor::FDetailsWidget::GetEffectiveSection(const Core::TArray<Core::FString>& AvailableCategories) const {
+        const bool HasCategory{std::any_of(AvailableCategories.begin(), AvailableCategories.end(), [this](const Core::FString& Category) {
+            return IsCategoryInSection(mSelectedSection, Category);
+        })};
+
+        return HasCategory ? std::string_view{mSelectedSection} : std::string_view{"All"};
     }
 
     bool Editor::FDetailsWidget::MatchesSearch(std::string_view Category, std::string_view Label, std::string_view Name) const {
@@ -685,25 +804,30 @@ namespace Editor {
     void Editor::FDetailsWidget::DrawComponentTree(Engine::AActor* Actor, CoreUObject::TObjectRef<CoreUObject::UObject> Selected) {
         Editor::FEditorContext* Context{GetEditorContext()};
         const CoreUObject::TObjectRef<CoreUObject::UObject> ActorHandle{CoreUObject::MakeObjectRef(Actor)};
-        Core::TArray<CoreUObject::TObjectRef<CoreUObject::UObject>> Components{};
-
-        if (auto* Root{Actor->GetRootComponent()}) {
-            Components.push_back(CoreUObject::MakeObjectRef(Root));
-        }
+        Engine::USceneComponent* Root{Actor->GetRootComponent()};
+        Core::TMap<const Engine::USceneComponent*, Core::TArray<Engine::UActorComponent*>> Children{};
 
         for (const auto& Component : Actor->GetComponents()) {
-            if (Component.get() != Actor->GetRootComponent()) {
-                Components.push_back(CoreUObject::MakeObjectRef(Component));
+            const auto* Scene{CoreUObject::Cast<Engine::USceneComponent>(Component.get())};
+            const Engine::USceneComponent* Parent{};
+
+            if (Scene != nullptr && Scene != Root) {
+                Parent = Scene->GetAttachParent() != nullptr ? Scene->GetAttachParent() : Root;
+            }
+
+            if (Scene != Root || Root == nullptr) {
+                Children[Parent].push_back(Component.get());
             }
         }
 
         constexpr std::size_t MaxVisibleRows{8};
         const float RowHeight{ImGui::GetTextLineHeight() + ImGui::GetStyle().CellPadding.y * 2.0f};
-        const float Height{static_cast<float>(std::min(Components.size() + 1, MaxVisibleRows)) * RowHeight + 4.0f};
+        const float Height{static_cast<float>(std::min(Actor->GetComponents().size() + 1, MaxVisibleRows)) * RowHeight + 4.0f};
         constexpr ImGuiTableFlags Flags{ImGuiTableFlags_BordersOuter | ImGuiTableFlags_ScrollY};
+        bool OpenRootDropMenu{};
 
         if (ImGui::BeginTable("##Components", 1, Flags, {0.0f, Height})) {
-            const auto DrawRow{[this, Context, Selected](CoreUObject::TObjectRef<CoreUObject::UObject> Handle, float Indent) {
+            const auto DrawRow{[this, Context, Selected, &OpenRootDropMenu](CoreUObject::TObjectRef<CoreUObject::UObject> Handle, float Indent) {
                 CoreUObject::UObject* Object{Context->ResolveObject(Handle)};
 
                 if (Object == nullptr) {
@@ -712,7 +836,7 @@ namespace Editor {
 
                 ImGui::PushID(Object);
                 ImGui::TableNextRow();
-                ObjectRow::DrawLabel(Object, Handle == Selected, Indent);
+                ObjectRow::DrawLabel(*Context, Object, Handle == Selected, Indent);
 
                 if (ImGui::IsItemClicked()) {
                     if (mLockedContext != nullptr) {
@@ -722,33 +846,94 @@ namespace Editor {
                     }
                 }
 
-                if (CoreUObject::Cast<Engine::AActor>(Object) != nullptr && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                const auto* RowActor{CoreUObject::Cast<Engine::AActor>(Object)};
+
+                if (RowActor != nullptr && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                     Context->OpenInSequencer(CoreUObject::Cast<Engine::ALevelSequenceActor>(Object));
                 }
 
                 ImGui::SetItemTooltip("%s", ObjectRow::GetTypeLabel(Object).c_str());
+
+                auto* Scene{RowActor != nullptr ? RowActor->GetRootComponent() : CoreUObject::Cast<Engine::USceneComponent>(Object)};
+
+                if (Scene != nullptr && Scene->GetAttachParent() != nullptr && ImGui::BeginPopupContextItem("AttachmentMenu")) {
+                    if (ImGui::MenuItem("Detach from Parent", nullptr, false, Context->CanAttachComponent(Scene, nullptr))) {
+                        Context->AttachComponent(Scene, nullptr);
+                    }
+
+                    ImGui::EndPopup();
+                }
+
+                if (auto* Candidate{ObjectRow::DrawAttachmentDragDrop(*Context, Object, true)}) {
+                    mRootDropComponent = CoreUObject::MakeObjectRef(Candidate);
+                    OpenRootDropMenu = true;
+                }
+
                 ImGui::PopID();
+            }};
+
+            const float IndentStep{ImGui::GetTreeNodeToLabelSpacing()};
+            const auto Visit{[&](const auto& VisitChildren, const Engine::USceneComponent* Parent, float Indent) -> void {
+                const auto It{Children.find(Parent)};
+
+                if (It == Children.end()) {
+                    return;
+                }
+
+                for (Engine::UActorComponent* Component : It->second) {
+                    DrawRow(CoreUObject::MakeObjectRef(Component), Indent);
+
+                    if (const auto* Scene{CoreUObject::Cast<Engine::USceneComponent>(Component)}) {
+                        VisitChildren(VisitChildren, Scene, Indent + IndentStep);
+                    }
+                }
             }};
 
             DrawRow(ActorHandle, 0.0f);
 
-            for (CoreUObject::TObjectRef<CoreUObject::UObject> Handle : Components) {
-                DrawRow(Handle, ImGui::GetTreeNodeToLabelSpacing());
+            if (Root != nullptr) {
+                DrawRow(CoreUObject::MakeObjectRef(Root), IndentStep);
+                Visit(Visit, Root, IndentStep * 2.0f);
             }
 
+            Visit(Visit, nullptr, IndentStep);
+
             ImGui::EndTable();
+        }
+
+        if (OpenRootDropMenu) {
+            ImGui::OpenPopup("RootComponentDrop");
+        }
+
+        if (ImGui::BeginPopup("RootComponentDrop")) {
+            auto* Component{CoreUObject::Cast<Engine::USceneComponent>(Context->ResolveObject(mRootDropComponent))};
+
+            if (Component == nullptr || Component->GetOwner() != Actor || !Context->CanPromoteRootComponent(Component)) {
+                ImGui::CloseCurrentPopup();
+            } else {
+                if (ImGui::MenuItem("Make New Root")) {
+                    Context->PromoteRootComponent(Component);
+                }
+
+                if (ImGui::MenuItem("Attach to Current Root", nullptr, false, Context->CanAttachComponent(Component, nullptr))) {
+                    Context->AttachComponent(Component, nullptr);
+                }
+            }
+
+            ImGui::EndPopup();
         }
     }
 
     /**
-     * @brief 객체 타입의 편집 가능한 리플렉션 프로퍼티를 순회하여 표시합니다.
+     * @brief 대상들이 공유하는 프로퍼티 행과 표시할 내용이 있는 카테고리를 모읍니다.
      */
-    void Editor::FDetailsWidget::DrawReflectedObjects(const Core::TArray<CoreUObject::TObjectRef<CoreUObject::UObject>>& Targets) {
+    Editor::FDetailsWidget::FDetailLayout Editor::FDetailsWidget::BuildDetailLayout(const Core::TArray<CoreUObject::TObjectRef<CoreUObject::UObject>>& Targets) {
+        FDetailLayout Layout{};
         Editor::FEditorContext* Context{GetEditorContext()};
         CoreUObject::UObject* Object{Context->ResolveObject(Targets.front())};
 
         if (Object == nullptr) {
-            return;
+            return Layout;
         }
 
         const auto* CommonClass{Object->GetClass()};
@@ -757,7 +942,7 @@ namespace Editor {
             const CoreUObject::UObject* Other{Context->ResolveObject(Handle)};
 
             if (Other == nullptr) {
-                return;
+                return Layout;
             }
 
             while (!Other->IsA(CommonClass)) {
@@ -766,7 +951,7 @@ namespace Editor {
         }
 
         Core::TArray<const CoreUObject::UClass*> Classes{};
-        Core::TArray<FDetailRow> Rows{};
+        Core::TArray<FDetailRow>& Rows{Layout.mRows};
         Core::TArray<CoreUObject::TObjectRef<CoreUObject::UObject>> Roots{};
 
         const bool TransformMatches{MatchesSearch("Transform", "Location") || MatchesSearch("Transform", "Rotation") || MatchesSearch("Transform", "Scale")};
@@ -820,7 +1005,26 @@ namespace Editor {
                     continue;
                 }
 
-                const std::string_view Category{DetailCategory(*Class, Name)};
+                const std::string_view Category{DetailCategory(*Class, Property)};
+
+                // 언리얼처럼 내부 멤버만 보이는 구조체는 멤버마다 행을 만들고, 멤버에 카테고리가 있으면 그 카테고리에 둡니다.
+                if (const CoreUObject::UStruct* Struct{Property->GetStruct()}; Struct != nullptr && Property->HasFlag(Core::EPropertyFlags::ShowOnlyInnerProperties)) {
+                    for (const CoreUObject::FProperty* Child : Struct->GetProperties()) {
+                        if (!IsVisibleProperty(Child)) {
+                            continue;
+                        }
+
+                        const std::string_view ChildCategory{Child->GetCategory().empty() ? Category : std::string_view{Child->GetCategory()}};
+                        const Core::FString ChildLabel{PropertyLabel(Child)};
+
+                        if (MatchesSearch(ChildCategory, ChildLabel, Child->GetName())) {
+                            Rows.push_back({Property, Targets, ChildCategory, ChildLabel, IsAdvancedProperty(Child->GetName()), Child});
+                        }
+                    }
+
+                    continue;
+                }
+
                 const Core::FString Label{Name == "AnimClass" ? "Animation Mode" : LuaScript && Name == "ScriptPath" ? "Script" : PropertyLabel(Property)};
 
                 if (Name == "Transform" ? TransformMatches : MatchesSearch(Category, Label, Name)) {
@@ -835,26 +1039,67 @@ namespace Editor {
             });
         }
 
-        constexpr std::array Categories{"Script", "Transform", "Animation", "Mesh", "Materials", "Light", "Camera", "Fog", "Shape", "Movement", "Rendering", "General", "Settings", "Component Tick"};
-        const bool Searching{mPropertySearch.front() != '\0'};
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
-        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {5.0f, 2.0f});
+        Core::TArray<Core::FString> Categories{"Script", "Transform", "Animation", "Mesh", "Materials", "Physics", "Collision", "Light", "Camera", "Fog", "Shape", "Movement", "Rendering", "General", "Settings", "Actor Tick", "Component Tick"};
 
-        for (const char* Category : Categories) {
-            const std::string_view CategoryName{Category};
-            const bool GraphRow{CategoryName == "Animation" && AllGraphMode && (MatchesSearch(CategoryName, "Anim Graph", "AnimGraph") || MatchesSearch(CategoryName, "Debug Anim Graph"))};
+        // 정해 둔 순서에 없는 카테고리는 처음 나온 순서대로 General 앞에 둡니다.
+        for (const FDetailRow& Row : Rows) {
+            if (std::find(Categories.begin(), Categories.end(), Row.mCategory) == Categories.end()) {
+                Categories.insert(std::find(Categories.begin(), Categories.end(), "General"), Core::FString{Row.mCategory});
+            }
+        }
+
+        const auto* ShadowLight{Targets.size() == 1 ? CoreUObject::Cast<Engine::ULightComponent>(Context->ResolveObject(Targets.front())) : nullptr};
+
+        for (const Core::FString& CategoryName : Categories) {
+            FDetailCategory Category{CategoryName};
+            Category.mGraphRow = CategoryName == "Animation" && AllGraphMode && (MatchesSearch(CategoryName, "Anim Graph", "AnimGraph") || MatchesSearch(CategoryName, "Debug Anim Graph"));
             auto* Mesh{CategoryName == "Materials" && Targets.size() == 1 ? CoreUObject::Cast<Engine::UMeshComponent>(Context->ResolveObject(Targets.front())) : nullptr};
             const auto* Geometry{Mesh != nullptr ? Mesh->GetStaticMesh() : nullptr};
-            const bool MaterialRows{Geometry != nullptr && std::any_of(Geometry->GetMeshData().GetMaterialSlots().begin(), Geometry->GetMeshData().GetMaterialSlots().end(), [this, Mesh, Geometry](const Asset::FMeshMaterialSlot& Slot) {
+
+            if (Geometry != nullptr && std::any_of(Geometry->GetMeshData().GetMaterialSlots().begin(), Geometry->GetMeshData().GetMaterialSlots().end(), [this, Mesh, Geometry](const Asset::FMeshMaterialSlot& Slot) {
                 const Index_t Index{static_cast<Index_t>(&Slot - Geometry->GetMeshData().GetMaterialSlots().data())};
 
                 return MatchesSearch("Materials", Slot.GetName(), "Material Slots") && (!mOnlyModified || !Mesh->GetSlotMaterialPath(Index).empty());
-            })};
-            const bool HasRows{std::any_of(Rows.begin(), Rows.end(), [CategoryName](const FDetailRow& Row) {
-                return Row.mCategory == CategoryName;
-            })};
+            })) {
+                Category.mMaterialMesh = Mesh;
+            }
 
-            if ((!HasRows && !GraphRow && !MaterialRows) || !BeginCategory(Category, CategoryName != "Component Tick")) {
+            Category.mHasRows = std::any_of(Rows.begin(), Rows.end(), [&CategoryName](const FDetailRow& Row) {
+                return Row.mCategory == CategoryName;
+            });
+
+            if (Category.mHasRows || Category.mGraphRow || Category.mMaterialMesh != nullptr) {
+                Layout.mAvailableCategories.push_back(CategoryName);
+                Layout.mCategories.push_back(std::move(Category));
+            }
+        }
+
+        if (ShadowLight != nullptr && !mOnlyModified && MatchesSearch("Rendering", "Shadow Depth Maps")) {
+            Layout.mShadowLight = ShadowLight;
+
+            if (std::find(Layout.mAvailableCategories.begin(), Layout.mAvailableCategories.end(), "Rendering") == Layout.mAvailableCategories.end()) {
+                Layout.mAvailableCategories.push_back("Rendering");
+            }
+        }
+
+        return Layout;
+    }
+
+    /**
+     * @brief 모아 둔 행을 선택한 섹션에 속한 카테고리별로 표시합니다.
+     */
+    void Editor::FDetailsWidget::DrawDetailLayout(const FDetailLayout& Layout, const Core::TArray<CoreUObject::TObjectRef<CoreUObject::UObject>>& Targets) {
+        const Core::TArray<FDetailRow>& Rows{Layout.mRows};
+        const bool Searching{mPropertySearch.front() != '\0'};
+        const Core::FString Section{GetEffectiveSection(Layout.mAvailableCategories)};
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 2.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {5.0f, 2.0f});
+
+        for (const FDetailCategory& Entry : Layout.mCategories) {
+            const char* Category{Entry.mName.c_str()};
+            const std::string_view CategoryName{Category};
+
+            if (!IsCategoryInSection(Section, CategoryName) || !BeginCategory(Category, CategoryName != "Component Tick" && CategoryName != "Actor Tick")) {
                 continue;
             }
 
@@ -876,17 +1121,19 @@ namespace Editor {
                         DrawTransform(Row);
                     } else if (Row.mProperty->GetName() == "AnimClass") {
                         DrawAnimationMode(Row);
+                    } else if (Row.mProperty->GetType() == CoreUObject::EPropertyType::Struct) {
+                        DrawStructRow(Row);
                     } else {
                         DrawPropertyRow(Row);
                     }
                 }
 
-                if (GraphRow) {
+                if (Entry.mGraphRow) {
                     DrawAnimInstance(Targets);
                 }
 
-                if (MaterialRows) {
-                    DrawMaterialSlots(Mesh);
+                if (Entry.mMaterialMesh != nullptr) {
+                    DrawMaterialSlots(Entry.mMaterialMesh);
                 }
 
                 ImGui::EndTable();
@@ -902,12 +1149,8 @@ namespace Editor {
 
         ImGui::PopStyleVar(2);
 
-        if (Targets.size() == 1) {
-            Object = Context->ResolveObject(Targets.front());
-
-            if (const auto* Light{CoreUObject::Cast<Engine::ULightComponent>(Object)}; Light != nullptr && !mOnlyModified && MatchesSearch("Rendering", "Shadow Depth Maps") && BeginCategory("Shadow Depth Maps", false)) {
-                DrawShadowMaps(Light);
-            }
+        if (Layout.mShadowLight != nullptr && IsCategoryInSection(Section, "Rendering") && BeginCategory("Shadow Depth Maps", false)) {
+            DrawShadowMaps(Layout.mShadowLight);
         }
     }
 
@@ -941,13 +1184,14 @@ namespace Editor {
             ImGui::PushID(static_cast<int>(Slot));
             BeginPropertyRow(Label.c_str());
             ImGui::TableSetColumnIndex(1);
-            ImGui::BeginDisabled(!Context->CanEditWorld() || !Override.empty());
+            const bool Editable{Context->CanEditWorld() && Override.empty()};
+            ImGui::BeginDisabled(!Editable);
             const Core::FString& Inherited{Override.empty() ? Slots[Slot].GetMaterialPath() : Override};
             const bool Changed{DrawAssetPicker("##Slot", Path, Asset::EAssetType::Material, "Use mesh material", Inherited)};
 
             ImGui::TableSetColumnIndex(2);
 
-            if ((!Path.empty() && DrawResetButton()) || Changed) {
+            if ((Editable && !Path.empty() && DrawResetButton()) || Changed) {
                 Context->SetMaterialOverride(Handle, Slot, Changed ? Path : Core::FString{});
             }
 
@@ -1167,7 +1411,7 @@ namespace Editor {
 
         ImGui::TableSetColumnIndex(2);
 
-        if (!Defaults.empty() && (DrawResetButton() || Reset) && Editable) {
+        if (Editable && !Defaults.empty() && (DrawResetButton() || Reset)) {
             const Uint64 Token{Context->BeginSceneEdit()};
 
             for (const auto& [Target, Default] : Defaults) {
@@ -1182,7 +1426,115 @@ namespace Editor {
         ImGui::PopID();
     }
 
+    void Editor::FDetailsWidget::DrawStructRow(const FDetailRow& Row) {
+        Editor::FEditorContext* Context{GetEditorContext()};
+        const CoreUObject::UObject* Object{Context->ResolveObject(Row.mTargets.front())};
+        const auto* Struct{static_cast<const CoreUObject::UScriptStruct*>(Row.mProperty->GetStruct())};
+
+        if (Object == nullptr || Struct == nullptr) {
+            return;
+        }
+
+        const auto ReadStruct{[&Row](const CoreUObject::UObject* Target) {
+            return std::get<const void*>(Row.mProperty->ReadValue(Target));
+        }};
+        const bool Editable{std::all_of(Row.mTargets.begin(), Row.mTargets.end(), [Context, &Row](CoreUObject::TObjectRef<CoreUObject::UObject> Target) {
+            return Context->CanEditProperty(Target, Row.mProperty);
+        })};
+
+        // 내부 프로퍼티만 표시하는 구조체는 접힘 노드 없이 멤버를 소유 카테고리의 행으로 바로 그립니다.
+        const bool InnerOnly{Row.mProperty->HasFlag(Core::EPropertyFlags::ShowOnlyInnerProperties)};
+
+        ImGui::PushID(Row.mProperty);
+        ImGui::PushID(Object);
+
+        if (!InnerOnly) {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+        }
+
+        if (InnerOnly || ImGui::TreeNodeEx(Row.mLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAllColumns)) {
+            for (const CoreUObject::FProperty* Child : Struct->GetProperties()) {
+                if (!IsVisibleProperty(Child) || (Row.mInnerProperty != nullptr && Child != Row.mInnerProperty)) {
+                    continue;
+                }
+
+                ImGui::PushID(Child);
+                BeginPropertyRow(PropertyLabel(Child, Struct).c_str());
+                ImGui::TableSetColumnIndex(1);
+
+                if (Child->GetType() == CoreUObject::EPropertyType::Struct || Child->GetArrayOps() != nullptr) {
+                    ImGui::TextDisabled("Not editable here");
+                    ImGui::PopID();
+
+                    continue;
+                }
+
+                CoreUObject::FPropertyValue Value{Child->ReadValue(ReadStruct(Object))};
+                bool Mixed{};
+
+                for (CoreUObject::TObjectRef<CoreUObject::UObject> Target : Row.mTargets) {
+                    if (const CoreUObject::UObject* Current{Context->ResolveObject(Target)}) {
+                        Mixed = Mixed || !EqualValues(Value, Child->ReadValue(ReadStruct(Current)));
+                    }
+                }
+
+                const bool ChildEditable{Editable && !Child->HasFlag(Core::EPropertyFlags::ReadOnly)};
+                ImGui::BeginDisabled(!ChildEditable);
+
+                if (Mixed) {
+                    ImGui::TextDisabled("Multiple Values");
+                }
+
+                ImGui::SetNextItemWidth(-1.0f);
+
+                if (DrawPropertyValue(Child, Value, "##Value") && ChildEditable) {
+                    const bool Interactive{ImGui::IsItemActive()};
+
+                    if (Interactive) {
+                        BeginItemSceneEdit();
+                    }
+
+                    const Uint64 Token{Context->BeginSceneEdit()};
+
+                    for (CoreUObject::TObjectRef<CoreUObject::UObject> Target : Row.mTargets) {
+                        const CoreUObject::UObject* Current{Context->ResolveObject(Target)};
+
+                        if (Current == nullptr || EqualValues(Child->ReadValue(ReadStruct(Current)), Value)) {
+                            continue;
+                        }
+
+                        // 다른 필드는 대상마다 유지하도록 대상의 현재 구조체 사본에 바뀐 필드만 쓴 뒤 전체를 적용합니다.
+                        const CoreUObject::UScriptStruct::FValuePtr Working{Struct->CloneValue(ReadStruct(Current))};
+
+                        if (Working != nullptr && Child->WriteValue(Working.get(), Value)) {
+                            Context->EditProperty(Target, Row.mProperty, CoreUObject::FPropertyValue{static_cast<const void*>(Working.get())}, Interactive);
+                        }
+                    }
+
+                    Context->EndSceneEdit(Token);
+                }
+
+                ImGui::EndDisabled();
+                ImGui::PopID();
+            }
+
+            if (!InnerOnly) {
+                ImGui::TreePop();
+            }
+        }
+
+        ImGui::PopID();
+        ImGui::PopID();
+    }
+
     void Editor::FDetailsWidget::DrawTransform(const FDetailRow& Row) {
+        struct FTransformEdit {
+            CoreUObject::TObjectRef<CoreUObject::UObject> mTarget{};
+            FTransform mTransform{};
+            std::size_t mDepth{};
+        };
+
         Editor::FEditorContext* Context{GetEditorContext()};
         const CoreUObject::UObject* Object{Context->ResolveObject(Row.mTargets.front())};
 
@@ -1193,17 +1545,25 @@ namespace Editor {
         const bool Editable{std::all_of(Row.mTargets.begin(), Row.mTargets.end(), [Context, &Row](CoreUObject::TObjectRef<CoreUObject::UObject> Target) {
             return Context->CanEditProperty(Target, Row.mProperty);
         })};
-        constexpr std::array Labels{"Location", "Rotation", "Scale"};
-        constexpr std::array Axes{"X %.3f", "Y %.3f", "Z %.3f"};
-        constexpr std::array AxisIds{"X", "Y", "Z"};
+        constexpr Core::TStaticArray<const char*, 3> Labels{"Location", "Rotation", "Scale"};
+        constexpr Core::TStaticArray<const char*, 3> AxisIds{"X", "Y", "Z"};
+        constexpr Core::FQuantityUnit RotationUnit{Core::QuantityUnits::Degree.mAlias, Core::Dim::Angle, Core::QuantityUnits::Degree.mScale};
+        const auto& AxisColors{Editor::FGizmoCore::GetAxisColors()};
         const auto ReadPart{[](const FTransform& Transform, Index_t Part) {
             if (Part == 1) {
                 const FRotator Rotation{Transform.GetRotator()};
 
-                return std::array<float, 3>{Rotation.roll, Rotation.pitch, Rotation.yaw};
+                return Core::TStaticArray<float, 3>{Rotation.roll, Rotation.pitch, Rotation.yaw};
             }
 
             return (Part == 0 ? Transform.mLocation : Transform.mScale).ToArray();
+        }};
+        const auto IsDefaultPart{[](const FTransform& Transform, const FTransform& Default, Index_t Part) {
+            if (Part == 1) {
+                return Transform.mRotation.Equals(Default.mRotation, 0.0f);
+            }
+
+            return Part == 0 ? Transform.mLocation == Default.mLocation : Transform.mScale == Default.mScale;
         }};
 
         ImGui::PushID(Object);
@@ -1214,8 +1574,9 @@ namespace Editor {
                 continue;
             }
 
+            const bool IsRotation{Part == 1};
             const auto First{ReadPart(std::get<FTransform>(Row.mProperty->ReadValue(Object)), Part)};
-            std::array<bool, 3> Mixed{};
+            Core::TStaticArray<bool, 3> Mixed{};
             bool Modified{};
 
             for (CoreUObject::TObjectRef<CoreUObject::UObject> Target : Row.mTargets) {
@@ -1225,14 +1586,15 @@ namespace Editor {
                     continue;
                 }
 
-                const auto Values{ReadPart(std::get<FTransform>(Row.mProperty->ReadValue(Current)), Part)};
+                const FTransform Transform{std::get<FTransform>(Row.mProperty->ReadValue(Current))};
+                const auto Values{ReadPart(Transform, Part)};
 
-                for (Index_t Axis{}; Axis < Axes.size(); ++Axis) {
+                for (Index_t Axis{}; Axis < AxisIds.size(); ++Axis) {
                     Mixed[Axis] = Mixed[Axis] || Values[Axis] != First[Axis];
                 }
 
                 if (const auto Default{GetDefaultValue(Current->GetClass(), Row.mProperty)}; Default.has_value()) {
-                    Modified = Modified || Values != ReadPart(std::get<FTransform>(*Default), Part);
+                    Modified = Modified || !IsDefaultPart(Transform, std::get<FTransform>(*Default), Part);
                 }
             }
 
@@ -1244,26 +1606,41 @@ namespace Editor {
             BeginPropertyRow(Labels[Part]);
             ImGui::TableSetColumnIndex(1);
             auto Values{First};
-            std::array<bool, 3> Changed{};
+            Core::TStaticArray<bool, 3> Changed{};
             bool Interactive{};
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {2.0f, ImGui::GetStyle().ItemSpacing.y});
             const float Width{std::max(1.0f, (ImGui::GetContentRegionAvail().x - 4.0f) / 3.0f)};
 
-            for (Index_t Axis{}; Axis < Axes.size(); ++Axis) {
+            for (Index_t Axis{}; Axis < AxisIds.size(); ++Axis) {
                 if (Axis > 0) {
                     ImGui::SameLine();
                 }
 
                 ImGui::PushID(AxisIds[Axis]);
                 ImGui::SetNextItemWidth(Width);
-                Changed[Axis] = ImGui::DragFloat("##Axis", &Values[Axis], Part == 1 ? 0.25f : 0.025f, 0.0f, 0.0f, Mixed[Axis] ? "Multiple" : Axes[Axis]);
+
+                const FVector& Color{AxisColors[Axis]};
+                const float BaseValue{IsRotation ? (Values[Axis] * 1_deg).GetBase() : Values[Axis]};
+                Editor::FEditorQuantityInputWidget Input{"##Axis", BaseValue, IsRotation ? RotationUnit : Core::QuantityUnits::Scalar};
+                Input.SetMixedValue(Mixed[Axis]);
+                Input.SetAxisColor(ImGui::ColorConvertFloat4ToU32({Color.x, Color.y, Color.z, 1.0f}));
+                Input.SetInlineUnit(IsRotation);
+                Input.Draw(0.0f);
+                ImGui::SetItemTooltip("%s", AxisIds[Axis]);
+
+                if (const auto Edited{Input.GetEditedValue()}; Edited.has_value()) {
+                    const float Value{IsRotation ? Core::Math::ToDegrees(Core::FAngle::FromBase(*Edited)) : *Edited};
+                    Changed[Axis] = Mixed[Axis] || Value != Values[Axis];
+                    Values[Axis] = Value;
+                }
+
                 Interactive = Interactive || (Changed[Axis] && ImGui::IsItemActive());
                 ImGui::PopID();
             }
 
             ImGui::PopStyleVar();
             ImGui::TableSetColumnIndex(2);
-            const bool Reset{Modified && DrawResetButton()};
+            const bool Reset{Editable && Modified && DrawResetButton()};
 
             if (Reset || std::any_of(Changed.begin(), Changed.end(), [](bool AxisChanged) {
                 return AxisChanged;
@@ -1273,6 +1650,8 @@ namespace Editor {
                 }
 
                 const Uint64 Token{Context->BeginSceneEdit()};
+                Core::TArray<FTransformEdit> Edits{};
+                Edits.reserve(Row.mTargets.size());
 
                 for (CoreUObject::TObjectRef<CoreUObject::UObject> Target : Row.mTargets) {
                     CoreUObject::UObject* Current{Context->ResolveObject(Target)};
@@ -1282,33 +1661,57 @@ namespace Editor {
                     }
 
                     FTransform Transform{std::get<FTransform>(Row.mProperty->ReadValue(Current))};
-                    auto NewPart{ReadPart(Transform, Part)};
-
                     if (Reset) {
                         const auto Default{GetDefaultValue(Current->GetClass(), Row.mProperty)};
 
-                        if (!Default.has_value()) {
+                        if (!Default.has_value() || IsDefaultPart(Transform, std::get<FTransform>(*Default), Part)) {
                             continue;
                         }
 
-                        NewPart = ReadPart(std::get<FTransform>(*Default), Part);
+                        const FTransform& DefaultTransform{std::get<FTransform>(*Default)};
+
+                        if (Part == 0) {
+                            Transform.mLocation = DefaultTransform.mLocation;
+                        } else if (IsRotation) {
+                            Transform.mRotation = DefaultTransform.mRotation;
+                        } else {
+                            Transform.mScale = DefaultTransform.mScale;
+                        }
                     } else {
-                        for (Index_t Axis{}; Axis < Axes.size(); ++Axis) {
+                        auto NewPart{ReadPart(Transform, Part)};
+
+                        for (Index_t Axis{}; Axis < AxisIds.size(); ++Axis) {
                             if (Changed[Axis]) {
                                 NewPart[Axis] = Values[Axis];
                             }
                         }
+
+                        if (Part == 0) {
+                            Transform.mLocation = {NewPart[0], NewPart[1], NewPart[2]};
+                        } else if (IsRotation) {
+                            Transform.SetRotator({NewPart[1] * 1_deg, NewPart[2] * 1_deg, NewPart[0] * 1_deg});
+                        } else {
+                            Transform.mScale = {NewPart[0], NewPart[1], NewPart[2]};
+                        }
                     }
 
-                    if (Part == 0) {
-                        Transform.mLocation = {NewPart[0], NewPart[1], NewPart[2]};
-                    } else if (Part == 1) {
-                        Transform.SetRotator({NewPart[1], NewPart[2], NewPart[0]});
-                    } else {
-                        Transform.mScale = {NewPart[0], NewPart[1], NewPart[2]};
+                    const auto* Scene{CoreUObject::Cast<Engine::USceneComponent>(Current)};
+                    const Engine::USceneComponent* Parent{Scene != nullptr ? Scene->GetAttachParent() : nullptr};
+                    std::size_t Depth{};
+
+                    while (Parent != nullptr) {
+                        const Engine::USceneComponent* Root{Parent->GetOwner()->GetRootComponent()};
+                        Parent = Root != nullptr ? Root->GetAttachParent() : nullptr;
+                        ++Depth;
                     }
 
-                    Context->EditProperty(Target, Row.mProperty, Transform, Interactive);
+                    Edits.push_back({Target, Transform, Depth});
+                }
+
+                std::ranges::stable_sort(Edits, {}, &FTransformEdit::mDepth);
+
+                for (const FTransformEdit& Edit : Edits) {
+                    Context->EditProperty(Edit.mTarget, Row.mProperty, Edit.mTransform, Interactive);
                 }
 
                 Context->EndSceneEdit(Token);
@@ -1387,7 +1790,7 @@ namespace Editor {
 
             if (ImGui::TreeNodeEx(Label, ImGuiTreeNodeFlags_DefaultOpen)) {
                 for (Index_t Row{}; Row < 4; ++Row) {
-                    std::array<float, 4> Values{(*Matrix)(Row, 0), (*Matrix)(Row, 1), (*Matrix)(Row, 2), (*Matrix)(Row, 3)};
+                    Core::TStaticArray<float, 4> Values{(*Matrix)(Row, 0), (*Matrix)(Row, 1), (*Matrix)(Row, 2), (*Matrix)(Row, 3)};
 
                     if (ImGui::DragFloat4(DrawFieldLabel(std::to_string(Row).c_str()).c_str(), Values.data(), 0.025f)) {
                         for (Index_t Column{}; Column < 4; ++Column) {
@@ -1414,42 +1817,26 @@ namespace Editor {
             auto Values{Rotation->ToArray()};
 
             if (ImGui::DragFloat3(Label, Values.data(), 0.25f, 0.0f, 0.0f, "%.2f")) {
-                *Rotation = {Values[0], Values[1], Values[2]};
+                *Rotation = {Values[0] * 1_deg, Values[1] * 1_deg, Values[2] * 1_deg};
 
                 return true;
             }
         } else if (auto* String{std::get_if<Core::FString>(&Value)}) {
-            const std::string_view Name{Property->GetName()};
+            if (const Core::FString& AssetTypeName{Property->GetMetaData("AssetType")}; !AssetTypeName.empty()) {
+                // AssetType 메타데이터는 EAssetType 값 이름이므로 리플렉션 열거형에서 값을 찾습니다.
+                const auto& AssetTypes{Asset::StaticEnumEAssetType()->GetValues()};
+                const auto Found{std::find_if(AssetTypes.begin(), AssetTypes.end(), [&AssetTypeName](const CoreUObject::FEnumValue& Entry) {
+                    return Entry.mName == AssetTypeName;
+                })};
 
-            if (Name == "SkeletalMesh") {
-                return DrawAssetPicker(Label, *String, Asset::EAssetType::SkeletalMesh, "None");
+                if (Found != AssetTypes.end()) {
+                    const Core::FString& EmptyLabel{Property->GetMetaData("EmptyLabel")};
+
+                    return DrawAssetPicker(Label, *String, static_cast<Asset::EAssetType>(Found->mValue), EmptyLabel.empty() ? "None" : EmptyLabel.c_str());
+                }
             }
 
-            if (Name == "Skeleton") {
-                return DrawAssetPicker(Label, *String, Asset::EAssetType::Skeleton, "None");
-            }
-
-            if (Name == "Animation") {
-                return DrawAssetPicker(Label, *String, Asset::EAssetType::AnimSequence, "None");
-            }
-
-            if (Name == "AnimGraph") {
-                return DrawAssetPicker(Label, *String, Asset::EAssetType::AnimGraph, "None");
-            }
-
-            if (Name == "Mesh") {
-                return DrawAssetPicker(Label, *String, Asset::EAssetType::Mesh, "Primitive mesh");
-            }
-
-            if (Name == "Material") {
-                return DrawAssetPicker(Label, *String, Asset::EAssetType::Material, "Use mesh materials");
-            }
-
-            if (Name == "Texture" || Name == "NormalMap" || Name == "Sprite") {
-                return DrawAssetPicker(Label, *String, Asset::EAssetType::Texture, Name == "Sprite" ? "Default atlas" : "None");
-            }
-
-            if (Property->GetName() == "Text") {
+            if (Property->HasMetaData("MultiLine")) {
                 Core::TArray<char> TextBuffer{};
                 TextBuffer.resize(std::max<std::size_t>(4096, String->size() + 1024));
                 std::copy(String->begin(), String->end(), TextBuffer.begin());
@@ -1463,7 +1850,7 @@ namespace Editor {
                 return false;
             }
 
-            std::array<char, 512> Buffer{};
+            Core::TStaticArray<char, 512> Buffer{};
 
             std::copy_n(String->begin(), std::min(String->size(), Buffer.size() - 1), Buffer.begin());
 
@@ -1474,7 +1861,21 @@ namespace Editor {
             }
         } else if (auto* Boolean{std::get_if<bool>(&Value)}) {
             return ImGui::Checkbox(Label, Boolean);
+        } else if (auto* Quantity{std::get_if<CoreUObject::FQuantityPropertyValue>(&Value)}) {
+            const auto Unit{Property->GetQuantityDisplayUnit(Quantity->mDimension)};
+
+            if (!Unit.has_value()) {
+                ImGui::TextUnformatted("Invalid quantity unit");
+
+                return false;
+            }
+
+            return FEditorQuantityInputWidget::EditValue(Label, Quantity->mBaseValue, *Unit);
         } else if (auto* FloatValue{std::get_if<float>(&Value)}) {
+            if (Property->GetMetaData("DisplayUnit") == Core::QuantityUnits::Meter.mSymbol) {
+                return FEditorQuantityInputWidget::EditValue(Label, *FloatValue, Core::QuantityUnits::Meter);
+            }
+
             return ImGui::DragFloat(Label, FloatValue, 0.025f);
         } else if (auto* IntegerValue{std::get_if<Int32>(&Value)}) {
             return ImGui::InputInt(Label, IntegerValue);
@@ -1488,7 +1889,8 @@ namespace Editor {
         } else if (auto* Reference{std::get_if<CoreUObject::FObjectReference>(&Value)}) {
 
             ImGui::TextWrapped("%s", Reference->GetGuid().ToString().c_str());
-        } else if (const CoreUObject::UStruct* Struct{Property->GetStruct()}) {
+        } else if (const CoreUObject::UStruct* Struct{Property->GetStruct()}; Struct != nullptr && !std::holds_alternative<const void*>(Value)) {
+            // 주소로 전달되는 구조체 멤버는 값이 variant 안에 없으므로 DrawStructRow에서 따로 편집합니다.
             bool Changed{};
 
             if (ImGui::TreeNodeEx(Label, ImGuiTreeNodeFlags_DefaultOpen)) {

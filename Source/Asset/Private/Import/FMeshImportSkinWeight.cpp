@@ -15,7 +15,7 @@ namespace Asset {
     /**
      * @brief 정점에 영향을 주는 본 인덱스와 대응 가중치를 저장합니다.
      */
-    Asset::FMeshImportSkinWeight::FMeshImportSkinWeight(const std::array<Uint32, MaxInfluences>& BoneIndices, const std::array<float, MaxInfluences>& Weights)
+    Asset::FMeshImportSkinWeight::FMeshImportSkinWeight(const Core::TStaticArray<Uint32, MaxInfluences>& BoneIndices, const Core::TStaticArray<float, MaxInfluences>& Weights)
 		: mBoneIndices{BoneIndices},
 		  mWeights{Weights} {
     }
@@ -70,14 +70,14 @@ namespace Asset {
     /**
      * @brief 영향을 주는 본 인덱스를 조회합니다.
      */
-    const std::array<Uint32, Asset::FMeshImportSkinWeight::MaxInfluences>& Asset::FMeshImportSkinWeight::GetBoneIndices() const {
+    const Core::TStaticArray<Uint32, Asset::FMeshImportSkinWeight::MaxInfluences>& Asset::FMeshImportSkinWeight::GetBoneIndices() const {
         return mBoneIndices;
     }
 
     /**
      * @brief 본별 가중치를 조회합니다.
      */
-    const std::array<float, Asset::FMeshImportSkinWeight::MaxInfluences>& Asset::FMeshImportSkinWeight::GetWeights() const {
+    const Core::TStaticArray<float, Asset::FMeshImportSkinWeight::MaxInfluences>& Asset::FMeshImportSkinWeight::GetWeights() const {
         return mWeights;
     }
 

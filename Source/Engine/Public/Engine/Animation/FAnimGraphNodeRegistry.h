@@ -40,7 +40,11 @@ namespace Engine {
         /**
          * @brief 블렌드 스페이스의 Content 기준 경로입니다.
          */
-        BlendSpace
+        BlendSpace,
+        /**
+         * @brief 피직스 에셋의 Content 기준 경로입니다.
+         */
+        PhysicsAsset
     };
 
     /**

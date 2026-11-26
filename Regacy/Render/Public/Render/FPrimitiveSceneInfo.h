@@ -5,6 +5,7 @@
 #include "Core/Base/TCachedValue.h"
 #include "Render/FRenderAssetStamp.h"
 #include "Asset/FLODSettings.h"
+#include "Core/Types.h"
 
 struct FPrimitiveSceneInfo {
     FObjectHandle mComponentHandle{};
@@ -17,6 +18,6 @@ struct FPrimitiveSceneInfo {
     bool mSky{};
     std::unique_ptr<FPrimitiveSceneProxy> mProxy{};
     TCachedValue<TArray<FMeshBatch>, FRenderAssetStamp> mStaticMeshes{};
-    std::array<TArray<Uint32>, GLODCount> mCachedCommandsByLOD{};
+    Core::TStaticArray<TArray<Uint32>, GLODCount> mCachedCommandsByLOD{};
     Uint32 mAvailableLODMask{};
 };

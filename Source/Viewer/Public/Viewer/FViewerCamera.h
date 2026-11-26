@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Core/Math/FBox.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FRotator.h"
 #include "Engine/FSceneView.h"
 
@@ -62,6 +63,24 @@ namespace Viewer {
         void Zoom(float Delta);
 
         /**
+         * @brief 궤도 중심과 거리로부터 카메라 눈의 월드 위치를 계산합니다.
+         * @return 월드 공간 눈 위치입니다.
+         */
+        FVector GetLocation() const;
+
+        /**
+         * @brief 시선 방향과 거리를 유지한 채 눈과 궤도 중심을 같은 양만큼 이동합니다.
+         * @param Delta 월드 공간 이동량이며 유한한 값만 적용합니다.
+         */
+        void MoveEye(const FVector& Delta);
+
+        /**
+         * @brief 눈의 위치를 고정하고 화면 이동량만큼 시선을 회전하며 상하 각도를 제한합니다.
+         * @param Delta 이전 마우스 위치 대비 화면 이동량(픽셀)입니다.
+         */
+        void LookAround(const FVector2& Delta);
+
+        /**
          * @brief 모든 성분이 유한한 경우 카메라 회전각을 설정합니다.
          * @param Rotation 설정할 카메라 회전각(도)입니다.
          */
@@ -71,7 +90,7 @@ namespace Viewer {
          * @brief 유한한 수직 시야각을 1~170도로 제한하여 설정합니다.
          * @param FieldOfView 수직 시야각(도)입니다.
          */
-        void SetFieldOfView(float FieldOfView);
+        void SetFieldOfView(Core::FAngle FieldOfView);
 
         /**
          * @brief 궤도 카메라의 회전각을 반환합니다.
@@ -102,7 +121,7 @@ namespace Viewer {
         /**
          * @brief 궤도 카메라의 회전각(도)입니다.
          */
-        FRotator mRotation{-20.0f, 45.0f, 0.0f};
+        FRotator mRotation{};
 
         /**
          * @brief 카메라가 바라보고 회전하는 중심의 월드 좌표입니다.
@@ -112,16 +131,16 @@ namespace Viewer {
         /**
          * @brief 카메라 거리와 클립 평면 계산의 기준이 되는 경계 반지름입니다.
          */
-        float mRadius{1.0f};
+        float mRadius{};
 
         /**
          * @brief 카메라와 궤도 중심 사이의 월드 단위 거리입니다.
          */
-        float mDistance{3.0f};
+        float mDistance{};
 
         /**
          * @brief 수직 시야각(도)입니다.
          */
-        float mFieldOfView{60.0f};
+        Core::FAngle mFieldOfView{};
     };
 }

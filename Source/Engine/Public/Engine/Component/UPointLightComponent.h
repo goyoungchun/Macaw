@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Engine/Component/ULightComponent.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "UPointLightComponent.generated.h"
 
 namespace Engine {
@@ -41,14 +42,14 @@ namespace Engine {
          * @brief 점광원·스포트라이트의 영향 반경을 반환합니다.
          * @return 점광원·스포트라이트의 영향 반경입니다.
          */
-        float GetAttenuationRadius() const;
+        Core::FLength GetAttenuationRadius() const;
 
         /**
          * @brief 점광원·스포트라이트의 영향 반경을 검증하고 변경합니다.
          * @param[in] AttenuationRadius 0보다 큰 유한한 광원 영향 반경입니다.
          * @return 입력값을 수락하고 상태를 갱신하면 true이며 잘못된 값이면 false입니다.
          */
-        bool SetAttenuationRadius(float AttenuationRadius);
+        bool SetAttenuationRadius(Core::FLength AttenuationRadius);
 
         /**
          * @brief 거리에 따른 광원 감쇠 지수를 반환합니다.
@@ -67,13 +68,13 @@ namespace Engine {
         /**
          * @brief 점광원·스포트라이트의 영향 반경입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetAttenuationRadius, Setter = SetAttenuationRadius)
-        float mAttenuationRadius{10.0f};
+        UPROPERTY(Edit, Serialize, Category = "Light", Getter = GetAttenuationRadius, Setter = SetAttenuationRadius)
+        Core::FLength mAttenuationRadius{};
 
         /**
          * @brief 거리에 따른 광원 감쇠 지수입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetLightFalloffExponent, Setter = SetLightFalloffExponent)
+        UPROPERTY(Edit, Serialize, Category = "Light", Getter = GetLightFalloffExponent, Setter = SetLightFalloffExponent)
         float mLightFalloffExponent{2.0f};
     };
 

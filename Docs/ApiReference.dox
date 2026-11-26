@@ -52,6 +52,7 @@ for (CoreUObject::TObjectIterator<Asset::UStaticMesh> Iterator{}; Iterator; ++It
 | \ref Serialization | JSON 아카이브와 파일 입출력 | \ref Serialization::FJsonArchive |
 | \ref Asset | 메시·텍스처·머티리얼, 에셋 관리·저장과 외부 파일 임포트 | \ref Asset::FAssetManager, \ref Asset::UStaticMesh, \ref Asset::UTexture2D, \ref Asset::UMaterial |
 | \ref RenderCore | 렌더러 수명 및 프레임 제출 인터페이스 | \ref RenderCore::IRendererModule, \ref RenderCore::FRenderStats |
+| \ref PhysicsRuntime | PhysX SDK 수명과 엔진 수학 타입 변환 | \ref PhysicsRuntime::FPhysicsRuntime |
 | \ref Engine | 월드, 레벨, 액터, 컴포넌트, 장면·뷰포트 및 장면 저장 | \ref Engine::UEngine, \ref Engine::UWorld, \ref Engine::AActor, \ref Engine::FSceneSerializer |
 | \ref Renderer | Direct3D 11 장치, 장면, 타깃과 드로 제출 | \ref Renderer::FRenderer, \ref Renderer::FScene, \ref Renderer::FMeshPass |
 | \ref Platform | Win32 창과 메시지 펌프 | \ref Platform::FWindowsApplication |
@@ -223,6 +224,8 @@ JSON 문서와 파일 직렬화입니다.
 에셋 타입, 로드·캐시·직렬화와 외부 파일 임포트입니다.
 \defgroup RenderCore RenderCore
 렌더러 인터페이스와 렌더 통계입니다.
+\defgroup PhysicsRuntime PhysicsRuntime
+PhysX SDK 수명, 물리 장면·바디와 엔진 수학 타입 변환입니다.
 \defgroup Engine Engine
 월드, 액터, 컴포넌트, 장면 인터페이스와 직렬화입니다.
 \defgroup Renderer Renderer
@@ -311,6 +314,11 @@ Lua와 HLSL 소스 편집기, 언어 서버 연동과 빌드 메시지입니다.
 /**
  * @namespace Serialization
  * @brief JSON 기반 아카이브와 객체·파일 직렬화를 제공합니다.
+ */
+
+/**
+ * @namespace PhysicsRuntime
+ * @brief PhysX SDK 수명, 물리 장면·바디와 엔진 수학 타입 변환을 제공합니다.
  */
 
 /**

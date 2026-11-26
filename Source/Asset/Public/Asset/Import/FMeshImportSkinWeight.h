@@ -9,7 +9,6 @@
 #include "Core/ReflectionMacros.h"
 #include "Core/Types.h"
 
-#include <array>
 #include <utility>
 
 namespace Asset {
@@ -37,7 +36,7 @@ namespace Asset {
          * @param[in] BoneIndices 영향 슬롯별 본 인덱스 배열입니다.
          * @param[in] Weights 본 영향 슬롯별 스킨 가중치입니다.
          */
-        FMeshImportSkinWeight(const std::array<Uint32, MaxInfluences>& BoneIndices, const std::array<float, MaxInfluences>& Weights);
+        FMeshImportSkinWeight(const Core::TStaticArray<Uint32, MaxInfluences>& BoneIndices, const Core::TStaticArray<float, MaxInfluences>& Weights);
 
     public:
         /**
@@ -52,24 +51,24 @@ namespace Asset {
          * @brief 영향을 주는 본 인덱스를 조회합니다.
          * @return 결과 본 목록 기준 인덱스이며 쓰지 않는 칸은 0입니다.
          */
-        const std::array<Uint32, MaxInfluences>& GetBoneIndices() const;
+        const Core::TStaticArray<Uint32, MaxInfluences>& GetBoneIndices() const;
 
         /**
          * @brief 본별 가중치를 조회합니다.
          * @return 합이 1인 가중치이며 쓰지 않는 칸과 영향이 없는 정점은 0입니다.
          */
-        const std::array<float, MaxInfluences>& GetWeights() const;
+        const Core::TStaticArray<float, MaxInfluences>& GetWeights() const;
 
     private:
         /**
          * @brief 결과 본 목록 기준 본 인덱스입니다.
          */
-        std::array<Uint32, 4> mBoneIndices{};
+        Core::TStaticArray<Uint32, 4> mBoneIndices{};
 
         /**
          * @brief 본별 가중치입니다.
          */
-        std::array<float, 4> mWeights{};
+        Core::TStaticArray<float, 4> mWeights{};
     };
 
 }

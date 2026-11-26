@@ -8,6 +8,7 @@
 
 #include "FObjectConstants.h"
 
+#include <algorithm>
 #include <utility>
 
 namespace Renderer {
@@ -69,7 +70,9 @@ namespace Renderer {
 
         const std::span<const Uint8> Bytes{Compilation->mByteCode};
 
-        if (mCode->GetDescription(mVariantKey).mTargetProfile.starts_with("ps_")) {
+        const RenderCore::FShaderDescription& Description{mCode->GetDescription(mVariantKey)};
+
+        if (Description.mTargetProfile.starts_with("ps_")) {
             Microsoft::WRL::ComPtr<ID3D11PixelShader> Pixel{};
 
             if (FAILED(Device->CreatePixelShader(Bytes.data(), Bytes.size(), nullptr, Pixel.GetAddressOf()))) {
@@ -84,7 +87,7 @@ namespace Renderer {
             return true;
         }
 
-        if (!mCode->GetDescription(mVariantKey).mTargetProfile.starts_with("vs_")) {
+        if (!Description.mTargetProfile.starts_with("vs_")) {
             Error = "Unsupported shader instance stage";
 
             return false;
@@ -113,6 +116,14 @@ namespace Renderer {
 
             if (!DepthOnly) {
                 Elements.push_back({"INSTANCE_UV", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 4, static_cast<UINT>(offsetof(Renderer::FObjectConstants, mUVTransform)), D3D11_INPUT_PER_INSTANCE_DATA, 1});
+
+                const bool ParticleColor{std::ranges::any_of(Description.mMacros, [](const RenderCore::FShaderMacro& Macro) {
+                    return Macro.mName == "MACAW_PARTICLE_COLOR";
+                })};
+
+                if (ParticleColor) {
+                    Elements.push_back({"INSTANCE_PARTICLE_COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 4, static_cast<UINT>(offsetof(Renderer::FMeshInstanceData, mParticleColor)), D3D11_INPUT_PER_INSTANCE_DATA, 1});
+                }
             }
         }
 

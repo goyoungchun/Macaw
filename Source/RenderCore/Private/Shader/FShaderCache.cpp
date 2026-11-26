@@ -6,11 +6,11 @@
 
 #include "RenderCore/Shader/FShaderCache.h"
 #include "Core/FilePath.h"
+#include "Core/Guid.h"
 #include "FShaderFile.h"
 
 #include <Windows.h>
 
-#include <atomic>
 #include <bit>
 #include <utility>
 
@@ -231,10 +231,9 @@ namespace RenderCore {
         }
 
         const std::filesystem::path Path{GetPath(Key)};
-        static std::atomic<Uint64> Sequence{};
         std::filesystem::path Temporary{Path};
 
-        Temporary += L"." + std::to_wstring(GetCurrentProcessId()) + L"." + std::to_wstring(GetTickCount64()) + L"." + std::to_wstring(Sequence.fetch_add(1)) + L".tmp";
+        Temporary += Core::FilePath::FromUtf8("." + Core::FGuid{}.ToString() + ".tmp");
 
         const HANDLE File{CreateFileW(Temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr)};
 

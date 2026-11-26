@@ -19,13 +19,13 @@
 #include "Engine/UWorld.h"
 #include "Platform/Window.h"
 #include "RenderCore/IRendererModule.h"
+#include "Core/Types.h"
 #include <commdlg.h>
 #include <d3d11.h>
 #include <DirectXTex.h>
 #include <wincodec.h>
 #include <wrl/client.h>
 #include <algorithm>
-#include <array>
 #include <utility>
 
 using namespace Editor;
@@ -64,11 +64,12 @@ namespace {
 
 }
 
-FEditorCommands::FEditorCommands(FEditorContext* Context, FPlayInEditorSession* PlaySession, FEditorViewportLayout& ViewportLayout, Platform::FWindowsApplication* Platform)
+FEditorCommands::FEditorCommands(FEditorContext* Context, FPlayInEditorSession* PlaySession, FEditorViewportLayout& ViewportLayout, Platform::FWindowsApplication* Platform, FMessageBox& Messages)
 	: mContext{Context},
 	  mPlaySession{PlaySession},
 	  mViewportLayout{ViewportLayout},
-	  mPlatform{Platform} {
+	  mPlatform{Platform},
+	  mMessages{Messages} {
 }
 
 FEditorCommands::~FEditorCommands() = default;
@@ -77,8 +78,8 @@ void FEditorCommands::SetContentChanged(std::function<void()> Handler) {
     mContentChanged = std::move(Handler);
 }
 
-void FEditorCommands::SetCanCloseAssets(std::function<bool()> Handler) {
-    mCanCloseAssets = std::move(Handler);
+void FEditorCommands::SetCollectAssetSavePrompts(std::function<Core::TArray<FMessageBox::FSavePrompt>()> Handler) {
+    mCollectAssetSavePrompts = std::move(Handler);
 }
 
 bool FEditorCommands::WantsExit() const {
@@ -86,11 +87,13 @@ bool FEditorCommands::WantsExit() const {
 }
 
 void FEditorCommands::RequestExit() {
-    mExit = true;
+    ConfirmSceneChange([this]() {
+        mExit = true;
+    });
 }
 
 std::filesystem::path FEditorCommands::ChooseFile(bool Save) {
-    std::array<wchar_t, 4096> Buffer{};
+    Core::TStaticArray<wchar_t, 4096> Buffer{};
 
     if (Save) {
         const std::wstring Filename{mContext->GetScenePath().empty() ? L"Scene.masset" : mContext->GetScenePath().filename().wstring()};
@@ -155,11 +158,27 @@ void FEditorCommands::SetCurrentLevelAsStartup() {
 }
 
 void FEditorCommands::OpenLevel() {
+    if (mMessages.IsOpen()) {
+        return;
+    }
+
     const auto Path{ChooseFile(false)};
 
-    if (!Path.empty() && ConfirmSceneChange()) {
-        mContext->LoadScene(Path);
+    if (!Path.empty()) {
+        OpenLevel(Path);
     }
+}
+
+void FEditorCommands::OpenLevel(const std::filesystem::path& Path) {
+    ConfirmSceneChange([this, Path]() {
+        mContext->LoadScene(Path);
+    });
+}
+
+void FEditorCommands::NewLevel() {
+    ConfirmSceneChange([this]() {
+        mContext->NewScene();
+    });
 }
 
 void FEditorCommands::RequestPlay() {
@@ -173,17 +192,21 @@ void FEditorCommands::RequestPlay() {
 }
 
 void FEditorCommands::ExportGame() {
-    const auto Destination{Editor::FProjectDialog::ChooseDirectory(mPlatform->GetWindowHandle())};
-
-    if (Destination.empty()) {
+    if (mMessages.IsOpen()) {
         return;
     }
 
-    if (!ConfirmSceneChange()) {
-        return;
-    }
+    const auto Destination{FProjectDialog::ChooseDirectory(mPlatform->GetWindowHandle())};
 
-    std::array<wchar_t, 32768> Executable{};
+    if (!Destination.empty()) {
+        ConfirmSceneChange([this, Destination]() {
+            ExportGameTo(Destination);
+        });
+    }
+}
+
+void FEditorCommands::ExportGameTo(const std::filesystem::path& Destination) {
+    Core::TStaticArray<wchar_t, 32768> Executable{};
     const DWORD Length{GetModuleFileNameW(nullptr, Executable.data(), static_cast<DWORD>(Executable.size()))};
     Core::FString Error{};
     bool Exported{};
@@ -199,44 +222,36 @@ void FEditorCommands::ExportGame() {
     const Core::FString Message{Exported ? "Exported game to " + Core::FilePath::ToUtf8(Destination) : Error};
 
     mContext->AddLog(Message);
-    MessageBoxW(mPlatform->GetWindowHandle(), Core::FilePath::FromUtf8(Message).c_str(), Exported ? L"Game Exported" : L"Cannot Export Game", MB_OK | (Exported ? MB_ICONINFORMATION : MB_ICONERROR));
+    mMessages.Show(Exported ? "Game Exported" : "Cannot Export Game", Message);
 }
 
-bool FEditorCommands::ConfirmSceneChange() {
-    if (mCanCloseAssets && !mCanCloseAssets()) {
-        return false;
-    }
-
-    if (!mContext->IsSceneDirty()) {
-        return true;
-    }
-
-    const Int32 Choice{MessageBoxW(mPlatform->GetWindowHandle(), L"Save changes to the current scene?", L"Scene", MB_YESNOCANCEL | MB_ICONQUESTION)};
-
-    if (Choice == IDCANCEL) {
-        return false;
-    }
-
-    if (Choice == IDNO) {
-        return true;
-    }
-
-    const auto Path{mContext->GetScenePath().empty() ? ChooseFile(true) : mContext->GetScenePath()};
-    const bool Saved{!Path.empty() && mContext->SaveScene(Path)};
-
-    if (Saved && mContentChanged) {
-        mContentChanged();
-    }
-
-    return Saved;
-}
-
-void FEditorCommands::ChooseProject(bool Create) {
-    if (!ConfirmSceneChange()) {
+void FEditorCommands::ConfirmSceneChange(std::function<void()> Action) {
+    if (mMessages.IsOpen()) {
         return;
     }
 
-    mContext->RequestProject({}, Create);
+    auto Prompts{mCollectAssetSavePrompts ? mCollectAssetSavePrompts() : Core::TArray<FMessageBox::FSavePrompt>{}};
+
+    if (mContext->IsSceneDirty()) {
+        Prompts.push_back({"Scene", "Save changes to the current scene?", [this]() {
+            const auto Path{mContext->GetScenePath().empty() ? ChooseFile(true) : mContext->GetScenePath()};
+            const bool Saved{!Path.empty() && mContext->SaveScene(Path)};
+
+            if (Saved && mContentChanged) {
+                mContentChanged();
+            }
+
+            return Saved;
+        }});
+    }
+
+    mMessages.ConfirmSave(std::move(Prompts), std::move(Action));
+}
+
+void FEditorCommands::ChooseProject(bool Create) {
+    ConfirmSceneChange([this, Create]() {
+        mContext->RequestProject({}, Create);
+    });
 }
 
 void FEditorCommands::CaptureProjectThumbnail() {

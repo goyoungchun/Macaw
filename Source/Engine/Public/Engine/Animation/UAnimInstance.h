@@ -385,7 +385,7 @@ namespace Engine {
         /**
          * @brief 루트 모션 추출·전달 방식입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "RootMotionMode", Getter = GetRootMotionMode, Setter = SetRootMotionMode)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "RootMotionMode", Getter = GetRootMotionMode, Setter = SetRootMotionMode)
         Engine::ERootMotionMode mRootMotionMode{Engine::ERootMotionMode::NoRootMotionExtraction};
 
         /**
@@ -407,7 +407,7 @@ namespace Engine {
          * @brief 시퀀스별로 트랙 인덱스를 스켈레톤 본 인덱스로 바꾸는 표이며, 스켈레톤에 없는 트랙은 -1입니다.
          * @details 시퀀스를 처음 평가할 때 만들고, 스켈레톤이 바뀌면 InitializeAnimation이 비웁니다.
          */
-        Core::TMap<CoreUObject::TObjectRef<const Asset::UAnimSequence>, FSequenceBoneMapping, CoreUObject::TObjectRefHash<const Asset::UAnimSequence>> mTrackToBone{};
+        CoreUObject::ObjectHashMap<CoreUObject::TObjectRef<const Asset::UAnimSequence>, FSequenceBoneMapping> mTrackToBone{};
 
         /**
          * @brief 샘플링 결과를 담는 트랙 순서의 임시 포즈입니다.

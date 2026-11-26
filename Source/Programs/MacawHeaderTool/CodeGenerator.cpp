@@ -71,8 +71,15 @@ namespace HeaderTool {
 
             const std::string FlagText{Flags.empty() ? "Core::EPropertyFlags::None" : Join(Flags, " | ")};
             const std::string Function{Property.Array ? "RegisterArrayProperty" : "RegisterProperty"};
+            std::vector<std::string> MetaData;
 
-            return Indent + "    CoreUObject::" + Function + "<" + Join(Pointers, ", ") + ">(Information, " + Property.Name + ", " + FlagText + ");";
+            for (const auto& [Key, Value] : Property.MetaData) {
+                MetaData.push_back("{\"" + Key + "\", " + Value + "}");
+            }
+
+            const std::string MetaDataText{MetaData.empty() ? "" : ", Core::FPropertyMetaData{" + Join(MetaData, ", ") + "}"};
+
+            return Indent + "    CoreUObject::" + Function + "<" + Join(Pointers, ", ") + ">(Information, " + Property.Name + ", " + FlagText + MetaDataText + ");";
         }
 
         /**

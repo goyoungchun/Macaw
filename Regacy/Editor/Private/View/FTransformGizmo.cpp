@@ -2,6 +2,7 @@
 #include "Asset/FAssetRegistry.h"
 #include "Editor/Settings/FEditorConfigManager.h"
 #include "Editor/View/FTransformGizmo.h"
+#include "Core/Types.h"
 
 #include <algorithm>
 #include <cmath>
@@ -97,7 +98,7 @@ namespace {
         return (Point - (Start + Segment * Parameter)).Length();
     }
 
-    bool InsidePolygon(const FVector2& Point, const std::array<FVector2, 4>& Polygon, Uint32 Count) {
+    bool InsidePolygon(const FVector2& Point, const Core::TStaticArray<FVector2, 4>& Polygon, Uint32 Count) {
         bool Positive{};
         bool Negative{};
         float Area{};
@@ -309,7 +310,7 @@ void FTransformGizmo::Update(const FViewMatrices& Camera, const D3D11_VIEWPORT& 
         mBasis = FMatrix::CreateFromQuaternion(Target->GetComponentTransform().GetRotationQuaternion());
     }
 
-    const std::array<FVector3, 3> UnitAxes{FVector3::UnitX, FVector3::UnitY, FVector3::UnitZ};
+    const Core::TStaticArray<FVector3, 3> UnitAxes{FVector3::UnitX, FVector3::UnitY, FVector3::UnitZ};
 
     for (Uint32 Index{}; Index < 3; ++Index) {
         mAxes[Index] = FVector3::TransformNormal(UnitAxes[Index], mBasis);
@@ -334,7 +335,7 @@ void FTransformGizmo::BuildHandles() {
 
     const float Radius{5.0f * mUnitsPerPixel * mSize};
     const EHandle Handle{mEditorContext->GetGizmoMode() == EGizmoMode::Scale ? EHandle::Uniform : EHandle::Screen};
-    const std::array<FVector3, 4> Points{mPivot - mViewRight * Radius - mViewUp * Radius, mPivot + mViewRight * Radius - mViewUp * Radius, mPivot + mViewRight * Radius + mViewUp * Radius, mPivot - mViewRight * Radius + mViewUp * Radius};
+    const Core::TStaticArray<FVector3, 4> Points{mPivot - mViewRight * Radius - mViewUp * Radius, mPivot + mViewRight * Radius - mViewUp * Radius, mPivot + mViewRight * Radius + mViewUp * Radius, mPivot - mViewRight * Radius + mViewUp * Radius};
 
     AddPolygon(Handle, Points, 4, GetHandleColor(Handle), 0);
 
@@ -350,7 +351,7 @@ void FTransformGizmo::BuildAxes() {
     const bool Scale{mEditorContext->GetGizmoMode() == EGizmoMode::Scale};
     const float Length{Scale ? ScaleAxisLength : TranslateAxisLength};
     const FAssetHandle Mesh{Scale ? mScaleArrowMesh : mArrowMesh};
-    const std::array<FMatrix, 3> Rotations{FMatrix::CreateRotationY(Pi * 0.5f), FMatrix::CreateRotationX(-Pi * 0.5f), FMatrix::Identity};
+    const Core::TStaticArray<FMatrix, 3> Rotations{FMatrix::CreateRotationY(Pi * 0.5f), FMatrix::CreateRotationX(-Pi * 0.5f), FMatrix::Identity};
 
     for (Uint32 Index{}; Index < 3; ++Index) {
         const EHandle Handle{static_cast<EHandle>(Index + 1)};
@@ -375,7 +376,7 @@ void FTransformGizmo::BuildAxes() {
 void FTransformGizmo::BuildPlanes() {
     const float Unit{mUnitsPerPixel * mSize};
     const bool Scale{mEditorContext->GetGizmoMode() == EGizmoMode::Scale};
-    constexpr std::array<std::array<Uint32, 2>, 3> AxisPairs{std::array<Uint32, 2>{0, 1}, std::array<Uint32, 2>{0, 2}, std::array<Uint32, 2>{1, 2}};
+    constexpr Core::TStaticArray<Core::TStaticArray<Uint32, 2>, 3> AxisPairs{Core::TStaticArray<Uint32, 2>{0, 1}, Core::TStaticArray<Uint32, 2>{0, 2}, Core::TStaticArray<Uint32, 2>{1, 2}};
 
     for (Uint32 Index{}; Index < 3; ++Index) {
         const EHandle Handle{static_cast<EHandle>(static_cast<Uint8>(EHandle::XY) + Index)};
@@ -388,8 +389,8 @@ void FTransformGizmo::BuildPlanes() {
 
         const float Near{Scale ? 18.0f : 20.0f};
         const float Far{Scale ? 48.0f : 36.0f};
-        const std::array<FVector3, 4> Points{mPivot + (First + Second) * Near * Unit, mPivot + (First * Far + Second * Near) * Unit, mPivot + (First + Second) * Far * Unit, mPivot + (First * Near + Second * Far) * Unit};
-        const std::array<FVector3, 4> Triangle{Points[0], Points[1], Points[3], FVector3{}};
+        const Core::TStaticArray<FVector3, 4> Points{mPivot + (First + Second) * Near * Unit, mPivot + (First * Far + Second * Near) * Unit, mPivot + (First + Second) * Far * Unit, mPivot + (First * Near + Second * Far) * Unit};
+        const Core::TStaticArray<FVector3, 4> Triangle{Points[0], Points[1], Points[3], FVector3{}};
 
         AddPolygon(Handle, Scale ? Triangle : Points, Scale ? 3 : 4, GetHandleColor(Handle), 1);
     }
@@ -435,7 +436,7 @@ void FTransformGizmo::AddSegment(EHandle Handle, const FVector3& Start, const FV
     }
 }
 
-void FTransformGizmo::AddPolygon(EHandle Handle, const std::array<FVector3, 4>& Points, Uint32 Count, const FVector4& Color, Uint32 Priority) {
+void FTransformGizmo::AddPolygon(EHandle Handle, const Core::TStaticArray<FVector3, 4>& Points, Uint32 Count, const FVector4& Color, Uint32 Priority) {
     mPickShapes.push_back({Handle, Points, Count, 3.0f, Priority});
 
     if (Priority == 1) {
@@ -463,7 +464,7 @@ FTransformGizmo::EHandle FTransformGizmo::HitTest(const POINT& Position) const {
     float BestDistance{std::numeric_limits<float>::max()};
 
     for (const FPickShape& Shape : mPickShapes) {
-        std::array<FVector2, 4> Points{};
+        Core::TStaticArray<FVector2, 4> Points{};
         bool Valid{true};
 
         for (Uint32 Index{}; Index < Shape.mCount; ++Index) {
@@ -1018,7 +1019,7 @@ bool FTransformGizmo::FindVertex(const POINT& MousePosition, FVector3& Position)
                 continue;
             }
 
-            std::array<DirectX::XMFLOAT3, 8> Corners{};
+            Core::TStaticArray<DirectX::XMFLOAT3, 8> Corners{};
 
             MeshComponent->GetWorldOBB().GetCorners(Corners.data());
 

@@ -8,6 +8,7 @@
 #include "Asset/Pipeline/UPipeline.h"
 #include "World/AActor.h"
 #include "World/UWorld.h"
+#include "Core/Types.h"
 
 bool UBillboardComponent::CanRenderBillBoard() const {
     return IsRegistered() && IsVisible();
@@ -124,7 +125,7 @@ bool UBillboardComponent::BuildBillboardDrawData(FBillboardDrawData& OutData) co
     return true;
 }
 
-bool UBillboardComponent::GetWorldCorners(const FMatrix& CameraWorld, std::array<FVector3, 4>& OutCorners) const {
+bool UBillboardComponent::GetWorldCorners(const FMatrix& CameraWorld, Core::TStaticArray<FVector3, 4>& OutCorners) const {
     FBillboardDrawData Data{};
 
     if (!BuildBillboardDrawData(Data) || Data.mSize.mX <= 0.0f || Data.mSize.mY <= 0.0f) {

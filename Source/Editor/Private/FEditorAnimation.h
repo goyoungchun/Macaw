@@ -52,7 +52,7 @@ namespace Editor {
          * @param[in] Duration 목표 값까지 보간할 초 단위 시간이며 음수는 0으로 처리합니다.
          * @return 현재 프레임의 등장 불투명도입니다.
          */
-        static float Appear(ImGuiID Owner, float Duration = 0.12f);
+        static float Appear(ImGuiID Owner, float Duration = mDefaultAppearDuration);
 
         /**
          * @brief 실수 채널의 보간 상태를 지정한 값으로 즉시 초기화합니다.
@@ -70,5 +70,8 @@ namespace Editor {
          * @return 직전 프레임에 사용하지 않은 채널이면 true입니다.
          */
         static bool Touch(ImGuiID Owner, const char* Channel);
+
+    private:
+        static const float mDefaultAppearDuration;
     };
 }

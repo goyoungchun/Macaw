@@ -16,16 +16,16 @@
 #include "Asset/UMaterial.h"
 #include "CoreUObject/Reflection/NewObject.h"
 #include "Renderer/Renderer.h"
-#include "Platform/Window.h"
 #include "Viewer/FMeshViewerContent.h"
 #include <imgui.h>
+#include <utility>
 
 using namespace Editor;
 
-FMaterialEditorToolkit::FMaterialEditorToolkit(FEditorContext* Context, Platform::FWindowsApplication* Platform, const std::filesystem::path& Path, Asset::UMaterial* Material, FEditorAssetCatalog& Catalog, FAssetThumbnailCache& Thumbnails)
+FMaterialEditorToolkit::FMaterialEditorToolkit(FEditorContext* Context, const std::filesystem::path& Path, Asset::UMaterial* Material, FEditorAssetCatalog& Catalog, FAssetThumbnailCache& Thumbnails, FMessageBox& Messages)
 	: FAssetEditorToolkit{Path, Asset::EAssetType::Material, "###MaterialEditor:" + Core::FilePath::ToGenericUtf8(Path)},
 	  mContext{Context},
-	  mPlatform{Platform},
+	  mMessages{Messages},
 	  mEditingMaterial{Material},
 	  mAssetCatalog{&Catalog},
 	  mThumbnails{&Thumbnails},
@@ -42,7 +42,7 @@ FMaterialEditorToolkit::FMaterialEditorToolkit(FEditorContext* Context, Platform
         EEditorDockRegion::Details);
 
     GetTab().SetCanCloseHandler([this]() {
-        return ConfirmMaterialChange();
+        return RequestTabClose();
     });
 
     if (!mViewer.SetAsset(Material, Asset::EAssetType::Material)) {
@@ -51,10 +51,6 @@ FMaterialEditorToolkit::FMaterialEditorToolkit(FEditorContext* Context, Platform
 }
 
 FMaterialEditorToolkit::~FMaterialEditorToolkit() = default;
-
-bool FMaterialEditorToolkit::CanClose() {
-    return ConfirmMaterialChange();
-}
 
 void FMaterialEditorToolkit::UpdateEditor(float) {
     GetTab().SetName(EditorStyle::TabIconPadding + Core::FilePath::ToUtf8(GetAssetPath().stem()) + (mMaterialDirty ? "*" : "") + "###MaterialEditor:" + Core::FilePath::ToGenericUtf8(GetAssetPath()));
@@ -72,28 +68,61 @@ bool FMaterialEditorToolkit::SaveMaterial() {
     return true;
 }
 
-bool FMaterialEditorToolkit::ConfirmMaterialChange() {
+std::optional<FMessageBox::FSavePrompt> FMaterialEditorToolkit::GetClosePrompt() {
     if (!mMaterialDirty || mEditingMaterial == nullptr) {
+        return {};
+    }
+
+    return FMessageBox::FSavePrompt{"Material", "Save changes to " + Core::FilePath::ToUtf8(GetAssetPath().filename()) + "?", [this]() {
+        const bool Saved{SaveMaterial()};
+
+        if (!Saved) {
+            GetTab().Open();
+        }
+
+        return Saved;
+    }, [this]() {
+        return ReloadMaterial();
+    }};
+}
+
+bool FMaterialEditorToolkit::RequestTabClose() {
+    auto Prompt{GetClosePrompt()};
+
+    if (!Prompt) {
         return true;
     }
 
-    const Int32 Choice{MessageBoxW(mPlatform->GetWindowHandle(), L"Save changes to the current material?", L"Material", MB_YESNOCANCEL | MB_ICONQUESTION)};
+    mMessages.ConfirmSave({std::move(*Prompt)}, [this]() {
+        GetTab().SetVisible(false);
+    });
 
-    if (Choice == IDCANCEL) {
-        return false;
-    }
+    return false;
+}
 
-    if (Choice == IDYES) {
-        return SaveMaterial();
-    }
-
+bool FMaterialEditorToolkit::ReloadMaterial() {
     if (!mContext->GetProject()->GetAssets()->ReloadMaterial(GetAssetPath(), mMaterialError)) {
+        GetTab().Open();
+
         return false;
     }
 
     mMaterialDirty = false;
 
     return true;
+}
+
+void FMaterialEditorToolkit::RequestReload() {
+    if (auto Prompt{GetClosePrompt()}) {
+        Prompt->mDiscard = {};
+        mMessages.ConfirmSave({std::move(*Prompt)}, [this]() {
+            ReloadMaterial();
+        });
+
+        return;
+    }
+
+    ReloadMaterial();
 }
 
 bool FMaterialEditorToolkit::SetMaterialTexture(const Core::FString& Path) {
@@ -216,15 +245,36 @@ void FMaterialEditorToolkit::DrawViewport() {
         mNeedsFrame = !mViewer.Fit(1.15f);
     }
 
-    if (ImGui::IsItemActive()) {
+    // 오른쪽 버튼을 누른 동안은 비행(제자리 시선 회전 + WASD/QE 이동, 휠은 속도 조절), 왼쪽은 궤도 회전, 가운데는 이동이다.
+    const bool Flying{ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::IsMouseDown(ImGuiMouseButton_Middle)};
+
+    if (Flying) {
+        Viewer::FFlyInput Fly{};
+
+        Fly.mMouseDelta = {Input.MouseDelta.x, Input.MouseDelta.y};
+        Fly.mWheel = Hovered ? Input.MouseWheel : 0.0f;
+        Fly.mDeltaTime = Input.DeltaTime;
+        Fly.mFast = Input.KeyShift;
+
+        if (!Input.WantTextInput) {
+            Fly.mForward = ImGui::IsKeyDown(ImGuiKey_W);
+            Fly.mBackward = ImGui::IsKeyDown(ImGuiKey_S);
+            Fly.mRight = ImGui::IsKeyDown(ImGuiKey_D);
+            Fly.mLeft = ImGui::IsKeyDown(ImGuiKey_A);
+            Fly.mUp = ImGui::IsKeyDown(ImGuiKey_E);
+            Fly.mDown = ImGui::IsKeyDown(ImGuiKey_Q);
+        }
+
+        mFlyCamera.Update(Camera, Fly);
+    } else if (ImGui::IsItemActive()) {
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f)) {
             Camera.Pan({Input.MouseDelta.x, Input.MouseDelta.y}, Size.y);
-        } else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f) || ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
+        } else if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
             Camera.Orbit({Input.MouseDelta.x, Input.MouseDelta.y});
         }
     }
 
-    if (Hovered && Input.MouseWheel != 0.0f) {
+    if (Hovered && !Flying && Input.MouseWheel != 0.0f) {
         Camera.Zoom(Input.MouseWheel);
     }
 
@@ -249,8 +299,8 @@ void FMaterialEditorToolkit::DrawDetails() {
     ImGui::TextUnformatted(Core::FilePath::ToGenericUtf8(GetAssetPath()).c_str());
     ImGui::BeginDisabled(!mContext->CanEditWorld());
 
-    if (EditorStyle::Button("Reload") && ConfirmMaterialChange()) {
-        mContext->GetProject()->GetAssets()->ReloadMaterial(GetAssetPath(), mMaterialError);
+    if (EditorStyle::Button("Reload")) {
+        RequestReload();
     }
 
     ImGui::Separator();
@@ -281,7 +331,7 @@ void FMaterialEditorToolkit::DrawDetails() {
 
     int BlendMode{static_cast<int>(mEditingMaterial->GetBlendMode())};
 
-    if (ImGui::Combo("Blend Mode", &BlendMode, "Opaque\0Translucent\0") && mEditingMaterial->SetBlendMode(static_cast<Asset::EBlendMode>(BlendMode))) {
+    if (ImGui::Combo("Blend Mode", &BlendMode, "Opaque\0Translucent\0Additive\0") && mEditingMaterial->SetBlendMode(static_cast<Asset::EBlendMode>(BlendMode))) {
         mMaterialDirty = true;
     }
 

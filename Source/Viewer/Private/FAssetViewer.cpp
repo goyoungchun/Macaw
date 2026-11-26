@@ -89,15 +89,22 @@ bool FAssetViewer::SetContent(std::unique_ptr<IViewerContent> Content) {
     }
 
     mContent = std::move(Content);
+    mDisplayTexture.reset();
+    mDisplaySource = nullptr;
     mCamera = FViewerCamera{};
     mImagePadding = 1.0f;
 
     return true;
 }
 
-void FAssetViewer::Close() {
+void FAssetViewer::Close(bool ReleaseTarget) {
+    mDisplayTexture.reset();
+    mDisplaySource = nullptr;
     mContent.reset();
-    mTarget.reset();
+
+    if (ReleaseTarget) {
+        mTarget.reset();
+    }
 }
 
 IViewerContent* FAssetViewer::GetContent() const {
@@ -168,7 +175,7 @@ EViewerPrepareResult FAssetViewer::PrepareCapture(Core::FString& Error) {
     return PrepareCapture(mContent != nullptr ? mContent->GetCaptureState() : FViewerCaptureState{}, Error);
 }
 
-bool FAssetViewer::Render(const Engine::FPrimitiveDrawInterface* EditorElements, const Engine::FPrimitiveDrawInterface* BackgroundOverlay) {
+bool FAssetViewer::Render(const Engine::FPrimitiveDrawInterface* EditorElements, const Engine::FPrimitiveDrawInterface* BackgroundOverlay, bool CheckerboardBackground) {
     if (mRenderer == nullptr || mContent == nullptr || !mContent->IsReady()) {
         return false;
     }
@@ -188,6 +195,7 @@ bool FAssetViewer::Render(const Engine::FPrimitiveDrawInterface* EditorElements,
 
     Engine::FSceneViewFamily Family{mContent->GetScene(), mTarget.get(), mCamera.CalcSceneView(mSize), EditorElements, mViewMode, mShowFlags, mGridSpacing};
     Family.mBackgroundOverlay = BackgroundOverlay != nullptr ? BackgroundOverlay : &ContentOverlay;
+    Family.mCheckerboardBackground = CheckerboardBackground;
 
     if (mShowEnvironment) {
         mContent->PrepareEnvironment(Family);
@@ -198,17 +206,17 @@ bool FAssetViewer::Render(const Engine::FPrimitiveDrawInterface* EditorElements,
     return true;
 }
 
-std::unique_ptr<FViewerCapture> FAssetViewer::Capture(Core::FString& Error) {
+std::unique_ptr<FViewerCapture> FAssetViewer::Capture(Core::FString& Error, bool CheckerboardBackground) {
     Error.clear();
 
-    if (!Render()) {
+    if (!Render(nullptr, nullptr, CheckerboardBackground)) {
         Error = "Cannot render the viewer capture";
 
         return nullptr;
     }
 
     Asset::UTexture2D* Source{mContent->GetTexture()};
-    auto Texture{Source != nullptr ? mRenderer->CaptureTexture(*Source, static_cast<Uint32>(mSize.x), static_cast<Uint32>(mSize.y), GetImageRect(), Error) : mRenderer->CaptureRenderTarget(*mTarget, Error)};
+    auto Texture{Source != nullptr ? mRenderer->CaptureTexture(*Source, static_cast<Uint32>(mSize.x), static_cast<Uint32>(mSize.y), GetImageRect(), Error, CheckerboardBackground) : mRenderer->CaptureRenderTarget(*mTarget, Error)};
 
     return Texture != nullptr ? std::make_unique<FViewerCapture>(std::move(Texture)) : nullptr;
 }
@@ -254,5 +262,30 @@ FVector4 FAssetViewer::GetImageRect() const {
 void* FAssetViewer::GetNativeTexture() const {
     const Asset::UTexture2D* Texture{mContent != nullptr ? mContent->GetTexture() : nullptr};
 
-    return Texture != nullptr ? Texture->GetShaderResourceView() : mTarget != nullptr ? mTarget->GetNativeTexture() : nullptr;
+    if (Texture == nullptr) {
+        return mTarget != nullptr ? mTarget->GetNativeTexture() : nullptr;
+    }
+
+    // sRGB 텍스처의 리소스 뷰는 샘플링할 때 선형으로 디코딩하므로 UI가 그대로 그리면 어둡게 보인다.
+    // 렌더러의 텍스처 복사(디코딩 후 다시 인코딩)로 저장된 색 그대로의 UNORM 이미지를 만들어 보여 준다.
+    // 형식이 sRGB 변환 없는 같은 계열의 뷰를 만들 수 없는 typed 리소스이므로 뷰 대체로는 해결할 수 없다.
+    if (!Texture->IsSRGB() || mRenderer == nullptr || !Texture->HasResources()) {
+        return Texture->GetShaderResourceView();
+    }
+
+    if (mDisplayTexture == nullptr || mDisplaySource != Texture) {
+        // 큰 텍스처는 화면에 보이는 크기보다 훨씬 크므로 한 변을 2048 이하로 줄여 만든다.
+        constexpr float MaxSide{2048.0f};
+        const float SizeX{static_cast<float>(Texture->GetSizeX())};
+        const float SizeY{static_cast<float>(Texture->GetSizeY())};
+        const float Scale{std::min(1.0f, MaxSide / std::max(SizeX, SizeY))};
+        const float Width{std::max(1.0f, std::floor(SizeX * Scale))};
+        const float Height{std::max(1.0f, std::floor(SizeY * Scale))};
+        Core::FString Error{};
+
+        mDisplayTexture = mRenderer->CaptureTexture(*Texture, static_cast<Uint32>(Width), static_cast<Uint32>(Height), {0.0f, 0.0f, Width, Height}, Error);
+        mDisplaySource = Texture;
+    }
+
+    return mDisplayTexture != nullptr ? mDisplayTexture->GetShaderResourceView() : Texture->GetShaderResourceView();
 }

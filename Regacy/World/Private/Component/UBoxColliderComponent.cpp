@@ -2,6 +2,7 @@
 #include "CoreUObject/Reflection/NativeSerialization.h"
 #include "CoreUObject/Reflection/UClass.h"
 #include "Core/Debug/ILineDrawContext.h"
+#include "Core/Types.h"
 #include <cfloat>
 #include "World/Component/UBoxColliderComponent.h"
 #include "World/Component/UMeshComponent.h"
@@ -9,7 +10,6 @@
 #include "Asset/UMesh.h"
 #include "CoreUObject/UObjectSystem.h"
 
-#include <array>
 #include <cmath>
 
 UBoxColliderComponent::UBoxColliderComponent() {
@@ -137,7 +137,7 @@ void UBoxColliderComponent::Serialize(FArchive& Archive) {
 }
 
 void UBoxColliderComponent::DrawEditorBounds(ILineDrawContext* LineContext, ELineDepthMode DepthMode) const {
-    std::array<DirectX::XMFLOAT3, DirectX::BoundingOrientedBox::CORNER_COUNT> Corners{};
+    Core::TStaticArray<DirectX::XMFLOAT3, DirectX::BoundingOrientedBox::CORNER_COUNT> Corners{};
     const FMatrix WorldMatrix{GetComponentToWorld()};
 
     mBounds.ToNative().GetCorners(Corners.data());

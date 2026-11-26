@@ -17,7 +17,6 @@
 #include "RenderCore/TConstantBuffer.h"
 
 #include <d3d11.h>
-#include <array>
 #include <wrl/client.h>
 #include "UMaterial.generated.h"
 
@@ -337,19 +336,19 @@ namespace Asset {
         /**
          * @brief 머티리얼이 사용하는 셰이더 객체 참조입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "Shader", Getter = GetShader, Setter = SetShader)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "Shader", Getter = GetShader, Setter = SetShader)
         CoreUObject::TObjectRef<RenderCore::UShader> mShader{};
 
         /**
          * @brief 머티리얼의 기본 RGBA 색상입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetBaseColor, Setter = SetBaseColor)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetBaseColor, Setter = SetBaseColor)
         FVector4 mBaseColor{1.0f, 1.0f, 1.0f, 1.0f};
 
         /**
          * @brief 머티리얼 표면의 불투명·반투명 블렌드 방식입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetBlendMode, Setter = SetBlendMode)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetBlendMode, Setter = SetBlendMode)
         Asset::EBlendMode mBlendMode{Asset::EBlendMode::Opaque};
 
         /**
@@ -360,13 +359,13 @@ namespace Asset {
         /**
          * @brief Content 기준 기본색 텍스처 경로입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "BaseColorTexture", Getter = GetBaseColorTexturePath, Setter = SetBaseColorTexturePath)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "BaseColorTexture", Getter = GetBaseColorTexturePath, Setter = SetBaseColorTexturePath)
         Core::FString mBaseColorTexturePath{};
 
         /**
          * @brief Content 상대 노멀 맵 텍스처 경로입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "NormalMap", Getter = GetNormalMapTexturePath, Setter = SetNormalMapTexturePath)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "NormalMap", Meta = (AssetType = "Texture"), Getter = GetNormalMapTexturePath, Setter = SetNormalMapTexturePath)
         Core::FString mNormalMapTexturePath{};
 
         /**
@@ -377,25 +376,25 @@ namespace Asset {
         /**
          * @brief 정반사 성분의 밝기 배율입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetSpecularStrength, Setter = SetSpecularStrength)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetSpecularStrength, Setter = SetSpecularStrength)
         float mSpecularStrength{0.35f};
 
         /**
          * @brief 정반사 하이라이트의 지수입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetShininess, Setter = SetShininess)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetShininess, Setter = SetShininess)
         float mShininess{32.0f};
 
         /**
          * @brief 노멀 맵의 접선 공간 XY 성분 배율입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetNormalStrength, Setter = SetNormalStrength)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetNormalStrength, Setter = SetNormalStrength)
         float mNormalStrength{1.0f};
 
         /**
          * @brief 메시의 양면 렌더링 여부입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = IsTwoSided, Setter = SetTwoSided)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = IsTwoSided, Setter = SetTwoSided)
         bool mTwoSided{};
 
         /**
@@ -406,37 +405,37 @@ namespace Asset {
         /**
          * @brief 정반사 색상 값 또는 참조입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetSpecularColor, Setter = SetSpecularColor)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetSpecularColor, Setter = SetSpecularColor)
         FVector4 mSpecularColor{1.0f, 1.0f, 1.0f, 1.0f};
 
         /**
          * @brief 주변광 색상 값 또는 참조입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetAmbientColor, Setter = SetAmbientColor)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetAmbientColor, Setter = SetAmbientColor)
         FVector4 mAmbientColor{1.0f, 1.0f, 1.0f, 1.0f};
 
         /**
          * @brief 자체 발광 색상 값 또는 참조입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetEmissiveColor, Setter = SetEmissiveColor)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetEmissiveColor, Setter = SetEmissiveColor)
         FVector4 mEmissiveColor{0.0f, 0.0f, 0.0f, 1.0f};
 
         /**
          * @brief 환경 반사 색상 값 또는 참조입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetReflectionColor, Setter = SetReflectionColor)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetReflectionColor, Setter = SetReflectionColor)
         FVector4 mReflectionColor{1.0f, 1.0f, 1.0f, 1.0f};
 
         /**
          * @brief 환경 반사 세기 값 또는 참조입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetReflectionStrength, Setter = SetReflectionStrength)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetReflectionStrength, Setter = SetReflectionStrength)
         float mReflectionStrength{};
 
         /**
          * @brief 정반사 텍스처의 프로젝트 상대 경로 값 또는 참조입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "SpecularTexture", Getter = GetSpecularTexturePath, Setter = SetSpecularTexturePath)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "SpecularTexture", Getter = GetSpecularTexturePath, Setter = SetSpecularTexturePath)
         Core::FString mSpecularTexturePath{};
 
         /**
@@ -447,7 +446,7 @@ namespace Asset {
         /**
          * @brief 자체 발광 텍스처의 프로젝트 상대 경로 값 또는 참조입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "EmissiveTexture", Getter = GetEmissiveTexturePath, Setter = SetEmissiveTexturePath)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "EmissiveTexture", Getter = GetEmissiveTexturePath, Setter = SetEmissiveTexturePath)
         Core::FString mEmissiveTexturePath{};
 
         /**
@@ -458,7 +457,7 @@ namespace Asset {
         /**
          * @brief 환경 반사 텍스처의 프로젝트 상대 경로 값 또는 참조입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "ReflectionTexture", Getter = GetReflectionTexturePath, Setter = SetReflectionTexturePath)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "ReflectionTexture", Getter = GetReflectionTexturePath, Setter = SetReflectionTexturePath)
         Core::FString mReflectionTexturePath{};
 
         /**
@@ -469,7 +468,7 @@ namespace Asset {
         /**
          * @brief GPU 상수 버퍼입니다.
          */
-        RenderCore::TConstantBuffer<std::array<float, 28>> mConstantBuffer{};
+        RenderCore::TConstantBuffer<Core::TStaticArray<float, 28>> mConstantBuffer{};
 
         /**
          * @brief GPU 상수 버퍼 갱신 필요 여부입니다.

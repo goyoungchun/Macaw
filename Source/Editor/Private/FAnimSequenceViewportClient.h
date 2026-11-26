@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Viewer/FAssetViewer.h"
+#include "Viewer/FFlyCameraController.h"
 
 namespace Viewer {
     class FAnimationViewerContent;
@@ -65,6 +66,11 @@ namespace Editor {
          * @brief 카메라·렌더 타깃·촬영을 담당하는 공통 에셋 뷰어입니다.
          */
         Viewer::FAssetViewer mViewer;
+
+        /**
+         * @brief 오른쪽 버튼을 누른 동안 시선 회전과 WASD/QE 이동을 처리하는 비행 카메라 컨트롤러입니다.
+         */
+        Viewer::FFlyCameraController mFlyCamera{};
 
         /**
          * @brief 공통 뷰어가 소유하는 애니메이션 콘텐츠의 비소유 포인터입니다.

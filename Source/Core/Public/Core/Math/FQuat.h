@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "Core/Literals/QuantityTypes.h"
+
 #include "Core/ReflectionMacros.h"
 #include "Core/Types.h"
 
@@ -59,6 +61,7 @@ public:
      * @param[in] Radians 라디안 단위 각도입니다.
      */
     FQuat(const FVector& Axis, float Radians);
+    FQuat(const FVector& Axis, Core::FAngle Angle);
 
 private:
     /**

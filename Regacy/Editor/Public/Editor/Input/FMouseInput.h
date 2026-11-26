@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Core/Common.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <cstdint>
 #include <optional>
 
@@ -64,11 +64,11 @@ private:
 private:
     std::optional<FMessageChannel::FSender> mWorldCommandSender{};
 
-    std::array<EKeyState, MAX> mKeyStates{EKeyState::None, EKeyState::None, EKeyState::None};
+    Core::TStaticArray<EKeyState, MAX> mKeyStates{EKeyState::None, EKeyState::None, EKeyState::None};
 
-    std::array<DragCapture, MAX> mClickCaptures{};
+    Core::TStaticArray<DragCapture, MAX> mClickCaptures{};
 
-    std::array<EDragOwner, MAX> mDragOwners{EDragOwner::None, EDragOwner::None};
+    Core::TStaticArray<EDragOwner, MAX> mDragOwners{EDragOwner::None, EDragOwner::None};
 
     float mPendingDeltaX{0.0f};
     float mPendingDeltaY{0.0f};

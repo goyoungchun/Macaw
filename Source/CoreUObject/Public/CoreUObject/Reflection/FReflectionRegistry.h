@@ -59,9 +59,10 @@ namespace CoreUObject {
          * @param[in] NativeType 네이티브 타입 식별 메타데이터입니다.
          * @param[in] Builder 타입의 프로퍼티나 열거값을 채우는 함수입니다.
          * @param[in] Parent 부모 타입의 메타데이터이며, 없으면 nullptr입니다.
+         * @param[in] Ops 네이티브 값을 복제·파괴하는 함수 테이블이며, 복사할 수 없는 타입이면 nullptr입니다.
          * @return 조회한 값의 비소유 주소이며, 해당 값이 없으면 nullptr입니다.
          */
-        static CoreUObject::UScriptStruct* DefineStruct(Core::FString Name, const CoreUObject::FNativeType* NativeType, FStructBuilder Builder, const CoreUObject::UScriptStruct* Parent = nullptr);
+        static CoreUObject::UScriptStruct* DefineStruct(Core::FString Name, const CoreUObject::FNativeType* NativeType, FStructBuilder Builder, const CoreUObject::UScriptStruct* Parent = nullptr, const CoreUObject::FStructOps* Ops = nullptr);
 
         /**
          * @brief 같은 이름의 정의와 호환성을 검사한 뒤 열거형 메타데이터를 등록합니다.

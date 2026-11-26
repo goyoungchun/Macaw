@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "Core/Literals/QuantityTypes.h"
 #include "Core/ReflectionMacros.h"
 #include "CoreUObject/TObjectRef.h"
 #include "Core/Math/FVector.h"
@@ -39,7 +40,7 @@ namespace Engine {
         /**
          * @brief 광선상의 충돌 거리입니다.
          */
-        float mDistance{};
+        Core::FLength mDistance{};
     };
 
 }

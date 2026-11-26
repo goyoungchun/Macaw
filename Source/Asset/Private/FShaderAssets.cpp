@@ -11,6 +11,7 @@
 #include "Asset/Animation/UBlendSpace1D.h"
 #include "Asset/Animation/UAnimGraph.h"
 #include "Asset/Sequence/ULevelSequence.h"
+#include "PhysicsRuntime/UPhysicsAsset.h"
 #include "Core/FilePath.h"
 #include "CoreUObject/Reflection/NewObject.h"
 #include "FAssetImportScope.h"
@@ -30,7 +31,7 @@ Core::FGuid FAssetManager::GetSaveIdentity(const std::filesystem::path& Path, co
 
 bool FAssetManager::ValidateAssetIdentity(const std::filesystem::path& Path, const Core::FGuid& Guid, Core::FString& Error) {
     Error.clear();
-    const auto Target{ResolvePath(Path, Error)};
+    const auto Target{ResolveWritablePath(Path, Error)};
 
     if (Target.empty() || !Guid.IsValid() || !RefreshAssetRegistry(Error)) {
         if (Error.empty()) {
@@ -52,15 +53,6 @@ bool FAssetManager::ValidateAssetIdentity(const std::filesystem::path& Path, con
 }
 
 bool FAssetManager::RefreshAssetRegistry(Core::FString& Error) {
-    std::error_code Code{};
-
-    if (!std::filesystem::exists(mContentRoot, Code) && !Code) {
-        Error.clear();
-        mAssetPaths.clear();
-
-        return true;
-    }
-
     const auto Paths{GetAssetPaths(Error)};
 
     if (!Error.empty()) {
@@ -74,7 +66,8 @@ bool FAssetManager::RefreshAssetRegistry(Core::FString& Error) {
         Core::FGuid Guid{Core::FGuid::Null()};
         Core::FString HeaderError{};
 
-        if (!FAssetFile::GetIdentity(ResolvePath(Path, HeaderError), Type, Guid, HeaderError) || !Guid.IsValid()) {
+        std::filesystem::path ReferencePath{};
+        if (!FAssetFile::GetIdentity(ResolveContentPath(Path, ReferencePath, HeaderError), Type, Guid, HeaderError) || !Guid.IsValid()) {
             continue;
         }
 
@@ -140,7 +133,13 @@ CoreUObject::UObject* FAssetManager::LoadAsset(const Core::FGuid& Guid, Core::FS
     }
 
     CoreUObject::UObject* Object{};
-    const CoreUObject::UClass* ActualClass{Type == EAssetType::Shader ? UShader::StaticClass() : Type == EAssetType::Material ? UMaterial::StaticClass() : Type == EAssetType::Mesh ? UStaticMesh::StaticClass() : Type == EAssetType::SkeletalMesh ? USkeletalMesh::StaticClass() : Type == EAssetType::Skeleton ? USkeleton::StaticClass() : Type == EAssetType::Texture ? UTexture2D::StaticClass() : Type == EAssetType::AnimSequence ? UAnimSequence::StaticClass() : Type == EAssetType::Sequence ? ULevelSequence::StaticClass() : Type == EAssetType::BlendSpace ? UBlendSpace1D::StaticClass() : Type == EAssetType::AnimGraph ? UAnimGraph::StaticClass() : nullptr};
+    const CoreUObject::UClass* ActualClass{Type == EAssetType::Shader ? UShader::StaticClass() : Type == EAssetType::Material ? UMaterial::StaticClass() : Type == EAssetType::Mesh ? UStaticMesh::StaticClass() : Type == EAssetType::SkeletalMesh ? USkeletalMesh::StaticClass() : Type == EAssetType::Skeleton ? USkeleton::StaticClass() : Type == EAssetType::Texture ? UTexture2D::StaticClass() : Type == EAssetType::AnimSequence ? UAnimSequence::StaticClass() : Type == EAssetType::Sequence ? ULevelSequence::StaticClass() : Type == EAssetType::BlendSpace ? UBlendSpace1D::StaticClass() : Type == EAssetType::AnimGraph ? UAnimGraph::StaticClass() : Type == EAssetType::PhysicsAsset ? PhysicsRuntime::UPhysicsAsset::StaticClass() : nullptr};
+
+    if (ActualClass == nullptr) {
+        if (const FAssetTypeHandler* Handler{FindAssetTypeHandler(Type)}) {
+            ActualClass = Handler->mClass;
+        }
+    }
 
     if (ExpectedClass != nullptr && (ActualClass == nullptr || !ActualClass->IsChildOf(ExpectedClass))) {
         Error = "The asset type does not match the object reference";
@@ -179,8 +178,15 @@ CoreUObject::UObject* FAssetManager::LoadAsset(const Core::FGuid& Guid, Core::FS
     case EAssetType::AnimGraph:
         Object = LoadAnimGraph(Path, Error);
         break;
+    case EAssetType::PhysicsAsset:
+        Object = LoadPhysicsAsset(Path, Error);
+        break;
     default:
-        Error = "This asset type requires its owning module's loader";
+        if (FindAssetTypeHandler(Type) != nullptr) {
+            Object = LoadRegisteredAsset(Path, Type, Error);
+        } else {
+            Error = "This asset type requires its owning module's loader";
+        }
         break;
     }
 
@@ -195,8 +201,8 @@ CoreUObject::UObject* FAssetManager::LoadAsset(const Core::FGuid& Guid, Core::FS
 
 UShader* FAssetManager::LoadShader(const std::filesystem::path& Path, Core::FString& Error) {
     Error.clear();
-    const auto Target{ResolvePath(Path, Error)};
-    const Core::FString Key{Core::FilePath::ToGenericUtf8(Core::FilePath::ToLower(Core::FilePath::FromUtf8(GetRelativePath(Path, Error))))};
+    Core::FString Key{};
+    const auto Target{ResolveAssetLoadPath(Path, Key, Error)};
 
     if (Target.empty() || Key.empty()) {
         return nullptr;
@@ -279,11 +285,15 @@ UShader* FAssetManager::LoadShader(const std::filesystem::path& Path, Core::FStr
 }
 
 bool FAssetManager::SaveShader(const std::filesystem::path& Path, UShader& Shader, Core::FString& Error) {
-    Error.clear();
-    const auto Target{ResolvePath(Path, Error)};
+    const auto Target{ResolveWritablePath(Path, Error)};
+
+    if (Target.empty()) {
+        return false;
+    }
+
     const auto Source{Core::FilePath::FromUtf8(Shader.GetSourcePath())};
 
-    if (Source.has_root_path()) {
+    if (Source.is_absolute()) {
         const Core::FString Relative{GetRelativePath(Source, Error)};
 
         if (Relative.empty() || !Shader.SetSourcePath(Relative)) {
@@ -291,7 +301,7 @@ bool FAssetManager::SaveShader(const std::filesystem::path& Path, UShader& Shade
         }
     }
 
-    if (Target.empty() || Shader.IsBuiltin() || ResolvePath(Core::FilePath::FromUtf8(Shader.GetSourcePath()), Error).empty() || !ValidateAssetIdentity(Target, Shader.GetGuid(), Error)) {
+    if (Shader.IsBuiltin() || ResolvePath(Core::FilePath::FromUtf8(Shader.GetSourcePath()), Error).empty() || !ValidateAssetIdentity(Target, Shader.GetGuid(), Error)) {
         if (Error.empty()) {
             Error = "Cannot save a builtin shader as a project asset";
         }
@@ -387,7 +397,7 @@ UShader* FAssetManager::LoadShaderSource(const Core::FString& SourcePath, Core::
                 return nullptr;
             }
 
-            if (Core::FilePath::ToLower(Core::FilePath::FromUtf8(Shader->GetSourcePath())) == Core::FilePath::ToLower(Core::FilePath::FromUtf8(SourcePath).lexically_normal())) {
+            if (Core::FilePath::ToLower(ResolvePath(Core::FilePath::FromUtf8(Shader->GetSourcePath()), Error)) == Core::FilePath::ToLower(Source)) {
                 return Shader;
             }
         }
@@ -411,7 +421,7 @@ UShader* FAssetManager::LoadShaderSource(const Core::FString& SourcePath, Core::
 bool FAssetManager::ImportShader(const std::filesystem::path& Source, const std::filesystem::path& Directory, std::filesystem::path& ImportedPath, Core::FString& Error) {
     Error.clear();
     ImportedPath.clear();
-    const auto Parent{Directory.empty() ? mContentRoot : ResolvePath(Directory, Error)};
+    const auto Parent{Directory.empty() ? mContentRoot : ResolveWritablePath(Directory, Error)};
     const auto Target{Parent.empty() ? std::filesystem::path{} : MakeUniqueAssetPath(Parent, Core::FilePath::ToUtf8(Source.stem()) + "_Shader", Error)};
     std::error_code Code{};
 

@@ -86,3 +86,4 @@
  */
 #define MacawContentIconNoticeResource 312
 #define MacawContentLuaIconResource 313
+#define MacawContentParticleSystemIconResource 314

@@ -53,6 +53,8 @@ namespace Core {
             return Result;
         }
 
+        bool IsFinite() const;
+
         /**
          * @brief SI 기본 단위로 표현한 값을 반환합니다.
          * @return SI 기본 단위 값입니다.
@@ -149,6 +151,11 @@ namespace Core {
          */
         T mValue{};
     };
+
+    template <Core::FDimension D, typename T>
+    bool Core::TQuantity<D, T>::IsFinite() const {
+        return std::isfinite(mValue);
+    }
 
     /**
      * @brief 같은 차원의 두 물리량을 더합니다.

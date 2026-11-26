@@ -8,6 +8,7 @@
 
 #include "Core/ReflectionMacros.h"
 #include "CoreUObject/UObject.h"
+#include "Engine/Tick/FTickFunction.h"
 #include "UActorComponent.generated.h"
 
 namespace Engine {
@@ -59,13 +60,13 @@ namespace Engine {
         Engine::UWorld* GetWorld() const;
 
         /**
-         * @brief 컴포넌트를 월드에 연결하고 필요한 렌더 상태를 등록합니다.
+         * @brief 컴포넌트를 월드에 연결하고 렌더 상태, 물리 상태와 Tick 함수를 등록합니다.
          * @param[in,out] World 컴포넌트를 등록할 월드입니다.
          */
         virtual void RegisterComponent(Engine::UWorld* World);
 
         /**
-         * @brief 등록된 렌더 상태와 월드 연결을 해제합니다.
+         * @brief 렌더 상태, Tick 등록, 물리 상태와 월드 연결을 해제합니다.
          */
         virtual void UnregisterComponent();
 
@@ -82,8 +83,8 @@ namespace Engine {
         virtual void BeginPlay();
 
         /**
-         * @brief 컴포넌트의 실행 또는 허용된 편집 갱신 시 호출되는 확장 지점입니다.
-         * @param[in] DeltaTime 이번 갱신이 진행하는 초 단위 시간입니다.
+         * @brief 기본 컴포넌트 Tick 함수가 실행 차례에 호출하는 갱신 확장 지점입니다.
+         * @param[in] DeltaTime 호출에 전달된 초 단위 시간 간격입니다.
          */
         virtual void Tick(float DeltaTime);
 
@@ -110,11 +111,71 @@ namespace Engine {
          */
         void SetEditorTickable(bool EditorTickable);
 
+        /** @brief 이 컴포넌트의 Tick()을 호출하는 기본 Tick 함수의 참조를 반환합니다. */
+        Engine::FActorComponentTickFunction& GetPrimaryComponentTick();
+
+        /** @brief 컴포넌트의 기본 Tick에 설정된 그룹을 반환합니다. */
+        Engine::ETickingGroup GetTickGroup() const;
+
+        /**
+         * @brief 컴포넌트의 기본 Tick에 설정할 그룹을 지정합니다.
+         * @param[in] Group 컴포넌트의 기본 Tick이 시작할 수 있는 가장 이른 그룹입니다.
+         * @return 지정할 수 있는 그룹이면 true입니다.
+         */
+        virtual bool SetTickGroup(Engine::ETickingGroup Group);
+
+        /**
+         * @brief 이 컴포넌트의 기본 Tick을 소유 액터의 레벨에 등록하거나 등록을 해제합니다.
+         * @param[in] Register 등록할 때 true이고 해제할 때 false입니다.
+         * @details 별도의 Tick 함수를 소유하는 파생 클래스는 이 함수를 재정의해 함께 등록하고 해제할 수 있습니다.
+         */
+        virtual void RegisterComponentTickFunctions(bool Register);
+
+        /**
+         * @brief 등록된 월드에 물리 장면이 있고 물리 상태가 필요하면 물리 상태를 만듭니다.
+         * @details 컴포넌트 등록 시와 월드가 물리 장면을 만든 직후 호출되므로, 바디 생성은 액터 BeginPlay가 아니라
+         *          "등록됨 + 물리 장면 있음" 조건을 따릅니다. 이미 만들었으면 아무 일도 하지 않습니다.
+         */
+        void CreatePhysicsState();
+
+        /**
+         * @brief 만든 물리 상태를 해제합니다.
+         * @note 컴포넌트 등록 해제 시와 월드가 물리 장면을 해제하기 직전에 호출됩니다.
+         */
+        void DestroyPhysicsState();
+
+        /**
+         * @brief 물리 상태를 해제한 뒤 조건이 맞으면 다시 만듭니다.
+         */
+        void RecreatePhysicsState();
+
+        /**
+         * @brief 물리 상태를 만들었는지 반환합니다.
+         * @return CreatePhysicsState로 만든 뒤 해제하지 않았으면 true입니다.
+         */
+        bool IsPhysicsStateCreated() const;
+
+        /**
+         * @brief 이 컴포넌트가 물리 상태를 필요로 하는지 반환하는 확장 지점입니다.
+         * @return 기본 구현은 false입니다.
+         */
+        virtual bool ShouldCreatePhysicsState() const;
+
     private:
         /**
          * @brief 월드에 등록된 컴포넌트가 참조하는 에셋과 렌더 상태를 준비합니다.
          */
         virtual void OnRegister();
+
+        /**
+         * @brief 물리 장면에 이 컴포넌트의 물리 상태를 만드는 확장 지점입니다.
+         */
+        virtual void OnCreatePhysicsState();
+
+        /**
+         * @brief 이 컴포넌트의 물리 상태를 물리 장면에서 해제하는 확장 지점입니다.
+         */
+        virtual void OnDestroyPhysicsState();
 
         /**
          * @brief 컴포넌트의 소유 액터를 지정합니다.
@@ -131,13 +192,6 @@ namespace Engine {
          * @brief 시작 상태를 설정하고 중복되지 않도록 시작 콜백을 전달합니다.
          */
         void DispatchBeginPlay();
-
-        /**
-         * @brief 등록된 컴포넌트의 실행 상태 또는 편집 Tick 설정에 따라 갱신을 전달합니다.
-         * @param[in] DeltaTime 이번 갱신의 초 단위 시간입니다.
-         * @param[in] EditorTick BeginPlay 없이 편집 Tick 설정을 검사할지 지정합니다.
-         */
-        void DispatchTick(float DeltaTime, bool EditorTick);
 
         /**
          * @brief 시작 상태를 먼저 해제하여 종료 콜백의 중복 전달을 막습니다.
@@ -161,10 +215,19 @@ namespace Engine {
         bool mHasBegunPlay{};
 
         /**
+         * @brief 물리 상태를 만들어 아직 해제하지 않았는지 나타냅니다.
+         */
+        bool mPhysicsStateCreated{};
+
+        /**
          * @brief 정지한 편집 월드에서도 이 객체의 Tick을 허용하는 설정입니다.
          */
-        UPROPERTY(Edit, Serialize)
+        UPROPERTY(Edit, Serialize, Category = "Component Tick")
         bool mEditorTickable{};
+
+        /** @brief 컴포넌트의 Tick()을 호출하는 기본 함수이며, 설정 그룹을 편집 및 직렬화에 노출합니다. */
+        UPROPERTY(Edit, Serialize, Category = "Component Tick", Name = "TickGroup", Getter = GetTickGroup, Setter = SetTickGroup)
+        Engine::FActorComponentTickFunction mPrimaryComponentTick{*this};
     };
 
 }

@@ -8,8 +8,7 @@
 
 #include "Core/ReflectionMacros.h"
 #include "Editor/Widget/FEditorContextWidget.h"
-
-#include <array>
+#include "Core/Types.h"
 
 namespace Editor {
 
@@ -41,7 +40,7 @@ namespace Editor {
         /**
          * @brief 액터의 이름과 타입을 거르는 검색어 버퍼입니다.
          */
-        std::array<char, 128> mSearch{};
+        Core::TStaticArray<char, 128> mSearch{};
     };
 
 }

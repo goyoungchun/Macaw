@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <array>
 #include <optional>
 #include <d3d11.h>
 #include "Core/Base/FAssetHandle.h"
@@ -15,6 +14,7 @@
 #include "Editor/World/FWorldEditorContext.h"
 #include "RenderCore/FOverlayRenderData.h"
 #include "World/Component/USceneComponent.h"
+#include "Core/Types.h"
 
 class FTransformGizmo {
 private:
@@ -32,7 +32,7 @@ private:
 
     struct FPickShape {
         EHandle mHandle{EHandle::None};
-        std::array<FVector3, 4> mPoints{};
+        Core::TStaticArray<FVector3, 4> mPoints{};
         Uint32 mCount{};
         float mTolerance{8.0f};
         Uint32 mPriority{2};
@@ -53,7 +53,7 @@ private:
         FViewMatrices mCamera{};
         D3D11_VIEWPORT mViewport{};
         FMatrix mBasis{FMatrix::Identity};
-        std::array<FVector3, 3> mAxes{};
+        Core::TStaticArray<FVector3, 3> mAxes{};
         FVector3 mPivot{};
         FVector3 mPlaneNormal{};
         FVector3 mStartIntersection{};
@@ -107,7 +107,7 @@ private:
     void BuildRotation();
     void BuildFeedback(FOverlayRenderData& Overlay) const;
     void AddSegment(EHandle Handle, const FVector3& Start, const FVector3& End, const FVector4& Color, float Width, bool Pickable = true);
-    void AddPolygon(EHandle Handle, const std::array<FVector3, 4>& Points, Uint32 Count, const FVector4& Color, Uint32 Priority);
+    void AddPolygon(EHandle Handle, const Core::TStaticArray<FVector3, 4>& Points, Uint32 Count, const FVector4& Color, Uint32 Priority);
     EHandle HitTest(const POINT& Position) const;
     bool BeginDrag(EHandle Handle, const POINT& Position, EMouseSide Button, bool PivotOnly, bool Duplicate);
     void UpdateDrag(const POINT& Position, bool VertexSnap, bool SurfaceSnap);
@@ -126,13 +126,13 @@ private:
     FAssetHandle mArrowMesh{};
     FAssetHandle mScaleArrowMesh{};
     FAssetHandle mCubeMesh{};
-    std::array<FAssetHandle, 3> mAxisMaterials{};
+    Core::TStaticArray<FAssetHandle, 3> mAxisMaterials{};
     FAssetHandle mHighlightMaterial{};
     FAssetHandle mNeutralMaterial{};
     FViewMatrices mLastCamera{};
     D3D11_VIEWPORT mLastViewport{};
     FMatrix mBasis{FMatrix::Identity};
-    std::array<FVector3, 3> mAxes{FVector3::UnitX, FVector3::UnitY, FVector3::UnitZ};
+    Core::TStaticArray<FVector3, 3> mAxes{FVector3::UnitX, FVector3::UnitY, FVector3::UnitZ};
     FVector3 mPivot{};
     FVector3 mViewDirection{};
     FVector3 mViewRight{};

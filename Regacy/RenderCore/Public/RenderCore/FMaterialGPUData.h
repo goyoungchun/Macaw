@@ -6,8 +6,8 @@
 #pragma once
 
 #include "Core/Common.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <cstddef>
 
 /**
@@ -23,7 +23,7 @@ struct FMaterialGPUSlot {
     /**
      * @brief 0으로 초기화한 머티리얼 원시 데이터입니다.
      */
-    std::array<std::byte, MaterialGpuStride> mData{};
+    Core::TStaticArray<std::byte, MaterialGpuStride> mData{};
 };
 
 static_assert(sizeof(FMaterialGPUSlot) == MaterialGpuStride);

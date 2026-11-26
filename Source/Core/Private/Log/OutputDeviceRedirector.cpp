@@ -1,9 +1,9 @@
 #include "Core/Log/OutputDeviceRedirector.h"
+#include "Core/Types.h"
 
 #include <Windows.h>
 
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -12,7 +12,7 @@
 namespace Core {
     namespace {
         constexpr Index_t BacklogCapacity{500};
-        constexpr std::array<std::string_view, 8> VerbosityNames{"NoLogging", "Fatal", "Error", "Warning", "Display", "Log", "Verbose", "VeryVerbose"};
+        constexpr Core::TStaticArray<std::string_view, 8> VerbosityNames{"NoLogging", "Fatal", "Error", "Warning", "Display", "Log", "Verbose", "VeryVerbose"};
 
         class FDebugOutputDevice final : public Core::FOutputDevice {
         public:

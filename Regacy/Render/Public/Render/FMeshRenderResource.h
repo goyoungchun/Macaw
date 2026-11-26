@@ -3,13 +3,14 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 #include "RenderCore/FVertexAttribute.h"
+#include "Core/Types.h"
 
 class UMesh;
 
 class FMeshRenderResource {
 private:
     struct FLODBuffers {
-        std::array<Microsoft::WRL::ComPtr<ID3D11Buffer>, static_cast<std::size_t>(EVertexAttribute::MAX)> mVertices{};
+        Core::TStaticArray<Microsoft::WRL::ComPtr<ID3D11Buffer>, static_cast<std::size_t>(EVertexAttribute::MAX)> mVertices{};
 
         Uint32 mVertexCount{};
     };

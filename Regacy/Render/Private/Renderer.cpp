@@ -7,6 +7,7 @@
 #include "Asset/UMesh.h"
 #include "Core/Base/ErrorHandler.h"
 #include "Core/Stat/Stat.h"
+#include "Core/Types.h"
 
 #include <ranges>
 #include <utility>
@@ -62,7 +63,7 @@ void FRenderer::BeginUiRender() {
 }
 
 void FRenderer::BindSamplerStates() {
-    std::array<ID3D11SamplerState*, 6> RawSamplerStates{};
+    Core::TStaticArray<ID3D11SamplerState*, 6> RawSamplerStates{};
     std::ranges::transform(mSamplerStates, RawSamplerStates.begin(), [](const auto& Sampler) {
         return Sampler.Get();
     });

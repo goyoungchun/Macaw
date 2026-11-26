@@ -613,14 +613,13 @@ namespace Platform {
                     auto* Bounds{WParam != 0 ? &reinterpret_cast<NCCALCSIZE_PARAMS*>(LParam)->rgrc[0] : reinterpret_cast<RECT*>(LParam)};
 
                     if (IsZoomed(Window)) {
+                        const HMONITOR Monitor{MonitorFromRect(Bounds, MONITOR_DEFAULTTONEAREST)};
                         MONITORINFO Info{};
                         Info.cbSize = sizeof(Info);
 
-                        if (GetMonitorInfoW(MonitorFromWindow(Window, MONITOR_DEFAULTTONEAREST), &Info)) {
-                            Bounds->left = std::max(Bounds->left, Info.rcWork.left);
-                            Bounds->top = std::max(Bounds->top, Info.rcWork.top);
-                            Bounds->right = std::min(Bounds->right, Info.rcWork.right);
-                            Bounds->bottom = std::min(Bounds->bottom, Info.rcWork.bottom);
+                        RECT ClientBounds{};
+                        if (GetMonitorInfoW(Monitor, &Info) && IntersectRect(&ClientBounds, Bounds, &Info.rcWork)) {
+                            *Bounds = ClientBounds;
                         }
                     }
 

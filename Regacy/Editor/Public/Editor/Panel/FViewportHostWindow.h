@@ -5,7 +5,6 @@
 
 #pragma once
 
-#include <array>
 #include "Editor/Panel/FEditorWindow.h"
 #include "Editor/View/FViewportPresetLayout.h"
 #include "Editor/View/EditorViewport.h"
@@ -13,6 +12,7 @@
 #include "Editor/Input/FKeyboardInput.h"
 #include "Editor/Input/FMouseInput.h"
 #include "Editor/World/FWorldEditorContext.h"
+#include "Core/Types.h"
 #include <d3d11.h>
 
 class FStatPanel;
@@ -57,7 +57,7 @@ private:
 private:
     std::unique_ptr<FStatPanel> mStatOverlay{};
     FViewportPresetLayout mLayout{};
-    std::array<std::unique_ptr<FEditorViewport>, MaximumViewportCount> mViewports{};
+    Core::TStaticArray<std::unique_ptr<FEditorViewport>, MaximumViewportCount> mViewports{};
     FViewportId mActiveViewportId{0};
     FWorldEditorContext& mEditorContext;
     ImGuiID mDockSpaceId{0};

@@ -39,7 +39,11 @@ namespace Core {
          * @brief 클래스의 다른 프로퍼티를 모두 처리한 뒤에 직렬화합니다.
          * @note 다른 프로퍼티의 setter가 초기화하는 값에 사용합니다.
          */
-        SerializeLate = 16
+        SerializeLate = 16,
+        /**
+         * @brief 구조체 프로퍼티를 접힘 노드 없이 멤버만 소유 카테고리에 바로 표시합니다.
+         */
+        ShowOnlyInnerProperties = 32
     };
 
     /**

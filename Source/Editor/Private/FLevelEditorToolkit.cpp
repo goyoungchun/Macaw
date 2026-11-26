@@ -27,9 +27,9 @@
 #include "Engine/Component/ULightComponentBase.h"
 #include "CoreUObject/Reflection/Cast.h"
 #include "Platform/Window.h"
+#include "Core/Types.h"
 #include <shellapi.h>
 #include <imgui_internal.h>
-#include <array>
 
 using namespace Editor;
 
@@ -61,10 +61,10 @@ bool FLevelEditorToolkit::Initialize(RenderCore::IRendererModule* Renderer, Plat
     }
 
     mAssetCatalog = std::make_unique<FEditorAssetCatalog>(mContext->GetProject()->GetAssets());
-    mThumbnails = std::make_unique<FAssetThumbnailCache>(mContext->GetProject()->GetAssets(), Renderer);
+    mThumbnails = std::make_unique<FAssetThumbnailCache>(*mAssetCatalog, Renderer);
     mWorkspace = std::make_unique<FEditorWorkspace>(mContext, mTopLevelTab, mUIScale);
-    mCommands = std::make_unique<FEditorCommands>(mContext, mPlaySession, mViewportLayout, Platform);
-    mAssetEditors = std::make_unique<FAssetEditorManager>(mContext, Platform, *mAssetCatalog, *mThumbnails, *mWorkspace, *mCommands);
+    mCommands = std::make_unique<FEditorCommands>(mContext, mPlaySession, mViewportLayout, Platform, mMessages);
+    mAssetEditors = std::make_unique<FAssetEditorManager>(mContext, Platform, *mAssetCatalog, *mThumbnails, *mWorkspace, *mCommands, mMessages);
     mImports = std::make_unique<FAssetImportController>(mContext, Platform);
     RegisterTabs();
     mDrawers = std::make_unique<FEditorDrawerManager>(mTabs, mUIScale, *mWorkspace);
@@ -74,7 +74,6 @@ bool FLevelEditorToolkit::Initialize(RenderCore::IRendererModule* Renderer, Plat
     mShell = std::make_unique<FEditorShell>(mContext, mViewport, mPlaySession, Platform, mViewportLayout, mTabs, *mWorkspace, *mSettings, *mCommands, *mImports, *mAssetEditors, *mDrawers, mUIScale);
     ConnectServices();
     mSettings->InitializeSettings();
-    InstallEditorIcons();
     mBrowser->LoadContentIcons(Renderer);
     mShell->LoadBranding(Renderer);
     mBrowser->RefreshContent();
@@ -160,8 +159,8 @@ void FLevelEditorToolkit::ConnectServices() {
     mContext->SetSceneSavedHandler([this]() {
         mCommands->CaptureProjectThumbnail();
     });
-    mCommands->SetCanCloseAssets([this]() {
-        return mAssetEditors->CanClose();
+    mCommands->SetCollectAssetSavePrompts([this]() {
+        return mAssetEditors->CollectSavePrompts();
     });
     mAssetEditors->SetChangedHandler([this]() {
         mBrowser->MarkRefresh();
@@ -202,6 +201,8 @@ void FLevelEditorToolkit::Tick(float DeltaTime) {
     mImports->BeginFrame();
     mBrowser->Tick();
     mSettings->Tick(DeltaTime);
+    mContext->TickClothGridTest(DeltaTime);
+    mContext->TickClothSimTest(DeltaTime);
 }
 
 void FLevelEditorToolkit::Draw(float DeltaTime) {
@@ -222,6 +223,13 @@ void FLevelEditorToolkit::Draw(float DeltaTime) {
     mAssetEditors->Draw(DeltaTime);
     mDrawers->Draw(DeltaTime);
     mBrowser->DrawDragPreview();
+
+    if (mCloseRequested) {
+        mCloseRequested = false;
+        mCommands->RequestExit();
+    }
+
+    mMessages.Draw();
     mPlaySession->ProcessInput(DeltaTime, !ImGui::GetIO().WantTextInput && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup));
 }
 
@@ -232,8 +240,10 @@ void FLevelEditorToolkit::Render(float DeltaTime) {
     mDrawers->FinishDragFrame();
 }
 
-bool FLevelEditorToolkit::CanClose() {
-    return mCommands != nullptr && mCommands->ConfirmSceneChange();
+void FLevelEditorToolkit::RequestClose() {
+    if (!mMessages.IsOpen()) {
+        mCloseRequested = true;
+    }
 }
 
 void FLevelEditorToolkit::QueueFileDrop(void* Handle) {
@@ -255,6 +265,10 @@ void FLevelEditorToolkit::Shutdown() {
         mSettings->SaveSettings();
     }
 
+    if (mThumbnails != nullptr) {
+        mThumbnails->FlushSavedThumbnails();
+    }
+
     mViewport->SetPlayInputCaptureHandlers({}, {});
     mContext->SetSceneSavedHandler({});
     mContext->SetSequencerOpener({});
@@ -270,6 +284,8 @@ void FLevelEditorToolkit::Shutdown() {
         }
     }
 
+    mMessages.Reset();
+    mCloseRequested = false;
     mPlaceActorsWidget.ClearIcons();
     mShell.reset();
     mSettings.reset();
@@ -285,49 +301,4 @@ void FLevelEditorToolkit::Shutdown() {
     mViewportLayout.Shutdown();
     mPlatform = nullptr;
     mInitialized = false;
-}
-
-void FLevelEditorToolkit::InstallEditorIcons() {
-    std::array<wchar_t, 32768> Executable{};
-    const DWORD Length{GetModuleFileNameW(nullptr, Executable.data(), static_cast<DWORD>(Executable.size()))};
-    const std::filesystem::path Bundled{Length > 0 && Length < Executable.size() ? std::filesystem::path{Executable.data()}.parent_path() / "Templates/Project/Content/Editor/Icon" : std::filesystem::path{}};
-    Asset::FAssetManager* Assets{mContext->GetProject()->GetAssets()};
-
-    for (const char* Name : {"SpotLight_64x.png", "PointLight_64x.png", "DirectionalLight_64x.png", "SkyLight_64x.png", "Pawn_64x.png", "ExponentialHeightFog_64x.png", "Sources.txt"}) {
-        Core::FString Error{};
-        const std::filesystem::path Target{Assets->ResolvePath(std::filesystem::path{"Editor/Icon"} / Name, Error)};
-        std::error_code Code{};
-
-        if (Target.empty()) {
-            mContext->AddLog(Error);
-
-            continue;
-        }
-
-        if (std::filesystem::is_regular_file(Target, Code)) {
-            continue;
-        }
-
-        std::filesystem::path Source{Bundled / Name};
-
-        if (Bundled.empty() || !std::filesystem::is_regular_file(Source, Code)) {
-            Source = std::filesystem::path{"Templates/Project/Content/Editor/Icon"} / Name;
-        }
-
-        if (!std::filesystem::is_regular_file(Source, Code)) {
-            mContext->AddLog("Cannot find bundled editor icon: " + Core::FString{Name});
-
-            continue;
-        }
-
-        std::filesystem::create_directories(Target.parent_path(), Code);
-
-        if (!Code) {
-            std::filesystem::copy_file(Source, Target, std::filesystem::copy_options::skip_existing, Code);
-        }
-
-        if (Code) {
-            mContext->AddLog("Cannot install editor icon '" + Core::FString{Name} + "': " + Code.message());
-        }
-    }
 }

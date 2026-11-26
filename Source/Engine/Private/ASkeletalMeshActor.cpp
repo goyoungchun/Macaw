@@ -6,7 +6,6 @@
 
 #include "Engine/ASkeletalMeshActor.h"
 #include "Engine/Component/USkeletalMeshComponent.h"
-#include "CoreUObject/Reflection/Cast.h"
 #include "CoreUObject/Reflection/NewObject.h"
 
 #include <utility>
@@ -32,7 +31,7 @@ namespace Engine {
      * @brief 루트 메시 컴포넌트를 반환합니다.
      */
     Engine::USkeletalMeshComponent* ASkeletalMeshActor::GetSkeletalMeshComponent() const {
-        return CoreUObject::Cast<Engine::USkeletalMeshComponent>(GetRootComponent());
+        return static_cast<Engine::USkeletalMeshComponent*>(FindDefaultComponent(Engine::USkeletalMeshComponent::StaticClass(), Core::FName{"SkeletalMeshComponent"}));
     }
 
 }

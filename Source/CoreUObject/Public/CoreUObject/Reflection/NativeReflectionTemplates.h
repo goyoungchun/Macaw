@@ -6,10 +6,18 @@
 
 #pragma once
 
+#include "Core/Literals/TQuantity.h"
+
 #include "Core/Types.h"
 #include "CoreUObject/FObjectReference.h"
 
 namespace CoreUObject {
+
+    template <typename T>
+    inline constexpr bool IsQuantityProperty{};
+
+    template <Core::FDimension Dimension>
+    inline constexpr bool IsQuantityProperty<Core::TQuantity<Dimension, float>>{true};
 
     /**
      * @brief 템플릿 타입의 크기, 정렬과 식별 문자열을 갖는 정적 메타데이터를 반환합니다.
@@ -36,6 +44,8 @@ namespace CoreUObject {
             return CoreUObject::EPropertyType::Unsigned64;
         } else if constexpr (std::is_same_v<T, float>) {
             return CoreUObject::EPropertyType::Float;
+        } else if constexpr (CoreUObject::IsQuantityProperty<T>) {
+            return CoreUObject::EPropertyType::Quantity;
         } else if constexpr (std::is_same_v<T, Core::FString>) {
             return CoreUObject::EPropertyType::String;
         } else if constexpr (std::is_same_v<T, Core::FGuid>) {
@@ -62,6 +72,8 @@ namespace CoreUObject {
             return CoreUObject::EPropertyType::ObjectReference;
         } else if constexpr (std::is_enum_v<T>) {
             return CoreUObject::EPropertyType::Enum;
+        } else if constexpr (requires { T::StaticStruct(); }) {
+            return CoreUObject::EPropertyType::Struct;
         } else {
             return CoreUObject::EPropertyType::Opaque;
         }
@@ -80,6 +92,24 @@ namespace CoreUObject {
     }
 
     /**
+     * @brief 구조체 타입의 값을 복제·파괴하는 함수 테이블을 반환합니다.
+     */
+    template <typename T>
+    const CoreUObject::FStructOps* GetStructOps() {
+        if constexpr (std::is_copy_constructible_v<T>) {
+            static const CoreUObject::FStructOps Ops{[](const void* Source) -> void* {
+                return new T{*static_cast<const T*>(Source)};
+            }, [](void* Value) {
+                delete static_cast<T*>(Value);
+            }};
+
+            return &Ops;
+        } else {
+            return nullptr;
+        }
+    }
+
+    /**
      * @brief 네이티브 구조체와 선택적 부모의 메타데이터를 등록합니다.
      */
     template <typename T>
@@ -90,7 +120,7 @@ namespace CoreUObject {
             Parent = T::Super::StaticStruct();
         }
 
-        static CoreUObject::UScriptStruct* Struct{CoreUObject::FReflectionRegistry::DefineStruct(Name, CoreUObject::GetNativeType<T>(), &CoreUObject::BuildNativeReflection<T, CoreUObject::UScriptStruct>, Parent)};
+        static CoreUObject::UScriptStruct* Struct{CoreUObject::FReflectionRegistry::DefineStruct(Name, CoreUObject::GetNativeType<T>(), &CoreUObject::BuildNativeReflection<T, CoreUObject::UScriptStruct>, Parent, CoreUObject::GetStructOps<T>())};
 
         return Struct;
     }
@@ -128,6 +158,8 @@ namespace CoreUObject {
             return static_cast<Uint32>(Value);
         } else if constexpr (CoreUObject::TIsObjectRef<FValue>::value) {
             return CoreUObject::FObjectReference{Value};
+        } else if constexpr (CoreUObject::IsQuantityProperty<FValue>) {
+            return CoreUObject::FQuantityPropertyValue{FValue::Dimension, Value.GetBase()};
         } else {
             return CoreUObject::FPropertyValue{Value};
         }
@@ -138,7 +170,9 @@ namespace CoreUObject {
      */
     template <typename FValue>
     std::optional<FValue> FromPropertyValue(const CoreUObject::FPropertyValue& Value) {
-        using FStoredValue = std::conditional_t<std::is_enum_v<FValue>, Int32, std::conditional_t<std::is_same_v<FValue, Uint8>, Uint32, std::conditional_t<CoreUObject::TIsObjectRef<FValue>::value, CoreUObject::FObjectReference, FValue>>>;
+        using FNumericValue = std::conditional_t<CoreUObject::IsQuantityProperty<FValue>, CoreUObject::FQuantityPropertyValue, FValue>;
+        using FReferenceValue = std::conditional_t<CoreUObject::TIsObjectRef<FValue>::value, CoreUObject::FObjectReference, FNumericValue>;
+        using FStoredValue = std::conditional_t<std::is_enum_v<FValue>, Int32, std::conditional_t<std::is_same_v<FValue, Uint8>, Uint32, FReferenceValue>>;
         const FStoredValue* Typed{std::get_if<FStoredValue>(&Value)};
 
         if (Typed == nullptr) {
@@ -153,6 +187,12 @@ namespace CoreUObject {
 
         if constexpr (CoreUObject::TIsObjectRef<FValue>::value) {
             return Typed->template ToObjectRef<typename FValue::FObjectType>();
+        } else if constexpr (CoreUObject::IsQuantityProperty<FValue>) {
+            if (Typed->mDimension != FValue::Dimension || !std::isfinite(Typed->mBaseValue)) {
+                return std::nullopt;
+            }
+
+            return FValue::FromBase(Typed->mBaseValue);
         } else {
             return static_cast<FValue>(*Typed);
         }
@@ -202,6 +242,11 @@ namespace CoreUObject {
 
         if constexpr (CoreUObject::GetNativePropertyType<FValue>() == CoreUObject::EPropertyType::Opaque) {
             return static_cast<const void*>(std::addressof(CoreUObject::ReadMemberValue<Member, Getter>(static_cast<const FOwner*>(Container))));
+        } else if constexpr (CoreUObject::GetNativePropertyType<FValue>() == CoreUObject::EPropertyType::Struct) {
+            // 구조체는 주소로 전달하므로 getter가 임시 값을 반환하면 주소가 즉시 무효화됩니다.
+            static_assert(std::is_lvalue_reference_v<decltype(CoreUObject::ReadMemberValue<Member, Getter>(std::declval<const FOwner*>()))>, "Struct getters must return a const reference");
+
+            return static_cast<const void*>(std::addressof(CoreUObject::ReadMemberValue<Member, Getter>(static_cast<const FOwner*>(Container))));
         } else {
             return CoreUObject::ToPropertyValue<FValue>(CoreUObject::ReadMemberValue<Member, Getter>(static_cast<const FOwner*>(Container)));
         }
@@ -217,6 +262,10 @@ namespace CoreUObject {
 
         if constexpr (CoreUObject::GetNativePropertyType<FValue>() == CoreUObject::EPropertyType::Opaque) {
             return false;
+        } else if constexpr (CoreUObject::GetNativePropertyType<FValue>() == CoreUObject::EPropertyType::Struct) {
+            const void* const* Address{std::get_if<const void*>(&Value)};
+
+            return Address != nullptr && *Address != nullptr && CoreUObject::AssignMemberValue<Member, Setter>(static_cast<FOwner*>(Container), *static_cast<const FValue*>(*Address));
         } else {
             const std::optional<FValue> Converted{CoreUObject::FromPropertyValue<FValue>(Value)};
 
@@ -228,7 +277,7 @@ namespace CoreUObject {
      * @brief 네이티브 멤버의 타입, 플래그와 읽기·쓰기 함수를 등록합니다.
      */
     template <auto Member, auto Getter, auto Setter>
-    void RegisterProperty(CoreUObject::FReflectionBuilder& Information, Core::FString Name, Core::EPropertyFlags Flags) {
+    void RegisterProperty(CoreUObject::FReflectionBuilder& Information, Core::FString Name, Core::EPropertyFlags Flags, Core::FPropertyMetaData MetaData) {
         using FOwner = typename CoreUObject::TMemberPointerTraits<decltype(Member)>::FOwner;
         using FValue = std::remove_cvref_t<decltype(CoreUObject::ReadMemberValue<Member, Getter>(std::declval<const FOwner*>()))>;
 
@@ -236,7 +285,9 @@ namespace CoreUObject {
             Flags = Flags | Core::EPropertyFlags::Transient | Core::EPropertyFlags::ReadOnly;
         }
 
-        Information.AddProperty(std::make_unique<CoreUObject::FProperty>(std::move(Name), CoreUObject::GetNativePropertyType<FValue>(), Flags, &CoreUObject::ReadMemberProperty<Member, Getter>, &CoreUObject::WriteMemberProperty<Member, Getter, Setter>, CoreUObject::GetNativeStruct<FValue>(), CoreUObject::GetNativeEnumValues<FValue>(), nullptr, CoreUObject::GetNativeType<FValue>()));
+        auto Property{std::make_unique<CoreUObject::FProperty>(std::move(Name), CoreUObject::GetNativePropertyType<FValue>(), Flags, &CoreUObject::ReadMemberProperty<Member, Getter>, &CoreUObject::WriteMemberProperty<Member, Getter, Setter>, CoreUObject::GetNativeStruct<FValue>(), CoreUObject::GetNativeEnumValues<FValue>(), nullptr, CoreUObject::GetNativeType<FValue>())};
+        Property->SetMetaData(std::move(MetaData));
+        Information.AddProperty(std::move(Property));
     }
 
     /**
@@ -255,9 +306,9 @@ namespace CoreUObject {
      */
     template <typename T>
     const CoreUObject::FProperty* GetArrayElementProperty() {
-        if constexpr (CoreUObject::GetNativePropertyType<T>() == CoreUObject::EPropertyType::Opaque) {
-            static_assert(requires { T::StaticStruct(); }, "Array elements must be property value types or reflected structs");
+        static_assert(CoreUObject::GetNativePropertyType<T>() != CoreUObject::EPropertyType::Opaque, "Array elements must be property value types or reflected structs");
 
+        if constexpr (CoreUObject::GetNativePropertyType<T>() == CoreUObject::EPropertyType::Struct) {
             static const CoreUObject::FProperty Element{"Element", CoreUObject::EPropertyType::Struct, Core::EPropertyFlags::Serialize, nullptr, nullptr, T::StaticStruct(), {}, nullptr, CoreUObject::GetNativeType<T>()};
 
             return &Element;
@@ -329,11 +380,13 @@ namespace CoreUObject {
      * @brief 네이티브 TArray 멤버의 플래그, 읽기·쓰기 함수와 함수 테이블을 등록합니다.
      */
     template <auto Member, auto Getter, auto Setter>
-    void RegisterArrayProperty(CoreUObject::FReflectionBuilder& Information, Core::FString Name, Core::EPropertyFlags Flags) {
+    void RegisterArrayProperty(CoreUObject::FReflectionBuilder& Information, Core::FString Name, Core::EPropertyFlags Flags, Core::FPropertyMetaData MetaData) {
         using FOwner = typename CoreUObject::TMemberPointerTraits<decltype(Member)>::FOwner;
         using FValue = std::remove_cvref_t<decltype(CoreUObject::ReadMemberValue<Member, Getter>(std::declval<const FOwner*>()))>;
 
-        Information.AddProperty(std::make_unique<CoreUObject::FProperty>(std::move(Name), CoreUObject::EPropertyType::Array, Flags, &CoreUObject::ReadArrayProperty<Member, Getter>, &CoreUObject::WriteArrayProperty<Member, Getter, Setter>, nullptr, Core::TArray<CoreUObject::FEnumValue>{}, nullptr, CoreUObject::GetNativeType<FValue>(), CoreUObject::GetArrayOps<FValue>()));
+        auto Property{std::make_unique<CoreUObject::FProperty>(std::move(Name), CoreUObject::EPropertyType::Array, Flags, &CoreUObject::ReadArrayProperty<Member, Getter>, &CoreUObject::WriteArrayProperty<Member, Getter, Setter>, nullptr, Core::TArray<CoreUObject::FEnumValue>{}, nullptr, CoreUObject::GetNativeType<FValue>(), CoreUObject::GetArrayOps<FValue>())};
+        Property->SetMetaData(std::move(MetaData));
+        Information.AddProperty(std::move(Property));
     }
 
 }

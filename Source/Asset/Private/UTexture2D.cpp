@@ -133,7 +133,7 @@ namespace Asset {
     bool Asset::UTexture2D::SetPixels(Uint32 SizeX, Uint32 SizeY, Asset::ETextureFormat Format, Core::TArray<Uint8> Pixels) {
         const bool SRGB{mSRGB && (Format == Asset::ETextureFormat::RGBA8 || Format == Asset::ETextureFormat::BGRA8)};
 
-        if (!IsValidSize(SizeX, SizeY) || IsDepthFormat(Format) || !ValidateUsage(Format, mUsage, SRGB)) {
+        if (!IsValidSize(SizeX, SizeY) || IsDepthFormat(Format) || Format == Asset::ETextureFormat::BC7 || !ValidateUsage(Format, mUsage, SRGB)) {
             return false;
         }
 
@@ -283,7 +283,7 @@ namespace Asset {
         Description.ArraySize = 1;
         Description.Format = GetResourceFormat(mFormat, mSRGB);
         Description.SampleDesc.Count = 1;
-        Description.Usage = !mPixels.empty() && (mUsage & (Asset::ETextureUsage::RenderTarget | Asset::ETextureUsage::DepthStencil)) == Asset::ETextureUsage::None ? D3D11_USAGE_IMMUTABLE : D3D11_USAGE_DEFAULT;
+        Description.Usage = (!mPixels.empty() || !mDDSData.empty()) && (mUsage & (Asset::ETextureUsage::RenderTarget | Asset::ETextureUsage::DepthStencil)) == Asset::ETextureUsage::None ? D3D11_USAGE_IMMUTABLE : D3D11_USAGE_DEFAULT;
         Description.BindFlags = GetBindFlags(mUsage);
 
         DirectX::ScratchImage SourceImage{};
@@ -506,7 +506,32 @@ namespace Asset {
             }
         }
 
-        if (DirectX::IsCompressed(SourceImage.GetMetadata().format)) {
+        const DXGI_FORMAT SourceFormat{SourceImage.GetMetadata().format};
+        if (SourceFormat == DXGI_FORMAT_BC7_UNORM || SourceFormat == DXGI_FORMAT_BC7_UNORM_SRGB) {
+            if (!ValidateUsage(Asset::ETextureFormat::BC7, mUsage, SRGB) || !SourceImage.OverrideFormat(GetResourceFormat(Asset::ETextureFormat::BC7, SRGB))) {
+                return false;
+            }
+
+            DirectX::Blob DDSBlob{};
+            if (FAILED(DirectX::SaveToDDSMemory(SourceImage.GetImages(), SourceImage.GetImageCount(), SourceImage.GetMetadata(), DirectX::DDS_FLAGS_FORCE_DX10_EXT, DDSBlob))) {
+                return false;
+            }
+
+            const auto* Bytes{static_cast<const Uint8*>(DDSBlob.GetBufferPointer())};
+            ReleaseResources();
+            mSizeX = static_cast<Uint32>(Metadata.width);
+            mSizeY = static_cast<Uint32>(Metadata.height);
+            mMipLevels = static_cast<Uint32>(Metadata.mipLevels);
+            mFormat = Asset::ETextureFormat::BC7;
+            mPixels = {};
+            mDDSData.assign(Bytes, Bytes + DDSBlob.GetBufferSize());
+            mSRGB = SRGB;
+            mExternalResource = false;
+
+            return true;
+        }
+
+        if (DirectX::IsCompressed(SourceFormat)) {
             DirectX::ScratchImage DecompressedImage{};
             const DirectX::Image* BaseImage{SourceImage.GetImage(0, 0, 0)};
 
@@ -625,6 +650,10 @@ namespace Asset {
      * @brief 픽셀 형식·용도 플래그·sRGB 설정의 조합이 지원되는지 검사합니다.
      */
     bool Asset::UTexture2D::ValidateUsage(Asset::ETextureFormat Format, Asset::ETextureUsage Usage, bool SRGB) {
+        if (Format == Asset::ETextureFormat::BC7) {
+            return Usage == Asset::ETextureUsage::ShaderResource;
+        }
+
         const Uint8 Flags{static_cast<Uint8>(Usage)};
 
         if (GetBytesPerPixel(Format) == 0 || (Flags & ~static_cast<Uint8>(Asset::ETextureUsage::ShaderResource | Asset::ETextureUsage::RenderTarget | Asset::ETextureUsage::DepthStencil)) != 0 || (SRGB && Format != Asset::ETextureFormat::RGBA8 && Format != Asset::ETextureFormat::BGRA8)) {
@@ -675,6 +704,9 @@ namespace Asset {
      */
     DXGI_FORMAT Asset::UTexture2D::GetResourceFormat(Asset::ETextureFormat Format, bool SRGB) {
         switch (Format) {
+        case Asset::ETextureFormat::BC7:
+            return SRGB ? DXGI_FORMAT_BC7_UNORM_SRGB : DXGI_FORMAT_BC7_UNORM;
+
         case Asset::ETextureFormat::RGBA8:
             return SRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
 

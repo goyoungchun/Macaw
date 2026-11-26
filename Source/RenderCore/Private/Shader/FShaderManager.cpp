@@ -155,6 +155,14 @@ namespace RenderCore {
      * @brief 변경된 셰이더를 재컴파일하고 갱신에 성공한 셰이더를 모읍니다.
      */
     bool RenderCore::FShaderManager::ReloadChanged(Core::TArray<CoreUObject::TObjectRef<RenderCore::UShader>>& ChangedShaders, Core::FString& Diagnostics) {
+        return Reload(ChangedShaders, Diagnostics, false);
+    }
+
+    bool RenderCore::FShaderManager::ReloadAll(Core::TArray<CoreUObject::TObjectRef<RenderCore::UShader>>& ChangedShaders, Core::FString& Diagnostics) {
+        return Reload(ChangedShaders, Diagnostics, true);
+    }
+
+    bool RenderCore::FShaderManager::Reload(Core::TArray<CoreUObject::TObjectRef<RenderCore::UShader>>& ChangedShaders, Core::FString& Diagnostics, bool ForceCompile) {
         ChangedShaders.clear();
         Diagnostics.clear();
         bool Success{true};
@@ -172,7 +180,7 @@ namespace RenderCore {
 
             ++Iterator;
 
-            if (mCache.IsCurrent(*Current)) {
+            if (!ForceCompile && mCache.IsCurrent(*Current)) {
                 continue;
             }
 
@@ -180,7 +188,7 @@ namespace RenderCore {
             bool LoadedFromCache{};
             Core::FString Message{};
 
-            if (!LoadCompilation(Shader->GetDescription(Entry.mVariantKey), Compilation, LoadedFromCache, Message)) {
+            if (!LoadCompilation(Shader->GetDescription(Entry.mVariantKey), Compilation, LoadedFromCache, Message, ForceCompile)) {
                 Success = false;
             } else {
                 Shader->Commit(Entry.mVariantKey, std::move(Compilation), LoadedFromCache);
@@ -218,8 +226,8 @@ namespace RenderCore {
     /**
      * @brief 유효한 캐시를 먼저 조회하고 사용할 수 없으면 셰이더를 컴파일합니다.
      */
-    bool RenderCore::FShaderManager::LoadCompilation(const RenderCore::FShaderDescription& Description, RenderCore::FShaderCompilation& Compilation, bool& LoadedFromCache, Core::FString& Diagnostics) const {
-        LoadedFromCache = mCache.Load(Description, Compilation, Diagnostics);
+    bool RenderCore::FShaderManager::LoadCompilation(const RenderCore::FShaderDescription& Description, RenderCore::FShaderCompilation& Compilation, bool& LoadedFromCache, Core::FString& Diagnostics, bool ForceCompile) const {
+        LoadedFromCache = !ForceCompile && mCache.Load(Description, Compilation, Diagnostics);
 
         if (LoadedFromCache) {
             return true;

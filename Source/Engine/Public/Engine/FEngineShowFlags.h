@@ -21,6 +21,11 @@ namespace Engine {
         bool mFog{true};
 
         /**
+         * @brief 현재 뷰의 피사계 심도 후처리를 허용합니다.
+         */
+        bool mDepthOfField{true};
+
+        /**
          * @brief 원근 뷰의 빈 배경에 기본 하늘을 그릴지 나타냅니다.
          */
         bool mSky{true};
@@ -69,6 +74,11 @@ namespace Engine {
          * @brief 월드 AABB 표시 여부입니다.
          */
         bool mBounds{};
+
+        /**
+         * @brief 물리 바디의 충돌 형상 표시 여부입니다.
+         */
+        bool mCollision{};
 
         /**
          * @brief 월드 그리드 표시 여부입니다.

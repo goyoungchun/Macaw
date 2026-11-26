@@ -95,7 +95,7 @@ namespace CoreUObject {
     /**
      * @brief 같은 이름의 정의와 호환성을 검사한 뒤 구조체 메타데이터를 등록합니다.
      */
-    CoreUObject::UScriptStruct* CoreUObject::FReflectionRegistry::DefineStruct(Core::FString Name, const CoreUObject::FNativeType* NativeType, FStructBuilder Builder, const CoreUObject::UScriptStruct* Parent) {
+    CoreUObject::UScriptStruct* CoreUObject::FReflectionRegistry::DefineStruct(Core::FString Name, const CoreUObject::FNativeType* NativeType, FStructBuilder Builder, const CoreUObject::UScriptStruct* Parent, const CoreUObject::FStructOps* Ops) {
         Core::ErrorHandler::Report(Name.empty() || NativeType == nullptr, "FReflectionRegistry", "Invalid struct definition", Core::ErrorHandler::EErrorLevel::Critical);
 
         CoreUObject::FReflectionDefinition Definition{CoreUObject::EReflectionType::Struct, NativeType};
@@ -106,7 +106,7 @@ namespace CoreUObject {
             return static_cast<CoreUObject::UScriptStruct*>(Existing);
         }
 
-        auto Owner{std::make_unique<CoreUObject::UScriptStruct>(Name, NativeType->mSize, Parent)};
+        auto Owner{std::make_unique<CoreUObject::UScriptStruct>(Name, NativeType->mSize, Parent, Ops)};
         CoreUObject::UScriptStruct* Struct{Owner.get()};
 
         GetRegisteredTypes().emplace(std::move(Name), CoreUObject::FRegisteredType{Definition, std::move(Owner)});

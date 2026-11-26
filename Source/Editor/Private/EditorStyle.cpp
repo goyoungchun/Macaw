@@ -5,14 +5,16 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "EditorStyle.h"
 #include "FEditorAnimation.h"
 
 #include <imgui_internal.h>
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <utility>
+
+using namespace Core::Literals;
 
 namespace Editor {
 
@@ -221,7 +223,7 @@ namespace Editor {
 
         switch (Icon) {
         case EIcon::Tools: {
-            const std::array<ImVec2, 6> Cube{Point(2.0f, 5.0f), Point(8.0f, 2.0f), Point(14.0f, 5.0f), Point(14.0f, 12.0f), Point(8.0f, 15.0f), Point(2.0f, 12.0f)};
+            const Core::TStaticArray<ImVec2, 6> Cube{Point(2.0f, 5.0f), Point(8.0f, 2.0f), Point(14.0f, 5.0f), Point(14.0f, 12.0f), Point(8.0f, 15.0f), Point(2.0f, 12.0f)};
 
             DrawList->AddPolyline(Cube.data(), static_cast<int>(Cube.size()), Color, Thickness, ImDrawFlags_Closed);
             Line(2.0f, 5.0f, 8.0f, 8.0f);
@@ -263,7 +265,7 @@ namespace Editor {
 
             break;
         case EIcon::Local: {
-            const std::array<ImVec2, 6> Cube{Point(3.0f, 6.0f), Point(10.0f, 2.0f), Point(17.0f, 6.0f), Point(17.0f, 14.0f), Point(10.0f, 18.0f), Point(3.0f, 14.0f)};
+            const Core::TStaticArray<ImVec2, 6> Cube{Point(3.0f, 6.0f), Point(10.0f, 2.0f), Point(17.0f, 6.0f), Point(17.0f, 14.0f), Point(10.0f, 18.0f), Point(3.0f, 14.0f)};
 
             DrawList->AddPolyline(Cube.data(), static_cast<int>(Cube.size()), Color, Thickness, ImDrawFlags_Closed);
             Line(3.0f, 6.0f, 10.0f, 10.0f);
@@ -325,6 +327,15 @@ namespace Editor {
             DrawList->AddRectFilled(Point(15.0f, 4.0f), Point(18.0f, 16.0f), Color, Scale);
 
             break;
+        case EIcon::Reset:
+            Line(7.5f, 5.0f, 3.0f, 9.5f);
+            Line(3.0f, 9.5f, 7.5f, 14.0f);
+            DrawList->PathLineTo(Point(3.0f, 9.5f));
+            DrawList->PathLineTo(Point(12.0f, 9.5f));
+            DrawList->PathBezierQuadraticCurveTo(Point(17.0f, 9.5f), Point(17.0f, 15.5f));
+            DrawList->PathStroke(Color, ImDrawFlags_None, Thickness);
+
+            break;
         case EIcon::Stop:
             DrawList->AddRectFilled(Point(4.0f, 4.0f), Point(16.0f, 16.0f), Color, Scale);
 
@@ -353,7 +364,7 @@ namespace Editor {
 
             break;
         case EIcon::Camera: {
-            const std::array<ImVec2, 4> Lens{Point(13.0f, 9.0f), Point(18.0f, 6.0f), Point(18.0f, 15.0f), Point(13.0f, 12.0f)};
+            const Core::TStaticArray<ImVec2, 4> Lens{Point(13.0f, 9.0f), Point(18.0f, 6.0f), Point(18.0f, 15.0f), Point(13.0f, 12.0f)};
 
             DrawList->AddRect(Point(2.0f, 6.0f), Point(13.0f, 15.0f), Color, Scale, ImDrawFlags_None, Thickness);
             DrawList->AddPolyline(Lens.data(), static_cast<int>(Lens.size()), Color, Thickness, ImDrawFlags_Closed);
@@ -362,7 +373,7 @@ namespace Editor {
         }
 
         case EIcon::CameraSpeed: {
-            const std::array<ImVec2, 4> Lens{Point(11.0f, 5.0f), Point(16.5f, 2.5f), Point(16.5f, 10.5f), Point(11.0f, 8.0f)};
+            const Core::TStaticArray<ImVec2, 4> Lens{Point(11.0f, 5.0f), Point(16.5f, 2.5f), Point(16.5f, 10.5f), Point(11.0f, 8.0f)};
 
             DrawList->AddRect(Point(2.0f, 2.5f), Point(11.0f, 10.5f), Color, Scale, Thickness);
             DrawList->AddPolyline(Lens.data(), static_cast<int>(Lens.size()), Color, Thickness, ImDrawFlags_Closed);
@@ -386,7 +397,7 @@ namespace Editor {
 
             break;
         case EIcon::Sprite: {
-            const std::array<ImVec2, 4> Hills{Point(3.0f, 15.0f), Point(8.0f, 10.0f), Point(11.0f, 13.0f), Point(17.0f, 8.0f)};
+            const Core::TStaticArray<ImVec2, 4> Hills{Point(3.0f, 15.0f), Point(8.0f, 10.0f), Point(11.0f, 13.0f), Point(17.0f, 8.0f)};
 
             DrawList->AddRect(Point(2.0f, 3.0f), Point(18.0f, 17.0f), Color, Scale, ImDrawFlags_None, Thickness);
             DrawList->AddCircleFilled(Point(7.0f, 7.5f), 1.5f * Scale, Color);
@@ -395,6 +406,13 @@ namespace Editor {
             break;
         }
 
+        case EIcon::ParticleSystem:
+            DrawList->AddQuadFilled(Point(8.0f, 4.0f), Point(12.0f, 10.0f), Point(8.0f, 16.0f), Point(4.0f, 10.0f), Color);
+            DrawList->AddCircleFilled(Point(15.0f, 5.0f), 2.0f * Scale, Color);
+            DrawList->AddCircleFilled(Point(16.5f, 13.0f), 1.5f * Scale, Color);
+            DrawList->AddCircleFilled(Point(3.0f, 16.0f), 1.5f * Scale, Color);
+
+            break;
         case EIcon::Text:
             Line(4.0f, 4.0f, 16.0f, 4.0f);
             Line(10.0f, 4.0f, 10.0f, 17.0f);
@@ -407,6 +425,15 @@ namespace Editor {
             Line(2.0f, 14.0f, 14.0f, 14.0f);
 
             break;
+        case EIcon::SkyDome:
+            DrawList->PathLineTo(Point(2.5f, 14.0f));
+            DrawList->PathBezierCubicCurveTo(Point(2.5f, 3.0f), Point(17.5f, 3.0f), Point(17.5f, 14.0f));
+            DrawList->PathStroke(Color, ImDrawFlags_Closed, Thickness);
+            DrawList->PathLineTo(Point(7.0f, 14.0f));
+            DrawList->PathBezierQuadraticCurveTo(Point(7.0f, 8.0f), Point(10.0f, 5.75f));
+            DrawList->PathStroke(Color, ImDrawFlags_None, Thickness);
+
+            break;
         case EIcon::Sequence:
             DrawList->AddRect(Point(2.0f, 4.0f), Point(18.0f, 16.0f), Color, Scale, ImDrawFlags_None, Thickness);
             Line(7.0f, 4.0f, 7.0f, 16.0f);
@@ -414,7 +441,7 @@ namespace Editor {
 
             break;
         case EIcon::Component: {
-            const std::array<ImVec2, 4> Diamond{Point(10.0f, 3.0f), Point(17.0f, 10.0f), Point(10.0f, 17.0f), Point(3.0f, 10.0f)};
+            const Core::TStaticArray<ImVec2, 4> Diamond{Point(10.0f, 3.0f), Point(17.0f, 10.0f), Point(10.0f, 17.0f), Point(3.0f, 10.0f)};
 
             DrawList->AddPolyline(Diamond.data(), static_cast<int>(Diamond.size()), Color, Thickness, ImDrawFlags_Closed);
 
@@ -435,7 +462,7 @@ namespace Editor {
 
             break;
         case EIcon::Save: {
-            const std::array<ImVec2, 5> Disk{Point(3.0f, 3.0f), Point(14.0f, 3.0f), Point(17.0f, 6.0f), Point(17.0f, 17.0f), Point(3.0f, 17.0f)};
+            const Core::TStaticArray<ImVec2, 5> Disk{Point(3.0f, 3.0f), Point(14.0f, 3.0f), Point(17.0f, 6.0f), Point(17.0f, 17.0f), Point(3.0f, 17.0f)};
 
             DrawList->AddPolyline(Disk.data(), static_cast<int>(Disk.size()), Color, Thickness, ImDrawFlags_Closed);
             DrawList->AddRectFilled(Point(6.0f, 3.0f), Point(13.0f, 7.5f), Color);
@@ -445,7 +472,7 @@ namespace Editor {
         }
 
         case EIcon::Add: {
-            const std::array<ImVec2, 6> Cube{Point(2.0f, 7.0f), Point(8.0f, 4.0f), Point(14.0f, 7.0f), Point(14.0f, 14.0f), Point(8.0f, 17.0f), Point(2.0f, 14.0f)};
+            const Core::TStaticArray<ImVec2, 6> Cube{Point(2.0f, 7.0f), Point(8.0f, 4.0f), Point(14.0f, 7.0f), Point(14.0f, 14.0f), Point(8.0f, 17.0f), Point(2.0f, 14.0f)};
 
             DrawList->AddPolyline(Cube.data(), static_cast<int>(Cube.size()), Color, Thickness, ImDrawFlags_Closed);
             Line(2.0f, 7.0f, 8.0f, 10.0f);
@@ -462,7 +489,7 @@ namespace Editor {
             DrawList->AddCircleFilled(Point(10.0f, 10.0f), 1.8f * Scale, Color);
 
             for (Index_t Index{}; Index < 8; ++Index) {
-                const float Angle{static_cast<float>(Index) * 0.78539816f};
+                const float Angle{(45_deg * Index).GetBase()};
                 const float X{cosf(Angle)};
                 const float Y{sinf(Angle)};
 
@@ -471,7 +498,7 @@ namespace Editor {
 
             break;
         case EIcon::Folder: {
-            const std::array<ImVec2, 6> Folder{Point(2.0f, 5.0f), Point(8.0f, 5.0f), Point(10.0f, 7.0f), Point(18.0f, 7.0f), Point(18.0f, 16.0f), Point(2.0f, 16.0f)};
+            const Core::TStaticArray<ImVec2, 6> Folder{Point(2.0f, 5.0f), Point(8.0f, 5.0f), Point(10.0f, 7.0f), Point(18.0f, 7.0f), Point(18.0f, 16.0f), Point(2.0f, 16.0f)};
 
             DrawList->AddConvexPolyFilled(Folder.data(), static_cast<int>(Folder.size()), Color);
 
@@ -495,7 +522,7 @@ namespace Editor {
 
             break;
         case EIcon::Details: {
-            const std::array<ImVec2, 5> Pencil{Point(4.0f, 16.0f), Point(4.5f, 12.5f), Point(13.5f, 3.5f), Point(16.5f, 6.5f), Point(7.5f, 15.5f)};
+            const Core::TStaticArray<ImVec2, 5> Pencil{Point(4.0f, 16.0f), Point(4.5f, 12.5f), Point(13.5f, 3.5f), Point(16.5f, 6.5f), Point(7.5f, 15.5f)};
 
             DrawList->AddPolyline(Pencil.data(), static_cast<int>(Pencil.size()), Color, Thickness, ImDrawFlags_Closed);
             Line(11.5f, 5.5f, 14.5f, 8.5f);
@@ -509,7 +536,7 @@ namespace Editor {
 
             break;
         case EIcon::Select: {
-            const std::array<ImVec2, 7> Arrow{Point(5.0f, 2.0f), Point(5.0f, 16.0f), Point(8.5f, 12.5f), Point(11.0f, 18.0f), Point(13.0f, 17.0f), Point(10.5f, 11.5f), Point(15.0f, 11.5f)};
+            const Core::TStaticArray<ImVec2, 7> Arrow{Point(5.0f, 2.0f), Point(5.0f, 16.0f), Point(8.5f, 12.5f), Point(11.0f, 18.0f), Point(13.0f, 17.0f), Point(10.5f, 11.5f), Point(15.0f, 11.5f)};
 
             DrawList->AddPolyline(Arrow.data(), static_cast<int>(Arrow.size()), Color, Thickness, ImDrawFlags_Closed);
 
@@ -518,10 +545,10 @@ namespace Editor {
 
         case EIcon::Snapping:
             DrawList->PathLineTo(Point(3.0f, 3.0f));
-            DrawList->PathArcTo(Point(10.0f, 10.0f), 7.0f * Scale, IM_PI, 0.0f, 12);
+            DrawList->PathArcTo(Point(10.0f, 10.0f), 7.0f * Scale, (180_deg).GetBase(), (0_rad).GetBase(), 12);
             DrawList->PathLineTo(Point(17.0f, 3.0f));
             DrawList->PathLineTo(Point(13.0f, 3.0f));
-            DrawList->PathArcTo(Point(10.0f, 10.0f), 3.0f * Scale, 0.0f, IM_PI, 8);
+            DrawList->PathArcTo(Point(10.0f, 10.0f), 3.0f * Scale, (0_rad).GetBase(), (180_deg).GetBase(), 8);
             DrawList->PathLineTo(Point(7.0f, 3.0f));
             DrawList->PathStroke(Color, Thickness, ImDrawFlags_Closed);
             Line(3.0f, 7.0f, 7.0f, 7.0f);
@@ -537,7 +564,7 @@ namespace Editor {
 
             break;
         case EIcon::Performance:
-            DrawList->PathArcTo(Point(10.0f, 12.0f), 8.0f * Scale, IM_PI, IM_PI * 2.0f, 16);
+            DrawList->PathArcTo(Point(10.0f, 12.0f), 8.0f * Scale, (180_deg).GetBase(), (1_turn).GetBase(), 16);
             DrawList->PathStroke(Color, Thickness);
             Line(2.0f, 12.0f, 2.0f, 16.0f);
             Line(18.0f, 12.0f, 18.0f, 16.0f);
@@ -755,6 +782,21 @@ namespace Editor {
         ImGui::PopID();
 
         return Pressed;
+    }
+
+    void Editor::EditorStyle::DrawFieldLabel(const char* Label, float LabelWidth, float FieldWidth) {
+        const ImVec2 Origin{ImGui::GetCursorScreenPos()};
+        const float Width{LabelWidth >= 0.0f ? LabelWidth : std::max(0.0f, ImGui::GetContentRegionAvail().x * 0.43f)};
+        ImGui::AlignTextToFramePadding();
+        ImGui::PushClipRect(Origin, {Origin.x + Width, Origin.y + ImGui::GetFrameHeight()}, true);
+        ImGui::TextUnformatted(Label);
+        if (ImGui::CalcTextSize(Label).x > Width) {
+            ImGui::SetItemTooltip("%s", Label);
+        }
+        ImGui::PopClipRect();
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::SetCursorScreenPos({Origin.x + Width + ImGui::GetStyle().ItemSpacing.x, Origin.y});
+        ImGui::SetNextItemWidth(FieldWidth);
     }
 
     /**

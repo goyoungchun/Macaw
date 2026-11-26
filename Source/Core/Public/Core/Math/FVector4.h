@@ -224,7 +224,7 @@ public:
      * @brief 유효한 성분을 원래 순서의 일반 배열로 반환합니다.
      * @return 연산을 적용한 새 값입니다.
      */
-    std::array<float, 4> ToArray() const;
+    Core::TStaticArray<float, 4> ToArray() const;
 
     /**
      * @brief 성분의 제곱합을 반환합니다.

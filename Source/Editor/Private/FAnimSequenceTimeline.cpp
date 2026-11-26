@@ -5,17 +5,19 @@
  */
 
 #include "FAnimSequenceTimeline.h"
+#include "Core/Literals/UnitLiterals.h"
+#include "Core/Types.h"
 
 #include "Viewer/FAnimationViewerContent.h"
 #include "Asset/Animation/UAnimSequence.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <format>
-#include <numbers>
 #include <imgui.h>
 #include <imgui_neo_sequencer.h>
+
+using namespace Core::Literals;
 
 using namespace Editor;
 
@@ -150,10 +152,10 @@ namespace {
             const ImVec2 Minimum{Center.x - Size * 0.42f, Center.y - Size * 0.3f};
             const ImVec2 Maximum{Center.x + Size * 0.42f, Center.y + Size * 0.3f};
             DrawList->PathLineTo({Center.x - Size * 0.05f, Maximum.y});
-            DrawList->PathArcTo({Minimum.x + Radius, Maximum.y - Radius}, Radius, std::numbers::pi_v<float> * 0.5f, std::numbers::pi_v<float>, 4);
-            DrawList->PathArcTo({Minimum.x + Radius, Minimum.y + Radius}, Radius, std::numbers::pi_v<float>, std::numbers::pi_v<float> * 1.5f, 4);
-            DrawList->PathArcTo({Maximum.x - Radius, Minimum.y + Radius}, Radius, std::numbers::pi_v<float> * 1.5f, std::numbers::pi_v<float> * 2.0f, 4);
-            DrawList->PathArcTo({Maximum.x - Radius, Maximum.y - Radius}, Radius, 0.0f, std::numbers::pi_v<float> * 0.5f, 4);
+            DrawList->PathArcTo({Minimum.x + Radius, Maximum.y - Radius}, Radius, (90_deg).GetBase(), (180_deg).GetBase(), 4);
+            DrawList->PathArcTo({Minimum.x + Radius, Minimum.y + Radius}, Radius, (180_deg).GetBase(), (270_deg).GetBase(), 4);
+            DrawList->PathArcTo({Maximum.x - Radius, Minimum.y + Radius}, Radius, (270_deg).GetBase(), (1_turn).GetBase(), 4);
+            DrawList->PathArcTo({Maximum.x - Radius, Maximum.y - Radius}, Radius, (0_rad).GetBase(), (90_deg).GetBase(), 4);
             DrawList->PathLineTo({Center.x + Size * 0.12f, Maximum.y});
             DrawList->PathStroke(Color, 0, std::max(1.5f, Size * 0.11f));
             DrawTriangle(DrawList, {Center.x + Size * 0.02f, Maximum.y}, Size * 0.26f, Size * 0.3f, false, true, Color);
@@ -342,7 +344,7 @@ void FAnimSequenceTimeline::DrawTransportBar(Viewer::FAnimationViewerContent& Pr
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.0f, 0.0f, 0.0f, 0.0f});
 
         if (ImGui::BeginCombo("##Speed", SpeedLabel.c_str())) {
-            for (const float Candidate : std::array<float, 6>{0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f}) {
+            for (const float Candidate : Core::TStaticArray<float, 6>{0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f}) {
                 const Core::FString Label{Candidate < 1.0f ? std::format("x{:.2g}", Candidate) : std::format("x{:.1f}", Candidate)};
                 const bool Selected{Candidate == Speed};
 

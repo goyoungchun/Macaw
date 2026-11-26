@@ -13,6 +13,10 @@ namespace RenderCore {
      */
     RenderCore::IRendererModule::~IRendererModule() = default;
 
+    bool RenderCore::IRendererModule::UsesForwardShading() const {
+        return false;
+    }
+
     /**
      * @brief 현재 그림자 아틀라스의 검사 정보를 반환합니다.
      */

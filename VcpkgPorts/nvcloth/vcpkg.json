@@ -1,0 +1,15 @@
+{
+  "name": "nvcloth",
+  "version-string": "1.1.6",
+  "description": "NVIDIA NvCloth CPU cloth simulation library built against the PhysX 4 PxShared headers",
+  "homepage": "https://github.com/NVIDIAGameWorks/NvCloth",
+  "license": null,
+  "supports": "windows & x64 & !uwp & !xbox",
+  "dependencies": [
+    "physx",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    }
+  ]
+}

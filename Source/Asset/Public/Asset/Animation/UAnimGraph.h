@@ -453,6 +453,7 @@ namespace Asset {
         void Serialize(Core::FArchive& Archive) override;
 
     private:
+        friend class FAnimStateMachineData;
 
         /**
          * @brief 직렬화된 파라미터 연결에 대응하는 Getter를 해석합니다.
@@ -467,11 +468,13 @@ namespace Asset {
          */
         void SerializeVariableGetters(Core::FArchive& Archive);
 
+        void SerializeGraph(Core::FArchive& Archive, Uint32 Depth);
+
         /**
          * @brief 상태 머신별 상태·전이와 중첩 포즈 그래프를 직렬화합니다.
          * @param Archive 저장·로드 방향과 오류 상태를 제공하는 아카이브입니다.
          */
-        void SerializeStateMachines(Core::FArchive& Archive);
+        void SerializeStateMachines(Core::FArchive& Archive, Uint32 Depth);
 
         /**
          * @brief 중첩 상태 그래프와 전이 조건의 변수 참조를 갱신합니다.

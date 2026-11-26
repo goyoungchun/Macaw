@@ -10,6 +10,8 @@
 #include <fstream>
 #include <utility>
 
+using namespace std::chrono_literals;
+
 using namespace NativeIDE;
 
 namespace {
@@ -79,7 +81,7 @@ FIDEContent::FIDEContent(EIDELanguage Language, FValidator Validator, FBuildSave
 
 FIDEContent::~FIDEContent() = default;
 
-bool FIDEContent::Open(const std::filesystem::path& Path, const std::filesystem::path& Workspace) {
+bool FIDEContent::Open(const std::filesystem::path& Path, const std::filesystem::path& Workspace, bool ReadOnly) {
     std::string Source{};
     if (!ReadSource(Path, Source)) {
         return false;
@@ -100,9 +102,9 @@ bool FIDEContent::Open(const std::filesystem::path& Path, const std::filesystem:
     mSavedSource = std::move(Source);
     mPath = Path;
     mEditor->SetText(mSavedText);
-    const bool ReadOnly{Binary || GetSourceText() != mSavedText};
-    mEditor->SetReadOnlyEnabled(ReadOnly);
-    if (ReadOnly) {
+    mReadOnlySource = ReadOnly;
+    mEditor->SetReadOnlyEnabled(ReadOnly || Binary || GetSourceText() != mSavedText);
+    if (mEditor->IsReadOnlyEnabled()) {
         mIntellisense->Close();
     } else {
         mIntellisense->Open(Path, Workspace, mSavedText);
@@ -193,7 +195,7 @@ void FIDEContent::Build() {
 }
 
 void FIDEContent::UpdateBuild() {
-    if (!mBuild.valid() || mBuild.wait_for(std::chrono::seconds{0}) != std::future_status::ready) {
+    if (!mBuild.valid() || mBuild.wait_for(0s) != std::future_status::ready) {
         return;
     }
 
@@ -275,7 +277,7 @@ void FIDEContent::Draw() {
     UpdateBuild();
     const bool ReadOnly{mEditor->IsReadOnlyEnabled()};
     if (ReadOnly) {
-        ImGui::TextDisabled("Read-only: this file contains text the editor cannot preserve.");
+        ImGui::TextDisabled("%s", mReadOnlySource ? "Read-only engine shader source." : "Read-only: this file contains text the editor cannot preserve.");
     } else if (!mSaveError.empty()) {
         ImGui::TextWrapped("Save failed: %s", mSaveError.c_str());
     }

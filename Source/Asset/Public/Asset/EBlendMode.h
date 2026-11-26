@@ -25,7 +25,8 @@ namespace Asset {
         /**
          * @brief 깊이를 읽고 배경과 알파 합성하는 반투명 표면입니다.
          */
-        Translucent
+        Translucent,
+        Additive
     };
 
 }

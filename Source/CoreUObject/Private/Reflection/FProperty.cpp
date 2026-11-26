@@ -14,6 +14,7 @@
 #include "Core/Reflection/EPropertyFlags.h"
 #include "CoreUObject/Reflection/FPropertyValue.h"
 #include "CoreUObject/Reflection/UStruct.h"
+#include "CoreUObject/Reflection/UScriptStruct.h"
 #include "Core/Base/ErrorHandler.h"
 
 #include <algorithm>
@@ -54,6 +55,49 @@ namespace CoreUObject {
      */
     const Core::FString& CoreUObject::FProperty::GetName() const {
         return mName;
+    }
+
+    /**
+     * @brief 키에 해당하는 메타데이터 값을 반환합니다.
+     */
+    const Core::FString& CoreUObject::FProperty::GetMetaData(std::string_view Key) const {
+        static const Core::FString Empty{};
+
+        const auto Found{std::find_if(mMetaData.begin(), mMetaData.end(), [Key](const auto& Entry) {
+            return Entry.first == Key;
+        })};
+
+        return Found != mMetaData.end() ? Found->second : Empty;
+    }
+
+    /**
+     * @brief 키에 해당하는 메타데이터가 있는지 검사합니다.
+     */
+    bool CoreUObject::FProperty::HasMetaData(std::string_view Key) const {
+        return std::any_of(mMetaData.begin(), mMetaData.end(), [Key](const auto& Entry) {
+            return Entry.first == Key;
+        });
+    }
+
+    /**
+     * @brief 메타데이터 목록 전체를 반환합니다.
+     */
+    const Core::FPropertyMetaData& CoreUObject::FProperty::GetMetaDataMap() const {
+        return mMetaData;
+    }
+
+    /**
+     * @brief 메타데이터 목록 전체를 바꿉니다.
+     */
+    void CoreUObject::FProperty::SetMetaData(Core::FPropertyMetaData MetaData) {
+        mMetaData = std::move(MetaData);
+    }
+
+    /**
+     * @brief 에디터 디테일 패널에서 프로퍼티를 묶을 카테고리를 반환합니다.
+     */
+    const Core::FString& CoreUObject::FProperty::GetCategory() const {
+        return GetMetaData("Category");
     }
 
     /**
@@ -116,6 +160,59 @@ namespace CoreUObject {
         return WriteValue(Container, Value, mWriter);
     }
 
+    std::optional<Core::FQuantityUnit> CoreUObject::FProperty::GetQuantityDisplayUnit(Core::FDimension Dimension) const {
+        const Core::FString& DisplayUnit{GetMetaData("DisplayUnit")};
+
+        return GetQuantityUnit(DisplayUnit.empty() ? GetMetaData("SerializeUnit") : DisplayUnit, Dimension);
+    }
+
+    std::optional<float> CoreUObject::FProperty::ToNumericValue(const CoreUObject::FPropertyValue& Value) const {
+        if (const auto* Number{std::get_if<float>(&Value)}; mType == CoreUObject::EPropertyType::Float && Number != nullptr) {
+            return *Number;
+        }
+
+        if (const auto* Quantity{std::get_if<CoreUObject::FQuantityPropertyValue>(&Value)}; mType == CoreUObject::EPropertyType::Quantity && Quantity != nullptr) {
+            const auto Unit{GetQuantityUnit(GetMetaData("SerializeUnit"), Quantity->mDimension)};
+
+            return Unit.has_value() ? Core::FromQuantityBase(Quantity->mBaseValue, *Unit) : std::nullopt;
+        }
+
+        return std::nullopt;
+    }
+
+    bool CoreUObject::FProperty::FromNumericValue(float Number, CoreUObject::FPropertyValue& Value) const {
+        if (auto* Scalar{std::get_if<float>(&Value)}; mType == CoreUObject::EPropertyType::Float && Scalar != nullptr) {
+            *Scalar = Number;
+
+            return true;
+        }
+
+        if (auto* Quantity{std::get_if<CoreUObject::FQuantityPropertyValue>(&Value)}; mType == CoreUObject::EPropertyType::Quantity && Quantity != nullptr) {
+            const auto Unit{GetQuantityUnit(GetMetaData("SerializeUnit"), Quantity->mDimension)};
+            const auto Base{Unit.has_value() ? Core::ToQuantityBase(Number, *Unit) : std::nullopt};
+
+            if (Base.has_value()) {
+                Quantity->mBaseValue = *Base;
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    std::optional<Core::FQuantityUnit> CoreUObject::FProperty::GetQuantityUnit(std::string_view Symbol, Core::FDimension Dimension) const {
+        if (Symbol.empty()) {
+            return Core::GetBaseQuantityUnit(Dimension);
+        }
+
+        if (const auto* Unit{Core::FindQuantityUnit(Symbol, Dimension)}; Unit != nullptr) {
+            return *Unit;
+        }
+
+        return std::nullopt;
+    }
+
     /**
      * @brief 로드 전용 쓰기 경로로 동일 프로퍼티의 값을 복사합니다.
      */
@@ -126,7 +223,8 @@ namespace CoreUObject {
 
         const CoreUObject::FPropertyValue Value{ReadValue(Source)};
 
-        if (std::holds_alternative<const void*>(Value)) {
+        // 구조체 멤버의 쓰기 함수는 같은 타입 구조체의 주소를 받으므로 원본 주소를 그대로 전달합니다.
+        if (std::holds_alternative<const void*>(Value) && mType != CoreUObject::EPropertyType::Struct) {
             return false;
         }
 
@@ -176,7 +274,10 @@ namespace CoreUObject {
         }
 
         if (mType == CoreUObject::EPropertyType::Struct) {
-            if (Archive.BeginObject(Name)) {
+            if (mReader != nullptr) {
+                SerializeStruct(Name, Container, Archive);
+            } else if (Archive.BeginObject(Name)) {
+                // 배열 원소는 읽기 함수 없이 원소 주소가 곧 구조체 주소입니다.
                 mStruct->SerializeProperties(Container, Archive);
 
                 Archive.EndObject();
@@ -187,7 +288,17 @@ namespace CoreUObject {
 
         CoreUObject::FPropertyValue Value{ReadValue(Container)};
 
-        if (mStruct != nullptr) {
+        if (auto* Quantity{std::get_if<CoreUObject::FQuantityPropertyValue>(&Value)}; mType == CoreUObject::EPropertyType::Quantity && Quantity != nullptr) {
+            const auto Unit{GetQuantityUnit(GetMetaData("SerializeUnit"), Quantity->mDimension)};
+
+            if (!Unit.has_value()) {
+                Archive.SetError("Invalid quantity unit: " + mName);
+
+                return;
+            }
+
+            Archive.SerializeQuantity(Name, Quantity->mBaseValue, *Unit);
+        } else if (mStruct != nullptr) {
             if (Archive.BeginObject(Name)) {
                 mStruct->SerializeProperties(CoreUObject::GetPropertyData(Value), Archive);
 
@@ -213,7 +324,7 @@ namespace CoreUObject {
                             Typed = CoreUObject::FObjectReference{Guid};
                         }
                     }
-                } else if constexpr (!std::is_same_v<FTyped, const void*>) {
+                } else if constexpr (requires { Archive.Serialize(Name, Typed); }) {
                     Archive.Serialize(Name, Typed);
                 } else {
                     Archive.SetError("Cannot serialize opaque property: " + mName);
@@ -262,6 +373,43 @@ namespace CoreUObject {
     }
 
     /**
+     * @brief 구조체 멤버를 직렬화합니다. 로드는 현재 값의 사본을 채운 뒤 한 번에 커밋합니다.
+     */
+    void CoreUObject::FProperty::SerializeStruct(std::string_view Name, void* Container, Core::FArchive& Archive) const {
+        const void* Current{std::get<const void*>(ReadValue(Container))};
+
+        if (!Archive.IsLoading()) {
+            // 저장 경로는 필드를 읽기만 하므로 getter가 돌려준 주소를 그대로 사용합니다.
+            if (Archive.BeginObject(Name)) {
+                mStruct->SerializeProperties(const_cast<void*>(Current), Archive);
+
+                Archive.EndObject();
+            }
+
+            return;
+        }
+
+        // 아카이브에 없는 필드는 현재 값을 유지하도록 현재 값을 복제해 작업용 사본으로 사용합니다.
+        const CoreUObject::UScriptStruct::FValuePtr Working{static_cast<const CoreUObject::UScriptStruct*>(mStruct)->CloneValue(Current)};
+
+        if (Working == nullptr) {
+            Archive.SetError("Cannot load a struct property that cannot be copied: " + mName);
+
+            return;
+        }
+
+        if (Archive.BeginObject(Name)) {
+            mStruct->SerializeProperties(Working.get(), Archive);
+
+            Archive.EndObject();
+        }
+
+        if (!Archive.HasError() && !WriteValue(Container, CoreUObject::FPropertyValue{static_cast<const void*>(Working.get())}, mLoader)) {
+            Archive.SetError("Property validation failed: " + mName);
+        }
+    }
+
+    /**
      * @brief 이 프로퍼티와 하위 원소의 객체 참조에 핸들을 연결합니다.
      */
     void CoreUObject::FProperty::BindObjectReferences(void* Container, const CoreUObject::FObjectGuidMap& Objects) const {
@@ -281,7 +429,10 @@ namespace CoreUObject {
                 }
             }
         } else if (mType == CoreUObject::EPropertyType::Struct) {
-            mStruct->BindObjectReferences(Container, Objects);
+            // 배열 원소는 원소 주소를, 멤버는 읽기 함수가 돌려준 주소를 사용하며 핸들은 캐시이므로 setter를 거치지 않습니다.
+            void* Struct{mReader != nullptr ? const_cast<void*>(std::get<const void*>(ReadValue(Container))) : Container};
+
+            mStruct->BindObjectReferences(Struct, Objects);
         } else if (mType == CoreUObject::EPropertyType::ObjectReference) {
             CoreUObject::FPropertyValue Value{ReadValue(Container)};
 

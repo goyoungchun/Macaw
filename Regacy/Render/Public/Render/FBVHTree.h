@@ -2,8 +2,8 @@
 
 #include <DirectXCollision.h>
 #include "RenderCore/FRenderData.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <span>
 
 struct FBVHNode {
@@ -42,7 +42,7 @@ private:
     Int32 BuildRecursive(std::span<const DirectX::BoundingBox> Bounds, std::size_t Start, std::size_t End, Int32 ParentIndex);
 
     void CullRecursive(Int32 NodeIndex, const FFrustum& Frustum, TArray<Uint32>& OutIndices) const;
-    void CullRecursive(Int32 NodeIndex, const std::array<DirectX::XMFLOAT4, 6>& Planes, TArray<Uint32>& OutIndices, TArray<Uint32>* OutBoundaryPositions) const;
+    void CullRecursive(Int32 NodeIndex, const Core::TStaticArray<DirectX::XMFLOAT4, 6>& Planes, TArray<Uint32>& OutIndices, TArray<Uint32>* OutBoundaryPositions) const;
 
     void CollectAllLeaves(Int32 NodeIndex, TArray<Uint32>& OutIndices) const;
 

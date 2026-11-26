@@ -10,6 +10,8 @@
 #include "Asset/FAssetManager.h"
 #include "Core/FilePath.h"
 #include "Engine/Component/UHeightFogComponent.h"
+#include "Engine/Component/USkyAtmosphereComponent.h"
+#include "Engine/Component/USkyDomeComponent.h"
 #include "Engine/Component/UDecalComponent.h"
 #include "Engine/EngineStats.h"
 #include "Engine/Component/ULightComponentBase.h"
@@ -23,7 +25,7 @@
 #include "Core/Input.h"
 #include "Core/Math.h"
 #include "Engine/Component/UPrimitiveComponent.h"
-#include "Engine/Component/UShapeComponent.h"
+#include "Engine/Collision/FHitResult.h"
 #include "Engine/AStaticMeshActor.h"
 #include "Engine/ULevel.h"
 #include "Engine/FWorldHit.h"
@@ -39,13 +41,25 @@
 
 #include "CoreUObject/FObjectRegistry.h"
 #include "CoreUObject/Reflection/UClass.h"
+#include "Core/Log/Log.h"
+#include "PhysicsRuntime/FPhysicsRuntime.h"
+#include "PhysicsRuntime/FPhysicsScene.h"
+#include "PhysicsRuntime/PhysicsStats.h"
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <utility>
 
 namespace Engine {
+
+    /**
+     * @brief 월드의 로그 범주입니다.
+     */
+    namespace {
+        DEFINE_LOG_CATEGORY_STATIC(LogWorld, Log, All);
+    }
 
     /**
      * @brief UWorld의 초기 상태와 전달받은 의존성을 구성합니다.
@@ -103,6 +117,10 @@ namespace Engine {
                         Decal->ResolveTexture();
                     }
 
+                    if (auto* SkyDome{CoreUObject::Cast<Engine::USkyDomeComponent>(Component.get())}) {
+                        SkyDome->ResolvePanorama();
+                    }
+
                     if (auto* Light{CoreUObject::Cast<Engine::ULightComponentBase>(Component.get())}) {
                         Light->SynchronizeLight();
                     }
@@ -120,6 +138,225 @@ namespace Engine {
      */
     Asset::FAssetManager* Engine::UWorld::GetAssets() const {
         return mAssets;
+    }
+
+    /**
+     * @brief 물리 장면 생성에 사용할 PhysX 런타임의 비소유 주소를 설정합니다.
+     */
+    void Engine::UWorld::SetPhysicsRuntime(PhysicsRuntime::FPhysicsRuntime* Runtime) {
+        if (mPhysicsRuntime == Runtime) {
+            return;
+        }
+
+        DestroyPhysicsScene();
+        mPhysicsRuntime = Runtime;
+    }
+
+    /**
+     * @brief 물리 장면 생성에 사용할 PhysX 런타임을 반환합니다.
+     */
+    PhysicsRuntime::FPhysicsRuntime* Engine::UWorld::GetPhysicsRuntime() const {
+        return mPhysicsRuntime;
+    }
+
+    /**
+     * @brief 천 시뮬레이션을 만들 때 쓸 천 시스템 모듈의 비소유 주소를 설정합니다.
+     */
+    void Engine::UWorld::SetClothingSystem(PhysicsRuntime::FClothingSystemRuntimeModuleNv* ClothingSystem) {
+        mClothingSystem = ClothingSystem;
+    }
+
+    /**
+     * @brief 천 시뮬레이션을 만들 때 쓸 천 시스템 모듈을 반환합니다.
+     */
+    PhysicsRuntime::FClothingSystemRuntimeModuleNv* Engine::UWorld::GetClothingSystem() const {
+        return mClothingSystem;
+    }
+
+    /**
+     * @brief 월드가 소유한 물리 장면을 반환합니다.
+     */
+    PhysicsRuntime::FPhysicsScene* Engine::UWorld::GetPhysicsScene() const {
+        return mPhysicsScene.get();
+    }
+
+    /**
+     * @brief 월드의 바람장을 반환합니다.
+     */
+    Engine::FWindField& Engine::UWorld::GetWindField() {
+        return mWindField;
+    }
+
+    /**
+     * @brief 월드의 바람장을 반환합니다.
+     */
+    const Engine::FWindField& Engine::UWorld::GetWindField() const {
+        return mWindField;
+    }
+
+    /**
+     * @brief 설정된 런타임으로 물리 장면을 만들고 고정 스텝 누적 시간을 초기화합니다.
+     */
+    bool Engine::UWorld::CreatePhysicsScene() {
+        if (mPhysicsScene != nullptr) {
+            return true;
+        }
+
+        if (mPhysicsRuntime == nullptr) {
+            return false;
+        }
+
+        auto Scene{std::make_unique<PhysicsRuntime::FPhysicsScene>()};
+
+        if (!Scene->Initialize(*mPhysicsRuntime)) {
+            MACAW_LOG(LogWorld, Warning, "Cannot create the physics scene; the world runs without physics.");
+
+            return false;
+        }
+
+        mPhysicsScene = std::move(Scene);
+        mPhysicsTimeAccumulator = {};
+
+        // 장면보다 먼저 등록된 컴포넌트는 등록 시점에 바디를 만들지 못했으므로 여기서 만듭니다.
+        UpdateComponentPhysicsStates(true);
+
+        return true;
+    }
+
+    /**
+     * @brief 컴포넌트의 물리 상태를 먼저 해제한 뒤 물리 장면을 해제합니다.
+     */
+    void Engine::UWorld::DestroyPhysicsScene() {
+        if (mPhysicsScene != nullptr) {
+            UpdateComponentPhysicsStates(false);
+        }
+
+        mPhysicsScene.reset();
+        mPhysicsTimeAccumulator = {};
+        mOverlaps.clear();
+    }
+
+    /**
+     * @brief 영속 레벨의 모든 액터 컴포넌트에 물리 상태 생성 또는 해제를 요청합니다.
+     */
+    void Engine::UWorld::UpdateComponentPhysicsStates(bool Create) {
+        if (mPersistentLevel == nullptr) {
+            return;
+        }
+
+        for (const auto& Actor : mPersistentLevel->GetActors()) {
+            for (const auto& Component : Actor->GetComponents()) {
+                if (Create) {
+                    Component->CreatePhysicsState();
+                } else {
+                    Component->DestroyPhysicsState();
+                }
+            }
+        }
+    }
+
+    /**
+     * @brief 프레임 시간을 고정 스텝으로 나누어 물리 장면을 진행합니다.
+     */
+    void Engine::UWorld::StepPhysics(Core::FTime DeltaTime) {
+        if (mPhysicsScene == nullptr || !DeltaTime.IsFinite() || DeltaTime <= Core::FTime{}) {
+            return;
+        }
+
+        const PhysicsRuntime::FPhysicsSettings& Settings{mPhysicsRuntime->GetSettings()};
+        const Core::FTime Step{Settings.mFixedStep};
+
+        mPhysicsTimeAccumulator = std::min(mPhysicsTimeAccumulator + DeltaTime, Step * static_cast<float>(Settings.mMaxStepsPerFrame));
+
+        // 접촉 목록과 움직인 바디 목록은 다음 Simulate에서 바뀌므로 스텝마다 결과를 전달합니다.
+        while (mPhysicsScene != nullptr && !mEndPlayRequested && !mShutdownRequested && mPhysicsTimeAccumulator >= Step && mPhysicsScene->Simulate(Step)) {
+            mPhysicsTimeAccumulator -= Step;
+
+            DispatchPhysicsResults();
+        }
+    }
+
+    /**
+     * @brief 마지막 물리 스텝에서 움직인 바디를 컴포넌트에 반영하고 새 접촉을 충돌 이벤트로 전달합니다.
+     */
+    void Engine::UWorld::DispatchPhysicsResults() {
+        const Core::FScopedStatTimer StatTimer{PhysicsRuntime::PhysicsStats::Dispatch};
+
+        /**
+         * @brief 컴포넌트 핸들로 바꾼 접촉 한 건입니다.
+         */
+        struct FPhysicsHit {
+            CoreUObject::TObjectRef<Engine::UPrimitiveComponent> mFirst{};
+            CoreUObject::TObjectRef<Engine::UPrimitiveComponent> mSecond{};
+            FVector mPoint{};
+            FVector mNormal{};
+        };
+
+        const auto OwnerOf{[](const physx::PxActor* Actor) -> Engine::UPrimitiveComponent* {
+            const PhysicsRuntime::FBodyInstance* Body{Actor != nullptr ? PhysicsRuntime::FBodyInstance::FromPxActor(*Actor) : nullptr};
+
+            return Body != nullptr ? Body->GetOwnerComponent() : nullptr;
+        }};
+
+        // 이벤트 처리 중 바디가 다시 만들어지면 PhysX 주소가 무효화되므로 전달 전에 모두 핸들로 바꿉니다.
+        Core::TArray<CoreUObject::TObjectRef<Engine::UPrimitiveComponent>> Moved{};
+        Core::TArray<FPhysicsHit> Hits{};
+
+        for (const physx::PxActor* Actor : mPhysicsScene->GetActiveActors()) {
+            const PhysicsRuntime::FBodyInstance* Body{Actor != nullptr ? PhysicsRuntime::FBodyInstance::FromPxActor(*Actor) : nullptr};
+
+            // 뼈 바디는 컴포넌트 전체가 아니라 뼈 하나의 자세이므로 컴포넌트가 직접 읽어 갑니다.
+            if (Body == nullptr || Body->mInstanceBodyIndex != InvalidIndex) {
+                continue;
+            }
+
+            if (Engine::UPrimitiveComponent* Component{Body->GetOwnerComponent()}) {
+                Moved.push_back(CoreUObject::MakeObjectRef(Component));
+            }
+        }
+
+        for (const PhysicsRuntime::FPhysicsContact& Contact : mPhysicsScene->GetContacts()) {
+            Engine::UPrimitiveComponent* First{OwnerOf(Contact.mActor0)};
+            Engine::UPrimitiveComponent* Second{OwnerOf(Contact.mActor1)};
+
+            if (First != nullptr && Second != nullptr) {
+                Hits.push_back({CoreUObject::MakeObjectRef(First), CoreUObject::MakeObjectRef(Second), Contact.mPoint, Contact.mNormal});
+            }
+        }
+
+        for (const CoreUObject::TObjectRef<Engine::UPrimitiveComponent> Handle : Moved) {
+            if (Engine::UPrimitiveComponent* Component{Handle.Get()}) {
+                Component->SyncComponentToBody();
+            }
+        }
+
+        for (const FPhysicsHit& Contact : Hits) {
+            Engine::UPrimitiveComponent* First{Contact.mFirst.Get()};
+            Engine::UPrimitiveComponent* Second{Contact.mSecond.Get()};
+
+            if (First == nullptr || Second == nullptr) {
+                continue;
+            }
+
+            // 접촉 법선은 두 번째 바디에서 첫 번째 바디를 향하므로 첫 번째 컴포넌트가 받은 충격면의 법선과 같습니다.
+            Engine::FHitResult Hit{0.0f};
+            Hit.mBlockingHit = true;
+            Hit.mLocation = Contact.mPoint;
+            Hit.mImpactPoint = Contact.mPoint;
+            Hit.mNormal = Contact.mNormal;
+            Hit.mImpactNormal = Contact.mNormal;
+            Hit.SetComponent(Second);
+            Hit.SetActor(Second->GetOwner());
+            First->OnHit(Second->GetOwner(), Second, Hit);
+
+            // 첫 번째 이벤트 처리 중 상대가 사라졌을 수 있으므로 핸들을 다시 해석합니다.
+            First = Contact.mFirst.Get();
+            Second = Contact.mSecond.Get();
+
+            if (First != nullptr && Second != nullptr) {
+                Second->OnHit(First->GetOwner(), First, Engine::FHitResult::GetReversedHit(Hit, First, First->GetOwner()));
+            }
+        }
     }
 
     /**
@@ -191,6 +428,14 @@ namespace Engine {
 
                     if (auto* Fog{CoreUObject::Cast<Engine::UHeightFogComponent>(Component.get())}) {
                         Fog->SynchronizeFog();
+                    }
+
+                    if (auto* Atmosphere{CoreUObject::Cast<Engine::USkyAtmosphereComponent>(Component.get())}) {
+                        Atmosphere->SynchronizeSkyAtmosphere();
+                    }
+
+                    if (auto* SkyDome{CoreUObject::Cast<Engine::USkyDomeComponent>(Component.get())}) {
+                        SkyDome->SynchronizeSkyDome();
                     }
 
                     if (auto* Decal{CoreUObject::Cast<Engine::UDecalComponent>(Component.get())}) {
@@ -346,7 +591,7 @@ namespace Engine {
                 auto* Primitive{CoreUObject::Cast<Engine::UPrimitiveComponent>(Component.get())};
 
                 if (Primitive != nullptr && Engine::RaycastMesh(&Primitive->GetMeshData(), Primitive->GetWorldMatrix(), NormalizedRay, Closest)) {
-                    Hit = {CoreUObject::MakeObjectRef(Actor), CoreUObject::MakeObjectRef(Primitive), NormalizedRay.mOrigin + NormalizedRay.mDirection * Closest, Closest};
+                    Hit = {CoreUObject::MakeObjectRef(Actor), CoreUObject::MakeObjectRef(Primitive), NormalizedRay.mOrigin + NormalizedRay.mDirection * Closest, Core::FLength::FromBase(Closest)};
                     Found = true;
                 }
             }
@@ -394,6 +639,7 @@ namespace Engine {
         mShutdownRequested = false;
 
         EndPlay();
+        DestroyPhysicsScene();
 
         mShuttingDown = true;
 
@@ -461,8 +707,11 @@ namespace Engine {
         FDispatchScope Scope{this};
 
         mPlayState = Engine::EWorldPlayState::Starting;
-        mTimeSeconds = 0.0f;
+        mTime = {};
         mTickCount = 0;
+
+        // 액터의 BeginPlay에서 강체를 다룰 수 있도록 물리 장면을 먼저 만듭니다. 실패하면 물리 없이 진행합니다.
+        CreatePhysicsScene();
 
         // 액터의 BeginPlay에서 카메라 관리자를 조회할 수 있도록 먼저 만듭니다.
         if (auto CameraManager{CoreUObject::NewObject<Engine::APlayerCameraManager>()}; CameraManager != nullptr && CameraManager->InitializeDefaultComponents() && mPersistentLevel != nullptr) {
@@ -495,7 +744,7 @@ namespace Engine {
                 }
             }
 
-            CameraManager->UpdateCamera(0.0f);
+            CameraManager->UpdateCamera({});
         }
 
         mPlayState = Engine::EWorldPlayState::Playing;
@@ -536,16 +785,19 @@ namespace Engine {
         DestroyActor(mPlayerCameraManager);
         mPlayerCameraManager = {};
         mLuaRuntime.reset();
+        DestroyPhysicsScene();
         mPlayState = Engine::EWorldPlayState::Stopped;
     }
 
     /**
-     * @brief Playing 상태의 게임 갱신 또는 정지한 편집 월드의 선택적 갱신을 수행합니다.
+     * @brief 월드 상태에 따라 일반 게임, 편집 또는 일시정지 Tick을 수행합니다.
      */
-    bool Engine::UWorld::Tick(float DeltaTime) {
+    bool Engine::UWorld::Tick(Core::FTime DeltaTime) {
         const bool EditorTick{mPlayState == Engine::EWorldPlayState::Stopped && (mWorldType == Engine::EWorldType::Editor || mWorldType == Engine::EWorldType::EditorPreview)};
 
-        return (mPlayState == Engine::EWorldPlayState::Playing || EditorTick) && TickActors(DeltaTime, EditorTick);
+        const bool PauseTick{mPlayState == Engine::EWorldPlayState::Paused};
+
+        return (mPlayState == Engine::EWorldPlayState::Playing || EditorTick || PauseTick) && TickActors(DeltaTime, EditorTick, PauseTick);
     }
 
     /**
@@ -562,17 +814,21 @@ namespace Engine {
     }
 
     /**
-     * @brief Paused 상태를 유지하면서 게임 갱신을 한 번 수행합니다.
+     * @brief Paused 상태에서 일반 게임 프레임을 한 번 수행합니다.
      */
-    bool Engine::UWorld::Step(float DeltaTime) {
-        return mPlayState == Engine::EWorldPlayState::Paused && DeltaTime > 0.0f && TickActors(DeltaTime, false);
+    bool Engine::UWorld::Step(Core::FTime DeltaTime) {
+        return mPlayState == Engine::EWorldPlayState::Paused && DeltaTime > Core::FTime{} && TickActors(DeltaTime, false, false);
+    }
+
+    Core::FTime Engine::UWorld::GetTime() const {
+        return mTime;
     }
 
     /**
      * @brief 마지막 실행 시작 이후 누적 게임 시간을 반환합니다.
      */
     float Engine::UWorld::GetTimeSeconds() const {
-        return mTimeSeconds;
+        return GetTime().GetBase();
     }
 
     /**
@@ -595,6 +851,14 @@ namespace Engine {
     bool Engine::UWorld::SetActiveCamera(Engine::UCameraComponent* Camera) {
         if (!CanAddActor() || (Camera != nullptr && (Camera->GetWorld() != this || !ContainsObject(Camera)))) {
             return false;
+        }
+
+        if (Engine::APlayerCameraManager* CameraManager{GetPlayerCameraManager()}) {
+            Engine::AActor* Target{Camera != nullptr ? Camera->GetOwner() : nullptr};
+
+            if ((CameraManager->GetViewTarget() != Target || CameraManager->IsBlending()) && !CameraManager->SetViewTarget(Target)) {
+                return false;
+            }
         }
 
         mActiveCamera = Camera;
@@ -662,10 +926,11 @@ namespace Engine {
     }
 
     /**
-     * @brief 시간을 검증하고 액터 핸들 스냅샷으로 갱신을 전달합니다.
+     * @brief 시간과 실행 상태를 검증하고 일반 그룹 또는 일시정지 Tick을 실행합니다.
+     * @details 일시정지는 별도 큐를 실행합니다. 일반 게임 프레임은 PostPhysics 뒤에 겹침과 카메라를 갱신한 다음 나머지 그룹을 처리합니다.
      */
-    bool Engine::UWorld::TickActors(float DeltaTime, bool EditorTick) {
-        if (!std::isfinite(DeltaTime) || DeltaTime < 0.0f || (!EditorTick && !std::isfinite(mTimeSeconds + DeltaTime)) || IsDispatching() || mShuttingDown) {
+    bool Engine::UWorld::TickActors(Core::FTime DeltaTime, bool EditorTick, bool PauseTick) {
+        if (!DeltaTime.IsFinite() || DeltaTime < Core::FTime{} || (!EditorTick && !PauseTick && !(mTime + DeltaTime).IsFinite()) || IsDispatching() || mShuttingDown) {
             return false;
         }
 
@@ -675,25 +940,30 @@ namespace Engine {
 
         FDispatchScope Scope{this};
 
+        if (PauseTick) {
+            return mTickTaskManager.RunPauseFrame(*this, DeltaTime.GetBase());
+        }
+
         if (!EditorTick) {
             if (mLuaRuntime != nullptr) {
                 mLuaRuntime->ReloadChangedScripts();
             }
-            mTimeSeconds += DeltaTime;
+            mTime += DeltaTime;
             ++mTickCount;
         }
 
-        const auto Handles{GetActorRefs()};
+        mTickTaskManager.StartFrame(*this, DeltaTime.GetBase(), EditorTick);
+        mTickTaskManager.RunTickGroup(Engine::ETickingGroup::PrePhysics);
+        mTickTaskManager.RunTickGroup(Engine::ETickingGroup::StartPhysics);
+        mTickTaskManager.RunTickGroup(Engine::ETickingGroup::DuringPhysics);
 
-        for (const CoreUObject::TObjectRef<Engine::AActor> Handle : Handles) {
-            if (mEndPlayRequested || mShutdownRequested) {
-                break;
-            }
-
-            if (Engine::AActor* Actor{ResolveActor(Handle)}; Actor != nullptr && !Actor->IsPendingDestroy()) {
-                Actor->DispatchTick(DeltaTime, EditorTick);
-            }
+        // StartPhysics·EndPhysics는 사용자 Tick이 없는 경계 그룹이므로 그 사이에서 물리 장면을 동기로 진행합니다.
+        if (!EditorTick && !mEndPlayRequested && !mShutdownRequested) {
+            StepPhysics(DeltaTime);
         }
+
+        mTickTaskManager.RunTickGroup(Engine::ETickingGroup::EndPhysics);
+        mTickTaskManager.RunTickGroup(Engine::ETickingGroup::PostPhysics);
 
         if (!EditorTick && !mEndPlayRequested && !mShutdownRequested) {
             UpdateOverlaps();
@@ -704,6 +974,10 @@ namespace Engine {
             CameraManager->UpdateCamera(DeltaTime);
         }
 
+        mTickTaskManager.RunTickGroup(Engine::ETickingGroup::PostUpdateWork);
+        mTickTaskManager.RunTickGroup(Engine::ETickingGroup::LastDemotable);
+        mTickTaskManager.EndFrame();
+
         if (!EditorTick && mLuaRuntime != nullptr) {
             mLuaRuntime->ClearFrameInput();
         }
@@ -712,38 +986,54 @@ namespace Engine {
     }
 
     /**
-     * @brief 충돌 도형의 겹침을 갱신하고 시작과 끝 이벤트를 전달합니다.
+     * @brief 겹침 이벤트를 켠 컴포넌트의 바디 겹침을 장면 쿼리로 갱신하고 시작과 끝 이벤트를 전달합니다.
      */
     void Engine::UWorld::UpdateOverlaps() {
-        Core::TArray<Engine::UShapeComponent*> Shapes{};
+        using FOverlapPair = std::pair<CoreUObject::TObjectRef<Engine::UPrimitiveComponent>, CoreUObject::TObjectRef<Engine::UPrimitiveComponent>>;
 
-        if (mPersistentLevel != nullptr) {
+        const Core::FScopedStatTimer StatTimer{PhysicsRuntime::PhysicsStats::OverlapUpdate};
+        Core::TArray<FOverlapPair> Current{};
+
+        if (mPhysicsScene != nullptr && mPersistentLevel != nullptr) {
+            Core::TArray<PhysicsRuntime::FBodyInstance*> Bodies{};
+
             for (const auto& Actor : mPersistentLevel->GetActors()) {
-                if (!Actor->IsPendingDestroy()) {
-                    for (const auto& Component : Actor->GetComponents()) {
-                        if (auto* Shape{CoreUObject::Cast<Engine::UShapeComponent>(Component.get())}) {
-                            Shapes.push_back(Shape);
+                if (Actor->IsPendingDestroy()) {
+                    continue;
+                }
+
+                for (const auto& Component : Actor->GetComponents()) {
+                    auto* Primitive{CoreUObject::Cast<Engine::UPrimitiveComponent>(Component.get())};
+
+                    if (Primitive == nullptr || !Primitive->GetGenerateOverlapEvents() || !Primitive->ComponentOverlapMulti(Bodies)) {
+                        continue;
+                    }
+
+                    for (const PhysicsRuntime::FBodyInstance* Body : Bodies) {
+                        Engine::UPrimitiveComponent* Other{Body->GetOwnerComponent()};
+
+                        if (Other == nullptr || Other == Primitive || !Other->GetGenerateOverlapEvents() || Other->GetOwner() == Primitive->GetOwner()) {
+                            continue;
+                        }
+
+                        // 두 컴포넌트의 쿼리에서 같은 쌍이 나오므로 순서를 고정해 한 번만 남깁니다.
+                        FOverlapPair Pair{std::less<>{}(Primitive, Other) ? FOverlapPair{Primitive, Other} : FOverlapPair{Other, Primitive}};
+
+                        if (std::find(Current.begin(), Current.end(), Pair) == Current.end()) {
+                            Current.push_back(std::move(Pair));
                         }
                     }
                 }
             }
         }
 
-        Core::TArray<std::pair<CoreUObject::TObjectRef<Engine::UShapeComponent>, CoreUObject::TObjectRef<Engine::UShapeComponent>>> Current{};
-
-        for (Index_t First{}; First < Shapes.size(); ++First) {
-            for (Index_t Second{static_cast<Index_t>(First + 1)}; Second < Shapes.size(); ++Second) {
-                if (Shapes[First]->GetOwner() != Shapes[Second]->GetOwner() && Shapes[First]->IsOverlapping(*Shapes[Second])) {
-                    Current.emplace_back(Shapes[First], Shapes[Second]);
-                }
-            }
-        }
+        PhysicsRuntime::PhysicsStats::OverlapPairs.Add(static_cast<double>(Current.size()));
 
         const auto Contains{[](const auto& Pairs, const auto& Pair) {
             return std::find(Pairs.begin(), Pairs.end(), Pair) != Pairs.end();
         }};
-        const auto Resolve{[](CoreUObject::TObjectRef<Engine::UShapeComponent> Handle) {
-            return CoreUObject::Cast<Engine::UShapeComponent>(Handle.Get());
+        const auto Resolve{[](CoreUObject::TObjectRef<Engine::UPrimitiveComponent> Handle) {
+            return CoreUObject::Cast<Engine::UPrimitiveComponent>(Handle.Get());
         }};
 
         // 이벤트 안에서 액터가 파괴될 수 있으므로 호출할 때마다 핸들을 다시 해석합니다.
@@ -751,20 +1041,20 @@ namespace Engine {
 
         for (const auto& Pair : Previous) {
             if (!Contains(Current, Pair)) {
-                if (Engine::UShapeComponent* Shape{Resolve(Pair.first)}) {
-                    Shape->OnEndOverlap(Resolve(Pair.second));
+                if (Engine::UPrimitiveComponent* Primitive{Resolve(Pair.first)}) {
+                    Primitive->OnEndOverlap(Resolve(Pair.second));
                 }
 
-                if (Engine::UShapeComponent* Shape{Resolve(Pair.second)}) {
-                    Shape->OnEndOverlap(Resolve(Pair.first));
+                if (Engine::UPrimitiveComponent* Primitive{Resolve(Pair.second)}) {
+                    Primitive->OnEndOverlap(Resolve(Pair.first));
                 }
             }
         }
 
         for (const auto& Pair : Current) {
             if (!Contains(Previous, Pair)) {
-                Engine::UShapeComponent* First{Resolve(Pair.first)};
-                Engine::UShapeComponent* Second{Resolve(Pair.second)};
+                Engine::UPrimitiveComponent* First{Resolve(Pair.first)};
+                Engine::UPrimitiveComponent* Second{Resolve(Pair.second)};
 
                 if (First != nullptr && Second != nullptr) {
                     First->OnBeginOverlap(Second);

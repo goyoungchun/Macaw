@@ -33,10 +33,10 @@ namespace Engine {
         friend class FLuaRuntime;
 
     private:
-        UPROPERTY(Edit, Serialize, Getter = GetScriptPath, Setter = SetScriptPath)
+        UPROPERTY(Edit, Serialize, Category = "Script", Getter = GetScriptPath, Setter = SetScriptPath)
         Core::FString mScriptPath{};
 
-        UPROPERTY(Edit, Serialize, Getter = IsEnabled, Setter = SetEnabled)
+        UPROPERTY(Edit, Serialize, Category = "Script", Getter = IsEnabled, Setter = SetEnabled)
         bool mEnabled{true};
 
         Engine::FLuaScriptInstance* mRuntimeInstance{};

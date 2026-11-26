@@ -77,11 +77,12 @@ namespace {
     }
 }
 
-FAnimSequenceEditor::FAnimSequenceEditor(RenderCore::IRendererModule* Renderer, Asset::FAssetManager* Assets, Editor::FEditorAssetCatalog* Catalog, Editor::FAssetThumbnailCache* Thumbnails)
+FAnimSequenceEditor::FAnimSequenceEditor(RenderCore::IRendererModule* Renderer, Asset::FAssetManager* Assets, Editor::FEditorAssetCatalog* Catalog, Editor::FAssetThumbnailCache* Thumbnails, FMessageBox& Messages)
 	: mRenderer{Renderer},
 	  mAssets{Assets},
 	  mCatalog{Catalog},
-	  mThumbnails{Thumbnails} {
+	  mThumbnails{Thumbnails},
+	  mMessages{Messages} {
 }
 
 FAnimSequenceEditor::~FAnimSequenceEditor() = default;
@@ -108,9 +109,9 @@ bool FAnimSequenceEditor::Open(const std::filesystem::path& Path, Core::FString&
     }
 
     if (mOpen && mDirty) {
-        mPendingPath = Relative;
-        mConfirmClose = true;
-        ImGui::SetWindowFocus(mWindowId.c_str());
+        mMessages.ConfirmSave({MakeSavePrompt()}, [this, Relative]() {
+            OpenNow(Relative, mError);
+        });
 
         return true;
     }
@@ -148,8 +149,6 @@ bool FAnimSequenceEditor::OpenNow(const std::filesystem::path& Path, Core::FStri
     mPath = Path;
     mDirty = false;
     mSourceChanged = false;
-    mConfirmClose = false;
-    mPendingPath.clear();
     mError.clear();
     mOpen = true;
     strncpy_s(mRootBone.data(), mRootBone.size(), mEditing->GetRootMotionBone().c_str(), _TRUNCATE);
@@ -234,8 +233,6 @@ void FAnimSequenceEditor::Close() {
 
     mOpen = false;
     mDirty = false;
-    mConfirmClose = false;
-    mPendingPath.clear();
     mPath.clear();
 }
 
@@ -357,25 +354,59 @@ void FAnimSequenceEditor::UpdateToolkit(float, bool CanSave) {
 }
 
 void FAnimSequenceEditor::HandleCommands(bool CanSave) {
-    if (mEditing == nullptr) {
-        return;
+    if (mEditing != nullptr) {
+        HandleShortcuts(CanSave);
     }
-
-    HandleShortcuts(CanSave);
-
-    DrawClosePrompt(CanSave);
 }
 
-bool FAnimSequenceEditor::RequestClose() {
-    if (mOpen && mDirty) {
-        mConfirmClose = true;
-        mPendingPath.clear();
-        mHostTab->Open();
-
-        return false;
+std::optional<FMessageBox::FSavePrompt> FAnimSequenceEditor::GetClosePrompt() {
+    if (!mOpen || !mDirty) {
+        return {};
     }
 
-    return true;
+    auto Prompt{MakeSavePrompt()};
+
+    if (Prompt.mSave) {
+        Prompt.mSave = [this, SaveSettings = std::move(Prompt.mSave)]() {
+            if (!SaveSettings()) {
+                return false;
+            }
+
+            Close();
+
+            return true;
+        };
+    }
+
+    Prompt.mDiscard = [this]() {
+        Close();
+
+        return true;
+    };
+
+    return Prompt;
+}
+
+FMessageBox::FSavePrompt FAnimSequenceEditor::MakeSavePrompt() {
+    FMessageBox::FSavePrompt Prompt{"Animation Settings", "Save changes to " + Core::FilePath::ToUtf8(mPath.filename()) + "?"};
+
+    if (mToolkitCanSave && !mSourceChanged) {
+        Prompt.mSave = [this]() {
+            const bool Saved{mToolkitCanSave && Save()};
+
+            if (!Saved && mHostTab != nullptr) {
+                mHostTab->Open();
+            }
+
+            return Saved;
+        };
+    } else if (mSourceChanged) {
+        Prompt.mMessage += "\nThe source animation changed. Reopen the editor before saving.";
+    } else {
+        Prompt.mMessage += "\nStop PIE before saving animation settings.";
+    }
+
+    return Prompt;
 }
 
 void FAnimSequenceEditor::DrawSettings(bool CanSave) {
@@ -588,42 +619,5 @@ void FAnimSequenceEditor::HandleShortcuts(bool CanSave) {
 
     if (ImGui::IsKeyPressed(ImGuiKey_End)) {
         mPreview->Seek(mEditing->GetPlayLength());
-    }
-}
-
-void FAnimSequenceEditor::DrawClosePrompt(bool CanSave) {
-    if (mConfirmClose) {
-        ImGui::OpenPopup("Unsaved Animation Settings");
-        mConfirmClose = false;
-        mPreview->Pause();
-    }
-
-    if (ImGui::BeginPopupModal("Unsaved Animation Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-        ImGui::TextUnformatted("Unsaved animation settings. Press Ctrl+S to save.");
-        const bool Saved{CanSave && !mSourceChanged && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S) && Save()};
-        const bool Discard{ImGui::Button("Discard")};
-        ImGui::SameLine();
-
-        if (ImGui::Button("Cancel")) {
-            mPendingPath.clear();
-            ImGui::CloseCurrentPopup();
-        }
-
-        if (!mError.empty()) {
-            ImGui::TextWrapped("%s", mError.c_str());
-        }
-
-        if (Saved || Discard) {
-            ImGui::CloseCurrentPopup();
-
-            if (mPendingPath.empty()) {
-                Close();
-            } else {
-                const std::filesystem::path Path{mPendingPath};
-                OpenNow(Path, mError);
-            }
-        }
-
-        ImGui::EndPopup();
     }
 }

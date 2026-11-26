@@ -9,7 +9,6 @@
 #include "Core/Types.h"
 #include "Editor/FAssetPicker.h"
 
-#include <array>
 #include <filesystem>
 #include <memory>
 
@@ -252,7 +251,7 @@ namespace Editor {
         /**
          * @brief 우클릭 샘플 추가 메뉴의 검색어입니다.
          */
-        std::array<char, 64> mAddSearch{};
+        Core::TStaticArray<char, 64> mAddSearch{};
 
         /**
          * @brief 마지막 저장·검증 오류입니다.

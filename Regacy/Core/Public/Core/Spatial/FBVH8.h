@@ -23,7 +23,7 @@
 #include "Core/Base/ErrorHandler.h"
 #include "Core/Common.h"
 #include "Math/FMath.h"
-#include <array>
+#include "Core/Types.h"
 #include <bit>
 #include <limits>
 
@@ -376,12 +376,12 @@ void FBVH8::Build(const TArray<TNode>& BinaryNodes, TIsLeaf IsLeaf, TAddLeaf Add
         /**
          * @brief 인덱스 1부터 8까지의 분기 개수별 비용. 사용할 수 없는 구성은 무한대로 표시한다.
          */
-        std::array<double, 9> mCost{};
+        Core::TStaticArray<double, 9> mCost{};
 
         /**
          * @brief 각 분기 개수의 최소 비용 구성에서 왼쪽 하위 트리에 배분한 개수.
          */
-        std::array<Uint8, 9> mLeftCount{};
+        Core::TStaticArray<Uint8, 9> mLeftCount{};
 
         /**
          * @brief 현재 하위 트리에 선택한 출력 경계 개수.

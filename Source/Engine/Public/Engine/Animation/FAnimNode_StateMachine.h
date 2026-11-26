@@ -141,12 +141,12 @@ namespace Engine {
         /**
          * @brief 진행 중인 전이의 경과 시간(초)입니다.
          */
-        float mBlendElapsed{};
+        Core::FTime mBlendElapsed{};
 
         /**
          * @brief 진행 중인 전이의 전체 블렌드 시간(초)입니다.
          */
-        float mBlendDuration{};
+        Core::FTime mBlendDuration{};
     };
 
     /**

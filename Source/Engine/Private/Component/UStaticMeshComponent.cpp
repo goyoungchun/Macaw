@@ -8,6 +8,7 @@
 #include "Core/FilePath.h"
 #include "Core/Base/ErrorHandler.h"
 #include "Engine/EPrimitiveType.h"
+#include "Engine/PrimitiveBodySetup.h"
 #include "Asset/FAssetManager.h"
 #include "Asset/UStaticMesh.h"
 #include "Engine/UWorld.h"
@@ -41,8 +42,10 @@ namespace Engine {
 
         if (mPrimitive != Type) {
             mPrimitive = Type;
+            mPrimitiveBodySetup.reset();
 
             MarkRenderStateDirty();
+            RecreatePhysicsState();
         }
 
         return true;
@@ -65,14 +68,8 @@ namespace Engine {
 
         const std::filesystem::path AssetPath{Core::FilePath::FromUtf8(Path)};
 
-        if (!Path.empty() && (AssetPath.is_absolute() || AssetPath.has_root_name() || AssetPath.extension() != L".masset")) {
+        if (!Path.empty() && (Core::FilePath::GetContentMount(AssetPath) == Core::FilePath::EContentMount::Invalid || AssetPath.extension() != L".masset")) {
             return false;
-        }
-
-        for (const auto& Part : AssetPath) {
-            if (Part == L"..") {
-                return false;
-            }
         }
 
         if (mMeshPath == Path && (Path.empty() || mStaticMesh != nullptr)) {
@@ -88,12 +85,14 @@ namespace Engine {
         if (mMeshPath != Path || mStaticMesh != Mesh) {
             if (mMeshPath != Path) {
                 ClearMaterialOverrides();
+                mPrimitiveBodySetup.reset();
             }
 
             mMeshPath = Path;
             mStaticMesh = Mesh;
 
             MarkRenderStateDirty();
+            RecreatePhysicsState();
         }
 
         return true;
@@ -144,6 +143,7 @@ namespace Engine {
             mStaticMesh = Mesh;
 
             MarkRenderStateDirty();
+            RecreatePhysicsState();
         }
 
         return mMeshPath.empty() || mStaticMesh != nullptr;
@@ -154,6 +154,36 @@ namespace Engine {
      */
     bool Engine::UStaticMeshComponent::ShouldCreateRenderState() const {
         return mMeshPath.empty() || mStaticMesh != nullptr;
+    }
+
+    bool Engine::UStaticMeshComponent::IsCollisionEnabled() const {
+        return mCollisionEnabled;
+    }
+
+    void Engine::UStaticMeshComponent::SetCollisionEnabled(bool Enabled) {
+        if (mCollisionEnabled != Enabled) {
+            mCollisionEnabled = Enabled;
+            RecreatePhysicsState();
+        }
+    }
+
+    /**
+     * @brief 충돌이 켜져 있으면 표시 중인 메시에 맞는 충돌 형상을 반환합니다.
+     */
+    const PhysicsRuntime::UBodySetup* Engine::UStaticMeshComponent::GetBodySetup() const {
+        if (!mCollisionEnabled) {
+            return nullptr;
+        }
+
+        if (mMeshPath.empty()) {
+            if (mPrimitiveBodySetup == nullptr) {
+                mPrimitiveBodySetup = Engine::AcquirePrimitiveBodySetup(mPrimitive);
+            }
+
+            return mPrimitiveBodySetup.get();
+        }
+
+        return mStaticMesh != nullptr ? mStaticMesh->GetBodySetup() : nullptr;
     }
 
     /**

@@ -5,14 +5,17 @@
  */
 
 #include "Asset/Animation/FFrameRate.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include <cmath>
+
+using namespace Core::Literals;
 
 namespace Asset {
 
     Asset::FFrameRate Asset::FFrameRate::FromDecimal(double FramesPerSecond) {
         constexpr double Tolerance{0.0001};
-        constexpr double MaxRate{100000.0};
+        constexpr double MaxRate{(100000_Hz).GetBase()};
 
         if (!std::isfinite(FramesPerSecond) || FramesPerSecond <= 0.0 || FramesPerSecond > MaxRate) {
             return {0, 1};

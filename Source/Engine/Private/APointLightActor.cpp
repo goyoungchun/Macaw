@@ -7,7 +7,6 @@
 #include "Engine/APointLightActor.h"
 #include "Engine/Component/UPointLightComponent.h"
 #include "CoreUObject/Reflection/NewObject.h"
-#include "CoreUObject/Reflection/Cast.h"
 
 namespace Engine {
 
@@ -39,7 +38,7 @@ namespace Engine {
      * @brief 액터의 기본 광원 컴포넌트를 조회합니다.
      */
     Engine::UPointLightComponent* Engine::APointLightActor::GetLightComponent() const {
-        return CoreUObject::Cast<Engine::UPointLightComponent>(GetRootComponent());
+        return static_cast<Engine::UPointLightComponent*>(FindDefaultComponent(Engine::UPointLightComponent::StaticClass(), Core::FName{"PointLightComponent"}));
     }
 
 }

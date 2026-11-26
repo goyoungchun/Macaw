@@ -5,6 +5,7 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Engine/Component/USubUVComponent.h"
 #include "Engine/Component/UBillboardComponent.h"
 #include "Engine/Component/UStaticMeshComponent.h"
@@ -15,12 +16,15 @@
 #include <algorithm>
 #include <cmath>
 
+using namespace Core::Literals;
+
 namespace Engine {
 
     /**
      * @brief 자동 재생과 에디터 Tick을 활성화한 SubUV 컴포넌트를 생성합니다.
      */
-    Engine::USubUVComponent::USubUVComponent() {
+    Engine::USubUVComponent::USubUVComponent()
+		: mFramesPerSecond{12_Hz} {
         SetEditorTickable(true);
     }
 
@@ -134,15 +138,15 @@ namespace Engine {
     /**
      * @brief 초당 재생 프레임 수를 반환합니다.
      */
-    float Engine::USubUVComponent::GetFramesPerSecond() const {
+    Core::FFrequency Engine::USubUVComponent::GetFramesPerSecond() const {
         return mFramesPerSecond;
     }
 
     /**
      * @brief 초당 재생 프레임 수를 설정합니다.
      */
-    bool Engine::USubUVComponent::SetFramesPerSecond(float FramesPerSecond) {
-        if (!std::isfinite(FramesPerSecond) || FramesPerSecond < 0.0f || FramesPerSecond > 10000.0f) {
+    bool Engine::USubUVComponent::SetFramesPerSecond(Core::FFrequency FramesPerSecond) {
+        if (!FramesPerSecond.IsFinite() || FramesPerSecond < 0_Hz || FramesPerSecond > 10000_Hz) {
             return false;
         }
 
@@ -227,7 +231,7 @@ namespace Engine {
      */
     void Engine::USubUVComponent::Tick(float DeltaTime) {
         if (mPlaying && std::isfinite(DeltaTime) && DeltaTime > 0.0f) {
-            const double Next{mFramePosition + static_cast<double>(DeltaTime) * mFramesPerSecond};
+            const double Next{mFramePosition + static_cast<double>(DeltaTime) * mFramesPerSecond.GetBase()};
             const double Count{static_cast<double>(GetEffectiveFrameCount())};
 
             mFramePosition = mLooping ? std::fmod(Next, Count) : std::min(Next, Count);

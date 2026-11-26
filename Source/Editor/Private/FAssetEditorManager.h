@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Core/Types.h"
+#include "FMessageBox.h"
 #include "Asset/FAssetFile.h"
 #include "Editor/FEditorTabManager.h"
 #include "Editor/Widget/FEditorContentWidget.h"
@@ -14,6 +15,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string_view>
 
 namespace Platform {
@@ -38,20 +40,21 @@ namespace Editor {
     private:
         class FSourceEditor {
         public:
-            FSourceEditor(NativeIDE::EIDELanguage Language, const char* Title, const char* Id, Platform::FWindowsApplication* Platform, NativeIDE::FIDEContent::FValidator Validator = {}, NativeIDE::FIDEContent::FBuildSavedHandler BuildSavedHandler = {});
+            FSourceEditor(NativeIDE::EIDELanguage Language, const char* Title, const char* Id, Editor::FEditorContext* Context, Editor::FMessageBox& Messages, NativeIDE::FIDEContent::FValidator Validator = {}, NativeIDE::FIDEContent::FBuildSavedHandler BuildSavedHandler = {});
 
         public:
-            bool Open(const std::filesystem::path& Path, const std::filesystem::path& Workspace);
+            void Open(const std::filesystem::path& Path, const std::filesystem::path& Workspace, bool ReadOnly);
             void Draw(float DeltaTime, Editor::FEditorWorkspace& Workspace);
             void CloseRetired(const std::filesystem::path& Absolute);
 
-            bool CanClose();
+            std::optional<Editor::FMessageBox::FSavePrompt> GetClosePrompt();
             bool IsFocused() const;
             bool HasUnsavedSource(const std::function<bool(const std::filesystem::path&)>& Predicate) const;
 
         private:
             bool RequestTabClose();
-            void DrawClosePrompt();
+            Editor::FMessageBox::FSavePrompt MakeSavePrompt();
+            void OpenNow(const std::filesystem::path& Path, const std::filesystem::path& Workspace, bool ReadOnly);
 
         private:
             NativeIDE::FIDEContent mIDE;
@@ -59,8 +62,8 @@ namespace Editor {
             Editor::FEditorTab mTab;
             std::string_view mTitle{};
             std::string_view mId{};
-            Platform::FWindowsApplication* mPlatform{};
-            bool mClosePrompt{};
+            Editor::FEditorContext* mContext{};
+            Editor::FMessageBox& mMessages;
             bool mAllowTabClose{};
         };
 
@@ -74,7 +77,7 @@ namespace Editor {
          * @param[in] Workspace 주 탭·레벨 패널의 도킹 배치와 포커스 서비스입니다.
          * @param[in] Commands 레벨·프로젝트·실행 명령 서비스입니다.
          */
-        FAssetEditorManager(Editor::FEditorContext* Context, Platform::FWindowsApplication* Platform, Editor::FEditorAssetCatalog& Catalog, Editor::FAssetThumbnailCache& Thumbnails, Editor::FEditorWorkspace& Workspace, Editor::FEditorCommands& Commands);
+        FAssetEditorManager(Editor::FEditorContext* Context, Platform::FWindowsApplication* Platform, Editor::FEditorAssetCatalog& Catalog, Editor::FAssetThumbnailCache& Thumbnails, Editor::FEditorWorkspace& Workspace, Editor::FEditorCommands& Commands, Editor::FMessageBox& Messages);
 
         /**
          * @brief 객체를 소멸하고 소유 멤버와 연결 상태를 정리합니다.
@@ -127,10 +130,11 @@ namespace Editor {
         bool IsSourceEditorFocused() const;
 
         /**
-         * @brief 편집기를 닫아도 되는지 확인하며 필요한 경우 변경 내용의 처리를 요청합니다.
-         * @return 닫기를 허용하면 true입니다.
+         * @brief 열려 있는 편집기의 저장 확인 항목을 수집합니다.
+         * @return 변경 내용이 있는 편집기의 저장 확인 항목입니다.
          */
-        bool CanClose();
+        Core::TArray<Editor::FMessageBox::FSavePrompt> CollectSavePrompts();
+        void ConfirmClose(std::function<void()> Action);
 
         /**
          * @brief 폐기된 에셋 경로를 참조하는 편집기 콘텐츠를 닫거나 해제합니다.
@@ -143,7 +147,7 @@ namespace Editor {
          * @param[in] Predicate 열린 머티리얼 경로를 판정할 조건입니다.
          * @return 조건에 맞는 열린 머티리얼이 있으면 true입니다.
          */
-        bool HasOpenMaterial(const std::function<bool(const std::filesystem::path&)>& Predicate) const;
+        bool HasOpenAsset(Asset::EAssetType Type, const std::function<bool(const std::filesystem::path&)>& Predicate) const;
 
         /**
          * @brief 소스 편집기에 조건에 맞는 저장하지 않은 소스가 열려 있는지 검사합니다.
@@ -159,7 +163,7 @@ namespace Editor {
         void SetChangedHandler(std::function<void()> Handler);
 
     private:
-        void OpenSource(const std::filesystem::path& Path, Editor::FAssetEditorManager::FSourceEditor& Editor);
+        void OpenSource(const std::filesystem::path& Path, Editor::FAssetEditorManager::FSourceEditor& Editor, bool AllowEngine);
 
         /**
          * @brief 포커스와 마지막 활성 상태로 표시 중인 에셋 편집기를 찾습니다.
@@ -204,6 +208,7 @@ namespace Editor {
          * @brief 레벨·프로젝트·실행 명령을 처리하는 서비스입니다.
          */
         Editor::FEditorCommands& mCommands;
+        Editor::FMessageBox& mMessages;
 
         /**
          * @brief 위젯·주 탭을 등록하고 표시하는 탭 관리자입니다.

@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Core/Stat/Stat.h"
+#include "Core/Types.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,8 +9,8 @@ using namespace Stat;
 
 namespace {
     struct FStatState {
-        std::array<FSystemStatSample, static_cast<std::size_t>(ESystemStatStage::Count)> mCurrentSamples{};
-        std::array<FSystemStatSample, static_cast<std::size_t>(ERenderPreparationStage::Count)> mCurrentRenderPreparationSamples{};
+        Core::TStaticArray<FSystemStatSample, static_cast<std::size_t>(ESystemStatStage::Count)> mCurrentSamples{};
+        Core::TStaticArray<FSystemStatSample, static_cast<std::size_t>(ERenderPreparationStage::Count)> mCurrentRenderPreparationSamples{};
 
         FWorldTickStats mCurrentWorldTick{};
         FWorldTickStats* mActiveWorldTickStats{};

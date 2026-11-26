@@ -14,6 +14,9 @@
 
 namespace Core::Math {
 
+    template <typename T>
+    constexpr T ToDegrees(Core::TQuantity<Core::Dim::Angle, T> Angle);
+
     /**
      * @brief 각도의 사인 값을 반환합니다.
      * @param[in] Angle 각도입니다.
@@ -147,49 +150,29 @@ namespace Core::Math {
     }
 
     /**
-     * @brief 각도로 FRotator를 만듭니다.
-     * @param[in] Pitch Y축 주위 회전각입니다.
-     * @param[in] Yaw Z축 주위 회전각입니다.
-     * @param[in] Roll X축 주위 회전각입니다.
-     * @return 도 단위로 변환한 오일러 회전입니다.
-     */
-    inline FRotator MakeRotator(Core::FAngle Pitch, Core::FAngle Yaw, Core::FAngle Roll) {
-        using namespace Core::Literals;
-
-        return FRotator{Pitch / 1_deg, Yaw / 1_deg, Roll / 1_deg};
-    }
-
-    /**
      * @brief FRotator의 Y축 주위 Pitch 회전각을 반환합니다.
      * @param[in] Rotation 오일러 회전입니다.
      * @return Pitch 각도입니다.
      */
-    inline Core::FAngle GetPitch(const FRotator& Rotation) {
-        using namespace Core::Literals;
-
-        return Rotation.pitch * 1_deg;
-    }
+    Core::FAngle GetPitch(const FRotator& Rotation);
 
     /**
      * @brief FRotator의 Z축 주위 Yaw 회전각을 반환합니다.
      * @param[in] Rotation 오일러 회전입니다.
      * @return Yaw 각도입니다.
      */
-    inline Core::FAngle GetYaw(const FRotator& Rotation) {
-        using namespace Core::Literals;
-
-        return Rotation.yaw * 1_deg;
-    }
+    Core::FAngle GetYaw(const FRotator& Rotation);
 
     /**
      * @brief FRotator의 X축 주위 Roll 회전각을 반환합니다.
      * @param[in] Rotation 오일러 회전입니다.
      * @return Roll 각도입니다.
      */
-    inline Core::FAngle GetRoll(const FRotator& Rotation) {
-        using namespace Core::Literals;
+    Core::FAngle GetRoll(const FRotator& Rotation);
 
-        return Rotation.roll * 1_deg;
+    template <typename T>
+    constexpr T ToDegrees(Core::TQuantity<Core::Dim::Angle, T> Angle) {
+        return static_cast<T>(static_cast<long double>(Angle.GetBase()) / Core::QuantityUnits::RadiansPerDegree);
     }
 
 }

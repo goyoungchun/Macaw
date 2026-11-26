@@ -11,7 +11,6 @@
 #include "Core/Types.h"
 #include "Editor/FAssetPicker.h"
 
-#include <array>
 #include <filesystem>
 #include <memory>
 
@@ -450,7 +449,7 @@ namespace Editor {
         /**
          * @brief 새 변수 이름 입력 버퍼입니다.
          */
-        std::array<char, 64> mNewVariable{};
+        Core::TStaticArray<char, 64> mNewVariable{};
 
         /**
          * @brief 마지막 저장·편집 오류입니다.

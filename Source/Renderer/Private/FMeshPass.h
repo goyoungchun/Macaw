@@ -10,17 +10,19 @@
 #include "Core/Math/FMatrix.h"
 #include "EMeshPass.h"
 #include "FMeshDrawCommand.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <memory>
 
 #include <d3d11.h>
 
 namespace Asset {
+    class UMaterial;
     class UStaticMesh;
 }
 
 namespace Engine {
+    struct FParticleMeshBatch;
     struct FSceneViewFamily;
 }
 
@@ -51,7 +53,7 @@ namespace Renderer {
          * @param[in] Context 머티리얼 상수 업로드에 사용할 Direct3D 11 장치 컨텍스트의 비소유 주소입니다.
          * @param[in] Meshes 기본 프리미티브 종류별 공유 메시의 소유 배열입니다.
          */
-        FMeshPass(Renderer::FRenderer& Renderer, ID3D11Device* Device, ID3D11DeviceContext* Context, const std::array<std::unique_ptr<Asset::UStaticMesh>, 3>& Meshes);
+        FMeshPass(Renderer::FRenderer& Renderer, ID3D11Device* Device, ID3D11DeviceContext* Context, const Core::TStaticArray<std::unique_ptr<Asset::UStaticMesh>, 3>& Meshes);
 
         /**
          * @brief 객체 수명을 끝냅니다.
@@ -111,7 +113,20 @@ namespace Renderer {
          * @param[in] Family 표시 모드를 가진 현재 뷰 요청입니다.
          * @param[in,out] Commands 드로 명령을 추가할 목록입니다.
          */
-        virtual void AddCommands(const Renderer::FScenePrimitive& Primitive, Asset::UStaticMesh& Mesh, const Engine::FSceneViewFamily& Family, Core::TArray<Renderer::FMeshDrawCommand>& Commands) = 0;
+        virtual void AddCommands(const Renderer::FScenePrimitive& Primitive, Asset::UStaticMesh& Mesh, const Engine::FSceneViewFamily& Family, Core::TArray<Renderer::FMeshDrawCommand>& Commands, const Engine::FParticleMeshBatch* ParticleBatch) = 0;
+
+        static Asset::UMaterial* ResolveMaterial(const Renderer::FScenePrimitive& Primitive, Index_t MaterialIndex, Asset::UMaterial* Default, const Engine::FParticleMeshBatch* ParticleBatch);
+
+        /**
+         * @brief SubMesh가 이번 프레임에 천 결과로 그려야 하는 천 섹션인지 검사합니다.
+         * @param[in] Primitive 천 입자 버퍼를 가진 렌더 프리미티브입니다.
+         * @param[in] SubMeshIndex 검사할 SubMesh 번호입니다.
+         * @return 천 섹션이고 메시의 천 정점 버퍼와 입자 버퍼가 준비되어 있으면 그 천 에셋 번호, 아니면 InvalidIndex입니다.
+         */
+        static Index_t GetClothAssetIndex(const Renderer::FScenePrimitive& Primitive, Index_t SubMeshIndex);
+
+    private:
+        void AddParticleCommands(const Renderer::FScenePrimitive& Primitive, const Engine::FSceneViewFamily& Family, const FMatrix& ViewProjection, Core::TArray<Renderer::FMeshDrawCommand>& Commands, Uint32& Primitives);
 
     protected:
         /**
@@ -132,7 +147,7 @@ namespace Renderer {
         /**
          * @brief 기본 프리미티브 종류별 공유 메시 배열의 비소유 주소입니다.
          */
-        const std::array<std::unique_ptr<Asset::UStaticMesh>, 3>* mMeshes{};
+        const Core::TStaticArray<std::unique_ptr<Asset::UStaticMesh>, 3>* mMeshes{};
     };
 
 }

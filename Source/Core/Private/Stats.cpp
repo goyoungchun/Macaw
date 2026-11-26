@@ -14,6 +14,8 @@
 #include <stdexcept>
 #include <utility>
 
+using namespace std::chrono_literals;
+
 namespace Core {
 
     /**
@@ -173,8 +175,6 @@ namespace Core {
      * @brief 프레임을 시작하고 누적 통계와 기록 횟수를 초기화합니다.
      */
     bool Core::FStats::BeginFrame() {
-        const std::lock_guard Lock{mMutex};
-
         if (mInFrame) {
             return false;
         }
@@ -195,7 +195,7 @@ namespace Core {
 
         FrameInterval.mValue = Interval;
         FrameInterval.mSamples = Interval > 0.0 ? 1 : 0;
-        FrameRate.mValue = Interval > 0.0 ? 1000.0 / Interval : 0.0;
+        FrameRate.mValue = Interval > 0.0 ? static_cast<double>(std::chrono::milliseconds{1s}.count()) / Interval : 0.0;
         FrameRate.mSamples = FrameInterval.mSamples;
         mInFrame = true;
 
@@ -206,8 +206,6 @@ namespace Core {
      * @brief 프레임 값을 이력에 저장하고 정렬된 통계 스냅샷을 갱신합니다.
      */
     bool Core::FStats::EndFrame() {
-        const std::lock_guard Lock{mMutex};
-
         if (!mInFrame) {
             return false;
         }
@@ -251,8 +249,6 @@ namespace Core {
      * @brief 누적 통계·기록 횟수·이력·스냅샷과 프레임 번호를 초기화합니다.
      */
     void Core::FStats::Reset() {
-        const std::lock_guard Lock{mMutex};
-
         for (Core::FStat* Stat : mStats) {
             if (Stat->mMode == Core::EStatMode::Counter) {
                 Stat->mValue = 0.0;
@@ -273,8 +269,6 @@ namespace Core {
      * @brief 마지막 초기화 이후 완료한 통계 프레임 수를 반환합니다.
      */
     Uint64 Core::FStats::GetFrameNumber() const {
-        const std::lock_guard Lock{mMutex};
-
         return mFrameNumber;
     }
 
@@ -282,7 +276,6 @@ namespace Core {
      * @brief 등록된 통계의 그룹 이름을 중복 없이 정렬하여 반환합니다.
      */
     Core::TArray<Core::FString> Core::FStats::GetGroups() const {
-        const std::lock_guard Lock{mMutex};
         Core::TArray<Core::FString> Groups{};
 
         for (const Core::FStat* Stat : mStats) {
@@ -300,7 +293,6 @@ namespace Core {
      * @brief 마지막 완료 프레임의 통계 스냅샷을 그룹별로 조회합니다.
      */
     Core::TArray<Core::FStatSnapshot> Core::FStats::GetSnapshots(const Core::FString& Group) const {
-        const std::lock_guard Lock{mMutex};
         Core::TArray<Core::FStatSnapshot> Result{};
 
         for (const Core::FStatSnapshot& Snapshot : mSnapshots) {
@@ -316,7 +308,6 @@ namespace Core {
      * @brief 지정한 통계 항목의 최근 기록을 오래된 샘플부터 반환합니다.
      */
     Core::TArray<double> Core::FStats::GetHistory(std::string_view Group, std::string_view Name) const {
-        const std::lock_guard Lock{mMutex};
         const auto Found{std::find_if(mStats.begin(), mStats.end(), [Group, Name](const Core::FStat* Stat) {
             return Stat->mGroup == Group && Stat->mName == Name;
         })};
@@ -342,8 +333,6 @@ namespace Core {
      * @brief 그룹과 이름을 검증한 뒤 통계 항목의 비소유 주소를 등록합니다.
      */
     void Core::FStats::Register(Core::FStat* Stat) {
-        const std::lock_guard Lock{mMutex};
-
         if (Stat->mGroup.empty() || Stat->mName.empty() || Stat->mGroup == "all" || Stat->mGroup == "none" || Stat->mGroup == "list" || Stat->mGroup == "reset" || Stat->mGroup == "shadows" || std::any_of(Stat->mGroup.begin(), Stat->mGroup.end(), [](unsigned char Character) {
             return Character == 0 || std::isspace(Character) != 0;
         }) || std::any_of(mStats.begin(), mStats.end(), [Stat](const Core::FStat* Existing) {
@@ -359,8 +348,6 @@ namespace Core {
      * @brief 통계 항목의 등록과 해당 항목의 완료 프레임 스냅샷을 제거합니다.
      */
     void Core::FStats::Unregister(Core::FStat* Stat) {
-        const std::lock_guard Lock{mMutex};
-
         std::erase(mStats, Stat);
         std::erase_if(mSnapshots, [Stat](const Core::FStatSnapshot& Snapshot) {
             return Snapshot.GetGroup() == Stat->mGroup && Snapshot.GetName() == Stat->mName;
@@ -368,14 +355,13 @@ namespace Core {
     }
 
     /**
-     * @brief 뮤텍스로 보호하여 유한한 값의 누적 또는 교체를 반영합니다.
+     * @brief 유한한 값의 누적 또는 교체를 반영합니다.
      */
     void Core::FStats::Record(Core::FStat& Stat, double Value, bool Replace) {
         if (!std::isfinite(Value)) {
             return;
         }
 
-        const std::lock_guard Lock{mMutex};
         const double Next{Replace ? Value : Stat.mValue + Value};
 
         if (std::isfinite(Next)) {

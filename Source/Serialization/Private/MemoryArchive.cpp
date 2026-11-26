@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <utility>
 
 namespace Serialization {
 
@@ -33,6 +34,10 @@ namespace Serialization {
      */
     std::size_t Serialization::FMemoryArchive::GetRemainingBytes() const {
         return mReadBytes != nullptr ? mReadBytes->size() - mReadOffset : 0;
+    }
+
+    void Serialization::FMemoryArchive::SetStringReader(Serialization::FMemoryArchive::FStringReader Reader) {
+        mStringReader = std::move(Reader);
     }
 
     /**
@@ -145,6 +150,7 @@ namespace Serialization {
             return;
         }
 
+        const std::size_t Offset{mReadOffset};
         Uint32 Length{IsLoading() ? 0 : static_cast<Uint32>(Value.size())};
 
         Serialize(Name, Length);
@@ -164,6 +170,9 @@ namespace Serialization {
         }
 
         SerializeBytes(Value.data(), Length);
+        if (IsLoading() && mStringReader && !HasError()) {
+            mStringReader(Name, Value, Offset);
+        }
     }
 
     /**

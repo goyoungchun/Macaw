@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Editor/View/FViewportPresetLayout.h"
+#include "Core/Types.h"
 
 FViewportPresetLayout::FViewportPresetLayout(EViewportLayoutPreset InPreset) {
     SetPreset(InPreset);
@@ -230,7 +231,7 @@ void FViewportPresetLayout::CollectSplitters(std::vector<SSplitter*>& OutSplitte
     }
 }
 
-void FViewportPresetLayout::GetSplitterRatios(std::array<float, MaximumSplitterCount>& OutRatios, Uint32& OutCount) const {
+void FViewportPresetLayout::GetSplitterRatios(Core::TStaticArray<float, MaximumSplitterCount>& OutRatios, Uint32& OutCount) const {
     OutCount = mSplitterCount;
 
     for (Uint32 Index{0}; Index < mSplitterCount; ++Index) {
@@ -238,7 +239,7 @@ void FViewportPresetLayout::GetSplitterRatios(std::array<float, MaximumSplitterC
     }
 }
 
-bool FViewportPresetLayout::RestoreSplitterRatios(const std::array<float, MaximumSplitterCount>& Ratios, Uint32 RatioCount) {
+bool FViewportPresetLayout::RestoreSplitterRatios(const Core::TStaticArray<float, MaximumSplitterCount>& Ratios, Uint32 RatioCount) {
     if (RatioCount != mSplitterCount || RatioCount > MaximumSplitterCount) {
         return false;
     }

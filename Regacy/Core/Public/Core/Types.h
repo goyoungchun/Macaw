@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 
@@ -47,3 +49,10 @@ using uint32 = uint32_t;
  * @brief 64비트 부호 없는 정수 타입입니다.
  */
 using uint64 = uint64_t;
+
+namespace Core {
+
+    template <typename T, std::size_t Size>
+    using TStaticArray = std::array<T, Size>;
+
+}

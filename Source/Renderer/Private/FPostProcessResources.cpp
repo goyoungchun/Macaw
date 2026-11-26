@@ -1,6 +1,6 @@
 /**
  * @file FPostProcessResources.cpp
- * @brief 전체 화면 삼각형으로 안개를 합성하고 깊이 시각화 또는 FXAA를 최종 컬러에 출력합니다.
+ * @brief 높이 안개, 피사계 심도, FXAA와 깊이 시각화를 순서대로 처리합니다.
  * @ingroup Renderer
  */
 
@@ -9,6 +9,9 @@
 #include "RenderTarget.h"
 #include "Engine/FSceneViewFamily.h"
 #include "Engine/FHeightFogSceneProxy.h"
+#include "Core/Types.h"
+
+#include <algorithm>
 
 namespace Renderer {
 
@@ -65,9 +68,24 @@ namespace Renderer {
         return true;
     }
 
-    /**
-     * @brief 가시 안개를 교대 타깃에 합성한 뒤 복사·깊이 시각화·FXAA 중 최종 패스를 실행합니다.
-     */
+    bool Renderer::FPostProcessResources::CreateDepthOfFieldShaders(ID3D11Device* Device, std::span<const Uint8> SeparateCode, std::span<const Uint8> BlurCode, std::span<const Uint8> CompositeCode) {
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> Separate{};
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> Blur{};
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> Composite{};
+
+        if (FAILED(Device->CreatePixelShader(SeparateCode.data(), SeparateCode.size(), nullptr, Separate.GetAddressOf())) ||
+            FAILED(Device->CreatePixelShader(BlurCode.data(), BlurCode.size(), nullptr, Blur.GetAddressOf())) ||
+            FAILED(Device->CreatePixelShader(CompositeCode.data(), CompositeCode.size(), nullptr, Composite.GetAddressOf()))) {
+            return false;
+        }
+
+        mSeparateDepthOfField = std::move(Separate);
+        mBlurDepthOfField = std::move(Blur);
+        mCompositeDepthOfField = std::move(Composite);
+
+        return true;
+    }
+
     Uint32 Renderer::FPostProcessResources::Render(ID3D11DeviceContext* Context, Renderer::FDXRenderTarget& Target, const Engine::FSceneViewFamily& Family, std::span<const Engine::FHeightFogSceneProxy> Fogs) {
         Renderer::FPostProcessConstants Constants{};
 
@@ -82,19 +100,43 @@ namespace Renderer {
         Constants.mCameraPosition = FVector4{Family.mView.mLocation, Family.mView.mOrthographic ? 1.0f : 0.0f};
         Constants.mScreenSize = {static_cast<float>(Target.GetWidth()), static_cast<float>(Target.GetHeight()), 1.0f / static_cast<float>(Target.GetWidth()), 1.0f / static_cast<float>(Target.GetHeight())};
 
+        const FMatrix& Projection{Family.mView.mProjection};
+        Constants.mProjectionDepth = {Projection(2, 2), Projection(3, 2), Projection(2, 3), Projection(3, 3)};
+
+        const Engine::FDepthOfFieldSettings& DepthOfField{Family.mView.mDepthOfFieldSettings};
+        // 얇은 렌즈 모델: 초점거리 f, 조리개 지름 f/N, 초점 평면 S일 때 깊이 d의 착란원 지름은 센서에서
+        // c(d) = f² / (N(S − f)) · |d − S| / d 입니다. 화면 높이가 센서 높이에 대응하므로 픽셀 반경은 c/2 · 화면 높이 / 센서 높이입니다.
+        // 무한대에서의 반경 K만 CPU에서 구하고, 셰이더는 K · |d − S| / d로 픽셀마다 반경을 계산합니다.
+        const float SensorHeight{Family.mView.mSensorHeight.GetBase()};
+        const float FocalLength{Family.mView.mLensFocalLength > Core::FLength{} ? Family.mView.mLensFocalLength.GetBase() : Engine::Lens::FocalLengthFromFieldOfView(Family.mView.mFieldOfView, Family.mView.mSensorHeight).GetBase()};
+        const float FocusDistance{std::max(DepthOfField.mFocalDistance.GetBase(), FocalLength * 1.001f)};
+        const float MaxBlurRadius{std::max(DepthOfField.mMaxBlurRadius, 0.0f)};
+        float InfinityBlurRadius{};
+
+        if (FocalLength > 0.0f && SensorHeight > 0.0f && DepthOfField.mFStop > 0.0f && std::isfinite(FocalLength)) {
+            const float InfinityCircleOfConfusion{FocalLength * FocalLength / (DepthOfField.mFStop * (FocusDistance - FocalLength))};
+            InfinityBlurRadius = 0.5f * InfinityCircleOfConfusion / SensorHeight * static_cast<float>(Target.GetHeight());
+        }
+
+        // 블러는 픽셀마다 자신의 착란원 반경으로 퍼집니다. ZW는 레이어별 최대 탐색 반경입니다.
+        // 배경 착란원은 무한대에서 K로 수렴하므로 K까지만 찾고, 전경은 카메라에 가까울수록 커지므로 상한까지 찾습니다.
+        const float ForegroundBlurRadius{InfinityBlurRadius > 0.0f ? MaxBlurRadius : 0.0f};
+        const float BackgroundBlurRadius{std::min(InfinityBlurRadius, MaxBlurRadius)};
+        Constants.mDepthOfFieldParameters = {FocusDistance, InfinityBlurRadius, ForegroundBlurRadius, BackgroundBlurRadius};
+
         Asset::UTexture2D* Source{Target.GetSceneColor()};
         Uint32 DrawCalls{};
         const bool Visualization{Engine::IsBufferVisualization(Family.mViewMode)};
 
         if (!Visualization && Family.mShowFlags.mFog) {
             for (const Engine::FHeightFogSceneProxy& Fog : Fogs) {
-                if (!Fog.mVisible || Fog.mDensity <= 0.0f || Fog.mMaxOpacity <= 0.0f) {
+                if (!Fog.mVisible || Fog.mDensity <= Core::FInverseLength{} || Fog.mMaxOpacity <= 0.0f) {
                     continue;
                 }
 
                 Constants.mFogColor = Fog.mInscatteringColor;
-                Constants.mFogParameters = {Fog.mDensity, Fog.mHeightFalloff, Fog.mPosition.z, Fog.mMaxOpacity};
-                Constants.mFogDistances = {Fog.mStartDistance, Fog.mEndDistance, Fog.mCutoffDistance, 0.0f};
+                Constants.mFogParameters = {Fog.mDensity.GetBase(), Fog.mHeightFalloff.GetBase(), Fog.mPosition.z, Fog.mMaxOpacity};
+                Constants.mFogDistances = {Fog.mStartDistance.GetBase(), Fog.mEndDistance.GetBase(), Fog.mCutoffDistance.GetBase(), 0.0f};
                 Constants.mSettings = {1.0f, 0.0f, 0.0f, 0.0f};
 
                 mConstants.Update(Context, Constants);
@@ -108,7 +150,48 @@ namespace Renderer {
             }
         }
 
-        Constants.mSettings = {Family.mViewMode == Engine::EViewMode::SceneDepth ? 2.0f : !Visualization && Family.mShowFlags.mFXAA ? 3.0f : 0.0f, 0.0f, 0.0f, 0.0f};
+        Constants.mSettings.z = DepthOfField.mNearBlur ? 0.0f : 1.0f;
+        Constants.mSettings.w = DepthOfField.mFarBlur ? 0.0f : 1.0f;
+
+        if (mCompositeDepthOfField != nullptr && Family.mShowFlags.mDepthOfField && DepthOfField.mEnabled &&
+            (DepthOfField.mNearBlur || DepthOfField.mFarBlur) && InfinityBlurRadius > 0.0f && MaxBlurRadius > 0.0f &&
+            !Family.mView.mOrthographic && !Visualization && Family.mViewMode != Engine::EViewMode::Wireframe) {
+            switch (DepthOfField.mApertureShape) {
+            case Engine::EDepthOfFieldApertureShape::Pentagon:
+                Constants.mSettings.y = 5.0f;
+                break;
+            case Engine::EDepthOfFieldApertureShape::Hexagon:
+                Constants.mSettings.y = 6.0f;
+                break;
+            case Engine::EDepthOfFieldApertureShape::Circle:
+                break;
+            }
+
+            Asset::UTexture2D* Destination{Source == Target.GetSceneColor() ? Target.GetPostProcessColor() : Target.GetSceneColor()};
+            mConstants.Update(Context, Constants);
+
+            if (RenderDepthOfField(Context, Target, Constants, *Source, *Destination)) {
+                Source = Destination;
+                DrawCalls += 4;
+            }
+
+            Constants.mSettings.x = 0.0f;
+            Constants.mSettings.y = 0.0f;
+        }
+
+        if (Family.mViewMode == Engine::EViewMode::DepthOfFieldWeights) {
+            Constants.mSettings.x = 4.0f;
+        } else {
+            Constants.mSettings.x = Family.mViewMode == Engine::EViewMode::SceneDepth ? 2.0f : !Visualization && Family.mShowFlags.mFXAA ? 3.0f : 0.0f;
+        }
+
+        // 조명은 선형 공간에서 계산하고 텍스처는 sRGB를 선형으로 디코딩해 읽으므로, 최종 출력에서 sRGB로 인코딩한다.
+        // 버퍼 시각화(DOF 가중치 포함)와 깊이 시각화는 색이 아닌 데이터를 보여 주고, 와이어프레임은 색을 화면 값으로 직접 지정하므로 제외한다.
+        // Settings.x, z, w는 위에서 정한 값(DOF 가중치 시각화, Near/Far 토글)을 유지하고 y만 최종 패스용 인코딩 플래그로 쓴다.
+        // (DOF 패스에서는 y가 조리개 모양 값이었고 그 패스 뒤에 0으로 되돌린 상태다.)
+        const bool EncodeSRGB{!Visualization && Family.mViewMode != Engine::EViewMode::SceneDepth && Family.mViewMode != Engine::EViewMode::Wireframe};
+
+        Constants.mSettings.y = EncodeSRGB ? 1.0f : 0.0f;
 
         mConstants.Update(Context, Constants);
         Draw(Context, Source, Target.GetOutputColor(), Target.GetSceneDepth());
@@ -116,41 +199,93 @@ namespace Renderer {
         return DrawCalls + 1;
     }
 
+    bool Renderer::FPostProcessResources::RenderDepthOfField(ID3D11DeviceContext* Context, Renderer::FDXRenderTarget& Target, Renderer::FPostProcessConstants& Constants, const Asset::UTexture2D& Source, Asset::UTexture2D& Destination) {
+        const FDXRenderTarget::FDepthOfFieldTargets* Layers{Target.PrepareDepthOfFieldTargets()};
+
+        if (Layers == nullptr) {
+            return false;
+        }
+
+        const auto& [Foreground, Background]{Layers->mSeparated};
+        const auto& [BlurredForeground, BlurredBackground]{Layers->mBlurred};
+        ID3D11ShaderResourceView* Color{Source.GetShaderResourceView()};
+        ID3D11ShaderResourceView* Depth{Target.GetSceneDepth()->GetShaderResourceView()};
+
+        const D3D11_VIEWPORT HalfViewport{0.0f, 0.0f, static_cast<float>(Foreground->GetSizeX()), static_cast<float>(Foreground->GetSizeY()), 0.0f, 1.0f};
+        Context->RSSetViewports(1, &HalfViewport);
+
+        // 분리 패스는 두 레이어와 함께 레이어별 착란원 반경을 기록합니다.
+        const Core::TStaticArray<ID3D11RenderTargetView*, 3> Separated{Foreground->GetRenderTargetView(), Background->GetRenderTargetView(), Layers->mCircleOfConfusion->GetRenderTargetView()};
+        const Core::TStaticArray<ID3D11ShaderResourceView*, 2> SceneInputs{Color, Depth};
+        Draw(Context, mSeparateDepthOfField.Get(), Separated, SceneInputs);
+
+        // 블러는 표본마다 자신의 착란원 반경으로 퍼지는 scatter-as-gather입니다. 레이어마다 탐색 반경이 달라 따로 실행합니다.
+        // Settings.x가 블러할 레이어(0 전경, 1 배경)이며 다른 출력 슬롯은 비워 둡니다.
+        const Core::TStaticArray<ID3D11ShaderResourceView*, 5> BlurInputs{nullptr, nullptr, Foreground->GetShaderResourceView(), Background->GetShaderResourceView(), Layers->mCircleOfConfusion->GetShaderResourceView()};
+        const Core::TStaticArray<ID3D11RenderTargetView*, 2> BlurredForegroundOnly{BlurredForeground->GetRenderTargetView(), nullptr};
+        const Core::TStaticArray<ID3D11RenderTargetView*, 2> BlurredBackgroundOnly{nullptr, BlurredBackground->GetRenderTargetView()};
+
+        Constants.mSettings.x = 0.0f;
+        mConstants.Update(Context, Constants);
+        Draw(Context, mBlurDepthOfField.Get(), BlurredForegroundOnly, BlurInputs);
+
+        Constants.mSettings.x = 1.0f;
+        mConstants.Update(Context, Constants);
+        Draw(Context, mBlurDepthOfField.Get(), BlurredBackgroundOnly, BlurInputs);
+
+        const D3D11_VIEWPORT FullViewport{0.0f, 0.0f, static_cast<float>(Target.GetWidth()), static_cast<float>(Target.GetHeight()), 0.0f, 1.0f};
+        Context->RSSetViewports(1, &FullViewport);
+
+        const Core::TStaticArray<ID3D11RenderTargetView*, 1> Composited{Destination.GetRenderTargetView()};
+        const Core::TStaticArray<ID3D11ShaderResourceView*, 4> CompositeInputs{Color, Depth, BlurredForeground->GetShaderResourceView(), BlurredBackground->GetShaderResourceView()};
+        Draw(Context, mCompositeDepthOfField.Get(), Composited, CompositeInputs);
+
+        return true;
+    }
+
     /**
      * @brief 입력 컬러·깊이를 읽어 다른 컬러 타깃에 전체 화면 삼각형을 그리고 SRV·RTV 바인딩을 해제합니다.
      */
     void Renderer::FPostProcessResources::Draw(ID3D11DeviceContext* Context, const Asset::UTexture2D* Source, Asset::UTexture2D* Destination, const Asset::UTexture2D* Depth) {
-        const std::array<ID3D11ShaderResourceView*, 2> Empty{};
+        const Core::TStaticArray<ID3D11RenderTargetView*, 1> Outputs{Destination->GetRenderTargetView()};
+        const Core::TStaticArray<ID3D11ShaderResourceView*, 2> Inputs{Source->GetShaderResourceView(), Depth != nullptr ? Depth->GetShaderResourceView() : nullptr};
+        Draw(Context, mPixelShader.Get(), Outputs, Inputs);
+    }
+
+    void Renderer::FPostProcessResources::Draw(ID3D11DeviceContext* Context, ID3D11PixelShader* PixelShader, std::span<ID3D11RenderTargetView* const> Outputs, std::span<ID3D11ShaderResourceView* const> Inputs, ID3D11BlendState* Blend) {
+        // DOF 블러가 쓰는 t4(착란원 반경)까지 비웁니다.
+        const Core::TStaticArray<ID3D11ShaderResourceView*, 5> Empty{};
 
         Context->PSSetShaderResources(0, static_cast<UINT>(Empty.size()), Empty.data());
-
-        ID3D11RenderTargetView* Output{Destination->GetRenderTargetView()};
-
-        Context->OMSetRenderTargets(1, &Output, nullptr);
+        Context->OMSetRenderTargets(static_cast<UINT>(Outputs.size()), Outputs.data(), nullptr);
         Context->OMSetDepthStencilState(mDepthDisabled.Get(), 0);
-        Context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFFu);
+        Context->OMSetBlendState(Blend, nullptr, 0xFFFFFFFFu);
         Context->RSSetState(mRasterizer.Get());
         Context->IASetInputLayout(nullptr);
         Context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         Context->VSSetShader(mVertexShader.Get(), nullptr, 0);
-        Context->PSSetShader(mPixelShader.Get(), nullptr, 0);
+        Context->PSSetShader(PixelShader, nullptr, 0);
 
         ID3D11SamplerState* Sampler{mSampler.Get()};
-        const std::array<ID3D11ShaderResourceView*, 2> Resources{Source->GetShaderResourceView(), Depth != nullptr ? Depth->GetShaderResourceView() : nullptr};
-
         mConstants.Bind(Context, RenderCore::EShaderStage::Pixel, 0);
         Context->PSSetSamplers(0, 1, &Sampler);
-        Context->PSSetShaderResources(0, static_cast<UINT>(Resources.size()), Resources.data());
+        Context->PSSetShaderResources(0, static_cast<UINT>(Inputs.size()), Inputs.data());
         Context->Draw(3, 0);
         Context->PSSetShaderResources(0, static_cast<UINT>(Empty.size()), Empty.data());
         Context->OMSetRenderTargets(0, nullptr, nullptr);
     }
 
-    void FPostProcessResources::RenderTexture(ID3D11DeviceContext* Context, const Asset::UTexture2D& Source, Asset::UTexture2D& Destination) {
-        const Renderer::FPostProcessConstants Constants{};
+    void FPostProcessResources::RenderTexture(ID3D11DeviceContext* Context, const Asset::UTexture2D& Source, Asset::UTexture2D& Destination, ID3D11BlendState* Blend) {
+        Renderer::FPostProcessConstants Constants{};
+
+        // sRGB 텍스처는 샘플링할 때 선형으로 디코딩되므로, 그대로 RGBA8 UNORM에 기록하면 원본보다 어둡게 보인다.
+        // 텍스처 뷰어와 썸네일이 원본 색을 보이도록 sRGB 텍스처만 다시 인코딩한다. 선형 텍스처(노멀 맵 등)는 값을 그대로 보인다.
+        Constants.mSettings = {0.0f, Source.IsSRGB() ? 1.0f : 0.0f, 0.0f, 0.0f};
+        const Core::TStaticArray<ID3D11RenderTargetView*, 1> Outputs{Destination.GetRenderTargetView()};
+        const Core::TStaticArray<ID3D11ShaderResourceView*, 1> Inputs{Source.GetShaderResourceView()};
 
         mConstants.Update(Context, Constants);
-        Draw(Context, &Source, &Destination, nullptr);
+        Draw(Context, mPixelShader.Get(), Outputs, Inputs, Blend);
     }
 
 }

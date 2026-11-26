@@ -1,4 +1,5 @@
 #include "Script/FLuaVM.h"
+#include "Core/Types.h"
 
 #include "Core/FilePath.h"
 #include "LuaBootstrap.generated.h"
@@ -12,7 +13,7 @@
 using namespace Script;
 
 namespace {
-    constexpr std::array<const char*, static_cast<std::size_t>(ELuaCallback::Count)> CallbackNames{"BeginPlay", "Tick", "EndPlay", "OnOverlap", "OnEndOverlap", "OnHit"};
+    constexpr Core::TStaticArray<const char*, static_cast<std::size_t>(ELuaCallback::Count)> CallbackNames{"BeginPlay", "Tick", "EndPlay", "OnOverlap", "OnEndOverlap", "OnHit"};
 }
 
 const char* FLuaExecution::GetCallbackName(ELuaCallback Callback) {

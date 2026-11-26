@@ -68,7 +68,7 @@ namespace NativeIDE {
          * @return 파일을 읽었으면 true이며 실패하면 기존 상태를 유지하고 false입니다.
          * @post 성공하면 변경 내용 없음 상태가 되며 이진 데이터처럼 보존할 수 없는 내용은 읽기 전용으로 표시합니다.
          */
-        bool Open(const std::filesystem::path& Path, const std::filesystem::path& Workspace);
+        bool Open(const std::filesystem::path& Path, const std::filesystem::path& Workspace, bool ReadOnly = false);
 
         /**
          * @brief 변경 내용을 원본 BOM과 줄 끝 형식으로 변환해 원자적으로 저장합니다.
@@ -166,6 +166,7 @@ namespace NativeIDE {
         std::uint64_t mBuildRevision{};
         bool mCurrentBuild{};
         bool mUnbuilt{};
+        bool mReadOnlySource{};
 
         /**
          * @brief 저장하지 않은 변경이 있는지 나타냅니다.

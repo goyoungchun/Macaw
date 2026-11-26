@@ -38,6 +38,10 @@ void FAssetEditorToolkit::HandleCommands() {
 void FAssetEditorToolkit::CloseRetired(const std::filesystem::path&) {
 }
 
+std::optional<FMessageBox::FSavePrompt> FAssetEditorToolkit::GetClosePrompt() {
+    return {};
+}
+
 const std::filesystem::path& FAssetEditorToolkit::GetAssetPath() const {
     return mPath;
 }

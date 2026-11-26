@@ -5,6 +5,7 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FMatrix.h"
 #include "Core/Math/FVector.h"
 #include "Core/Math/FRotator.h"
@@ -14,9 +15,10 @@
 #include "Math/SimdMath.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <limits>
+
+using namespace Core::Literals;
 
 /**
  * @brief FMatrix의 초기 상태와 전달받은 의존성을 구성합니다.
@@ -134,7 +136,11 @@ FMatrix FMatrix::LookTo(const FVector& Position, const FVector& Forward, const F
  * @brief 수직 시야각과 종횡비로 Direct3D 깊이 범위의 원근 투영 행렬을 생성합니다.
  */
 FMatrix FMatrix::Perspective(float FieldOfView, float Aspect, float NearPlane, float FarPlane) {
-    const float Height{1.0f / std::tan(Core::Math::ToRadians(FieldOfView) * 0.5f)};
+    return Perspective(FieldOfView * 1_deg, Aspect, Core::FLength::FromBase(NearPlane), Core::FLength::FromBase(FarPlane));
+}
+
+FMatrix FMatrix::Perspective(Core::FAngle FieldOfView, float Aspect, Core::FLength NearPlane, Core::FLength FarPlane) {
+    const float Height{1.0f / Core::Math::Tan(FieldOfView * 0.5f)};
     const float Width{Height / Aspect};
     const float Depth{FarPlane / (FarPlane - NearPlane)};
 
@@ -142,7 +148,7 @@ FMatrix FMatrix::Perspective(float FieldOfView, float Aspect, float NearPlane, f
     Result.mRows[0] = _mm_set_ps(0.0f, 0.0f, 0.0f, Width);
     Result.mRows[1] = _mm_set_ps(0.0f, 0.0f, Height, 0.0f);
     Result.mRows[2] = _mm_set_ps(1.0f, Depth, 0.0f, 0.0f);
-    Result.mRows[3] = _mm_set_ps(0.0f, -NearPlane * Depth, 0.0f, 0.0f);
+    Result.mRows[3] = _mm_set_ps(0.0f, -NearPlane.GetBase() * Depth, 0.0f, 0.0f);
 
     return Result;
 }
@@ -151,11 +157,15 @@ FMatrix FMatrix::Perspective(float FieldOfView, float Aspect, float NearPlane, f
  * @brief 지정한 가로·세로 범위와 깊이 구간의 정사영 행렬을 만듭니다.
  */
 FMatrix FMatrix::Orthographic(float Width, float Height, float NearPlane, float FarPlane) {
+    return Orthographic(Core::FLength::FromBase(Width), Core::FLength::FromBase(Height), Core::FLength::FromBase(NearPlane), Core::FLength::FromBase(FarPlane));
+}
+
+FMatrix FMatrix::Orthographic(Core::FLength Width, Core::FLength Height, Core::FLength NearPlane, Core::FLength FarPlane) {
     FMatrix Result{};
 
-    Result(0, 0) = 2.0f / Width;
-    Result(1, 1) = 2.0f / Height;
-    Result(2, 2) = 1.0f / (FarPlane - NearPlane);
+    Result(0, 0) = 2.0f / Width.GetBase();
+    Result(1, 1) = 2.0f / Height.GetBase();
+    Result(2, 2) = 1.0f / (FarPlane - NearPlane).GetBase();
     Result(3, 2) = -NearPlane / (FarPlane - NearPlane);
 
     return Result;
@@ -325,7 +335,7 @@ FRotator FMatrix::GetRotation() const {
  */
 FQuat FMatrix::GetQuaternion() const {
     FMatrix Rotation{*this};
-    std::array<float, 3> Scales{};
+    Core::TStaticArray<float, 3> Scales{};
 
     for (Index_t Row{}; Row < 3; ++Row) {
         const __m128 Axis{mRows[Row]};
@@ -383,8 +393,8 @@ bool FMatrix::TryGetTransform(FTransform& Result) const {
         return false;
     }
 
-    std::array<float, 3> Scales{};
-    std::array<__m128, 3> Axes{};
+    Core::TStaticArray<float, 3> Scales{};
+    Core::TStaticArray<__m128, 3> Axes{};
 
     for (Index_t Row{}; Row < 3; ++Row) {
         const float Size{std::sqrt(_mm_cvtss_f32(Core::Math::Simd::Dot<3>(mRows[Row], mRows[Row])))};
@@ -493,9 +503,9 @@ FMatrix FMatrix::Transposed() const {
  * @brief 4×4 행렬의 행렬식을 구합니다.
  */
 float FMatrix::Determinant() const {
-    constexpr std::array<std::array<Int32, 2>, 6> Columns{{{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}}};
-    std::array<double, 6> Upper{};
-    std::array<double, 6> Lower{};
+    constexpr Core::TStaticArray<Core::TStaticArray<Int32, 2>, 6> Columns{{{0, 1}, {0, 2}, {0, 3}, {1, 2}, {1, 3}, {2, 3}}};
+    Core::TStaticArray<double, 6> Upper{};
+    Core::TStaticArray<double, 6> Lower{};
 
     for (Index_t Index{}; Index < Columns.size(); ++Index) {
         const Index_t A{static_cast<Index_t>(Columns[Index][0])};

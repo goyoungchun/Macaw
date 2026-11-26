@@ -1,11 +1,11 @@
 #pragma once
 
-#include <array>
 #include <initializer_list>
 #include <memory>
 #include <vector>
 #include "Editor/View/FEditorViewportTypes.h"
 #include "Editor/View/SSplitter.h"
+#include "Core/Types.h"
 
 enum class EViewportLayoutPreset : Uint8 {
     Single,
@@ -41,8 +41,8 @@ public:
     const FRect& GetViewportRect(FViewportId ViewportId) const;
     void CollectSplitters(std::vector<SSplitter*>& OutSplitters) const;
 
-    void GetSplitterRatios(std::array<float, MaximumSplitterCount>& OutRatios, Uint32& OutCount) const;
-    bool RestoreSplitterRatios(const std::array<float, MaximumSplitterCount>& Ratios, Uint32 RatioCount);
+    void GetSplitterRatios(Core::TStaticArray<float, MaximumSplitterCount>& OutRatios, Uint32& OutCount) const;
+    bool RestoreSplitterRatios(const Core::TStaticArray<float, MaximumSplitterCount>& Ratios, Uint32 RatioCount);
 
 private:
     SSplitter* AddTopBottomSplitter(SWindow* First, SWindow* Second, float Ratio = 0.5f, const FSplitterRatio* SharedRatio = nullptr);
@@ -56,9 +56,9 @@ private:
     EViewportLayoutPreset mPreset{EViewportLayoutPreset::FourGrid};
     Uint32 mViewportCount{MaximumViewportCount};
     FRect mRect{};
-    std::array<SWindow, MaximumViewportCount> mViewportRegions{};
-    std::array<std::unique_ptr<SSplitter>, MaximumSplitterCount> mSplitters{};
-    std::array<SSplitter*, MaximumSplitterCount> mSplitterDrawOrder{};
+    Core::TStaticArray<SWindow, MaximumViewportCount> mViewportRegions{};
+    Core::TStaticArray<std::unique_ptr<SSplitter>, MaximumSplitterCount> mSplitters{};
+    Core::TStaticArray<SSplitter*, MaximumSplitterCount> mSplitterDrawOrder{};
     Uint32 mSplitterCount{0};
     SWindow* mRoot{nullptr};
     FSplitterRatio mSharedGridRatio{};

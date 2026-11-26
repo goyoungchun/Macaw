@@ -5,6 +5,7 @@
  */
 
 #include "Core/Math/MathUtility.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FVector2.h"
 #include "Core/Math/FVector.h"
 #include "Core/Math/FVector4.h"
@@ -13,7 +14,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <numbers>
+
+using namespace Core::Literals;
 
 namespace Core {
 
@@ -26,7 +28,7 @@ namespace Core {
      * @brief 도 단위 각도를 라디안으로 변환합니다.
      */
     float Core::Math::ToRadians(float Degrees) {
-        return Degrees * std::numbers::pi_v<float> / 180.0f;
+        return (Degrees * 1_deg).GetBase();
     }
 
     /**
@@ -38,7 +40,7 @@ namespace Core {
      * @brief 라디안 단위 각도를 도로 변환합니다.
      */
     float Core::Math::ToDegrees(float Radians) {
-        return Radians * 180.0f / std::numbers::pi_v<float>;
+        return Core::Math::ToDegrees(Radians * 1_rad);
     }
 
     /**

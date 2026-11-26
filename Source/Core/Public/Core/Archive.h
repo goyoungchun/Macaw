@@ -10,6 +10,8 @@
 #include "Core/Guid.h"
 #include "Core/GuidHash.h"
 #include "Core/Math.h"
+#include "Core/Literals/TQuantity.h"
+#include "Core/Literals/QuantityUnits.h"
 
 #include <string_view>
 
@@ -249,6 +251,11 @@ namespace Core {
          */
         void Serialize(std::string_view Name, FRay& Value);
 
+        void SerializeQuantity(std::string_view Name, float& BaseValue, const Core::FQuantityUnit& Unit);
+
+        template <Core::FDimension Dimension>
+        void Serialize(std::string_view Name, Core::TQuantity<Dimension, float>& Value, const Core::FQuantityUnit& Unit = Core::GetBaseQuantityUnit(Dimension));
+
     private:
         /**
          * @brief 현재 동작 모드입니다.
@@ -265,5 +272,21 @@ namespace Core {
          */
         Core::FString mError{};
     };
+
+    template <Core::FDimension Dimension>
+    void Core::FArchive::Serialize(std::string_view Name, Core::TQuantity<Dimension, float>& Value, const Core::FQuantityUnit& Unit) {
+        if (Unit.mDimension != Dimension) {
+            SetError("Incompatible quantity unit: " + Core::FString{Name});
+
+            return;
+        }
+
+        float BaseValue{Value.GetBase()};
+        SerializeQuantity(Name, BaseValue, Unit);
+
+        if (IsLoading() && !HasError()) {
+            Value = Core::TQuantity<Dimension, float>::FromBase(BaseValue);
+        }
+    }
 
 }

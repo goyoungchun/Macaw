@@ -5,17 +5,19 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Asset/Import/FFBXImporter.h"
 #include "Core/FilePath.h"
 #include "Core/Math/FTransform.h"
 #include "FMeshImportTransform.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <d3d11.h>
 #include <limits>
 #include <utility>
+
+using namespace Core::Literals;
 
 using namespace fbxsdk;
 
@@ -46,7 +48,7 @@ namespace Asset {
             const FbxVector4 Origin{Matrix.GetT()};
             FMatrix Result{};
 
-            for (Index_t Row{}; Row < 3; ++Row) {
+            for (Int32 Row{}; Row < 3; ++Row) {
                 FbxVector4 Axis{};
                 Axis[Row] = 1.0;
 
@@ -130,11 +132,27 @@ namespace Asset {
             const FbxDouble3 Transparent{Lambert->TransparentColor.Get()};
 
             // 불투명도 = 1 - (투명 계수 × 투명 색상 RGB 평균)입니다. 투명 색상이 검정이거나 계수가 0이면 완전 불투명입니다.
-            const double Opacity{1.0 - Lambert->TransparencyFactor.Get() * (Transparent[0] + Transparent[1] + Transparent[2]) / 3.0};
+            double Opacity{1.0 - Lambert->TransparencyFactor.Get() * (Transparent[0] + Transparent[1] + Transparent[2]) / 3.0};
+
+            // Blender·3ds Max 등은 알파를 "Opacity" 속성에 그대로 기록합니다. Blender는 반투명 재질의 TransparentColor에
+            // 기본 색상을 넣으므로, 위 공식으로는 검은 유리(헤드라이트 커버 등)가 완전 불투명이 됩니다. 속성이 있으면 그 값을 우선합니다.
+            if (const FbxProperty OpacityProperty{Lambert->FindProperty("Opacity")}; OpacityProperty.IsValid()) {
+                const double Value{OpacityProperty.Get<FbxDouble>()};
+
+                if (std::isfinite(Value)) {
+                    Opacity = std::clamp(Value, 0.0, 1.0);
+                }
+            }
 
             // RGB는 Diffuse 색상에 DiffuseFactor를 곱한 값, A는 위에서 계산한 불투명도입니다.
             BaseColor = {static_cast<float>(Color[0] * Factor), static_cast<float>(Color[1] * Factor), static_cast<float>(Color[2] * Factor), static_cast<float>(Opacity)};
             AmbientColor = ReadColor(Lambert->Ambient.Get(), Lambert->AmbientFactor.Get());
+
+            // FBX의 Ambient는 대개 검정(0, 0, 0)이 기본값이다. 이 엔진은 환경광에 이 색을 곱하므로 검정이면 환경광을 전혀 받지 못한다.
+            // 환경광을 끄려는 의도로 쓰지 않으므로, 검정은 값이 지정되지 않은 것으로 보고 기본값(흰색)을 쓴다.
+            if (AmbientColor.x <= 0.0f && AmbientColor.y <= 0.0f && AmbientColor.z <= 0.0f) {
+                AmbientColor = {1.0f, 1.0f, 1.0f, 1.0f};
+            }
             EmissiveColor = ReadColor(Lambert->Emissive.Get(), Lambert->EmissiveFactor.Get());
         }
 
@@ -154,8 +172,8 @@ namespace Asset {
             TwoSided = DoubleSided.IsValid() && DoubleSided.Get<FbxBool>();
 
             // 재질 슬롯별로 받아들이는 텍스처 형태입니다. 렌더러가 새 형태를 지원하면 여기에 추가합니다.
-            constexpr std::array BaseColorShapes{Asset::EMeshImportTextureShape::Texture2D};
-            constexpr std::array NormalShapes{Asset::EMeshImportTextureShape::Texture2D};
+            constexpr Core::TStaticArray<Asset::EMeshImportTextureShape, 1> BaseColorShapes{Asset::EMeshImportTextureShape::Texture2D};
+            constexpr Core::TStaticArray<Asset::EMeshImportTextureShape, 1> NormalShapes{Asset::EMeshImportTextureShape::Texture2D};
 
             // 재질의 지정한 속성에 연결된 텍스처를 이미지 처리기로 읽는 도우미입니다.
             // 텍스처가 연결되지 않은 경우에도 true를 반환하며, Texture의 Source가 None으로 남습니다.
@@ -331,7 +349,7 @@ namespace Asset {
         }};
 
         // 노드의 재질을 순서대로 등록합니다. 재질이 하나도 없으면 기본 재질(nullptr) 하나를 로컬 인덱스 0으로 등록합니다.
-        for (Index_t Index{}; Index < std::max(1, Node.GetMaterialCount()); ++Index) {
+        for (Int32 Index{}; Index < std::max(1, Node.GetMaterialCount()); ++Index) {
             if (!AddMaterial(Node.GetMaterialCount() == 0 ? nullptr : Node.GetMaterial(Index))) {
                 return false;
             }
@@ -353,17 +371,17 @@ namespace Asset {
         }
 
         // 로컬 재질 인덱스별로 그 재질을 쓰는 삼각형의 정점 인덱스를 모아 두는 목록입니다. 나중에 재질별 서브메시가 됩니다.
-        Core::TArray<Core::TArray<Index_t>> Sections{};
+        Core::TArray<Core::TArray<Uint32>> Sections{};
         Sections.resize(NodeMaterials.size());
 
-        for (Index_t Polygon{}; Polygon < Mesh.GetPolygonCount(); ++Polygon) {
+        for (Int32 Polygon{}; Polygon < Mesh.GetPolygonCount(); ++Polygon) {
             // 이 삼각형이 사용하는 로컬 재질 인덱스입니다. 재질 매핑 정보가 없으면 0번 재질을 사용합니다.
-            Index_t LocalMaterial{};
+            Int32 LocalMaterial{};
 
             // 노드에 재질이 있고 메시에 재질 매핑 요소가 있으면, 매핑 모드에 따라 이 삼각형의 재질 인덱스를 읽습니다.
             if (const auto* Element{Mesh.GetElementMaterial()}; Element != nullptr && Node.GetMaterialCount() > 0) {
                 // eAllSame은 모든 삼각형이 인덱스 배열의 0번 항목을 공유하고, eByPolygon은 삼각형마다 자기 항목을 가집니다.
-                const Index_t MaterialEntry{static_cast<Index_t>(Element->GetMappingMode() == FbxLayerElement::eAllSame ? 0 : Polygon)};
+                const Int32 MaterialEntry{Element->GetMappingMode() == FbxLayerElement::eAllSame ? 0 : Polygon};
 
                 // 재질은 위 두 매핑 모드만 의미가 있으므로 다른 모드이거나 인덱스 배열 범위를 벗어나면 실패시킵니다.
                 if ((Element->GetMappingMode() != FbxLayerElement::eAllSame && Element->GetMappingMode() != FbxLayerElement::eByPolygon) || MaterialEntry >= Element->GetIndexArray().GetCount()) {
@@ -397,16 +415,16 @@ namespace Asset {
             }
 
             // 삼각형의 세 꼭짓점을 하나씩 정점으로 만듭니다.
-            for (Index_t Corner{}; Corner < 3; ++Corner) {
+            for (Int32 Corner{}; Corner < 3; ++Corner) {
                 // DeepConvertScene이 왼손 좌표계로 바꾸면서 폴리곤 꼭짓점 순서도 이미 엔진의 앞면 방향에 맞춰 두었습니다.
                 // 노드나 임포트 변환이 거울 변환(행렬식 음수)일 때만 앞면이 뒤집히므로 꼭짓점을 역순(2, 1, 0)으로 읽습니다.
-                const Index_t SourceCorner{static_cast<Index_t>(Transform.ReversesWinding() ? 2 - Corner : Corner)};
+                const Int32 SourceCorner{Transform.ReversesWinding() ? 2 - Corner : Corner};
 
                 // 이 꼭짓점이 가리키는 컨트롤 포인트(위치 정점) 인덱스입니다. 여러 삼각형이 같은 컨트롤 포인트를 공유할 수 있습니다.
-                const Index_t ControlPoint{static_cast<Index_t>(Mesh.GetPolygonVertex(Polygon, SourceCorner))};
+                const Int32 ControlPoint{Mesh.GetPolygonVertex(Polygon, SourceCorner)};
 
                 // 메시 전체에서 이 꼭짓점의 순번(폴리곤 정점 인덱스)입니다. eByPolygonVertex 매핑 속성을 읽을 때 사용합니다.
-                const Index_t PolygonVertex{static_cast<Index_t>(Mesh.GetPolygonVertexIndex(Polygon) + SourceCorner)};
+                const Int32 PolygonVertex{Mesh.GetPolygonVertexIndex(Polygon) + SourceCorner};
 
                 // 노멀·탄젠트·색상·UV 같은 레이어 요소를 매핑 모드에 맞는 인덱스로 읽는 도우미입니다.
                 // 요소가 없으면 Value를 바꾸지 않고 true를 반환하므로, 아래에서 지정한 기본값이 그대로 사용됩니다.
@@ -475,9 +493,9 @@ namespace Asset {
                 }
 
                 // 모든 UV 채널에 이 정점의 좌표를 하나씩 추가하여 채널 길이를 정점 수와 맞춥니다.
-                for (Index_t Channel{}; Channel < UVCount; ++Channel) {
+                for (Int32 Channel{}; Channel < static_cast<Int32>(UVCount); ++Channel) {
                     // 다른 메시 때문에 생긴 채널이라 이 메시에는 없는 채널일 수 있습니다. 그 경우 (0, 0)을 넣습니다.
-                    const bool HasChannel{Channel < static_cast<std::size_t>(Mesh.GetElementUVCount())};
+                    const bool HasChannel{Channel < Mesh.GetElementUVCount()};
                     FbxVector2 UV{};
 
                     if (HasChannel && !Read(Mesh.GetElementUV(Channel), UV)) {
@@ -537,7 +555,7 @@ namespace Asset {
         }
 
         // 자식 노드를 재귀적으로 방문하여 Scene 트리 전체의 메시를 읽습니다. 하나라도 실패하면 즉시 중단합니다.
-        for (Index_t Index{}; Index < Node.GetChildCount(); ++Index) {
+        for (Int32 Index{}; Index < Node.GetChildCount(); ++Index) {
             if (!ReadNode(*Node.GetChild(Index))) {
                 return false;
             }
@@ -585,7 +603,7 @@ namespace Asset {
             Bones.emplace_back(Core::FString{Node.GetName()}, ParentIndex, BoneGlobal * ParentInverse);
         }
 
-        for (Index_t Child{}; Child < Node.GetChildCount(); ++Child) {
+        for (Int32 Child{}; Child < Node.GetChildCount(); ++Child) {
             if (!ReadSkeleton(*Node.GetChild(Child), Index, BoneGlobal)) {
                 return false;
             }
@@ -600,13 +618,13 @@ namespace Asset {
     void Asset::FFBXImporter::CollectBindPoses() {
         // FBX의 스킨 구조는 지오메트리 → 스킨 디포머(FbxSkin) → 클러스터(FbxCluster) 순이며, 클러스터 하나가 본 하나에 대응합니다.
         // 기본 자세는 바인드 자세와 다를 수 있으므로, 스킨을 묶은 시점의 값이 기록된 클러스터 행렬을 본 순회 전에 모아 둡니다.
-        for (Index_t GeometryIndex{}; GeometryIndex < mScene->GetGeometryCount(); ++GeometryIndex) {
+        for (Int32 GeometryIndex{}; GeometryIndex < mScene->GetGeometryCount(); ++GeometryIndex) {
             FbxGeometry* Geometry{mScene->GetGeometry(GeometryIndex)};
 
-            for (Index_t DeformerIndex{}; Geometry != nullptr && DeformerIndex < Geometry->GetDeformerCount(FbxDeformer::eSkin); ++DeformerIndex) {
+            for (Int32 DeformerIndex{}; Geometry != nullptr && DeformerIndex < Geometry->GetDeformerCount(FbxDeformer::eSkin); ++DeformerIndex) {
                 auto* Skin{static_cast<FbxSkin*>(Geometry->GetDeformer(DeformerIndex, FbxDeformer::eSkin))};
 
-                for (Index_t ClusterIndex{}; ClusterIndex < Skin->GetClusterCount(); ++ClusterIndex) {
+                for (Int32 ClusterIndex{}; ClusterIndex < Skin->GetClusterCount(); ++ClusterIndex) {
                     FbxCluster* Cluster{Skin->GetCluster(ClusterIndex)};
                     FbxNode* Link{Cluster->GetLink()};
 
@@ -624,14 +642,14 @@ namespace Asset {
 
         // 장면의 바인드 포즈 객체(FbxPose)는 가중치가 없는 본까지 바인드 시점의 전역 변환을 담으므로 클러스터보다 먼저 사용합니다.
         // 바인드 포즈가 아닌 Rest 포즈는 건너뛰며, 여러 바인드 포즈에 같은 노드가 있으면 먼저 나온 값을 사용합니다.
-        for (Index_t PoseIndex{}; PoseIndex < mScene->GetPoseCount(); ++PoseIndex) {
+        for (Int32 PoseIndex{}; PoseIndex < mScene->GetPoseCount(); ++PoseIndex) {
             FbxPose* Pose{mScene->GetPose(PoseIndex)};
 
             if (!Pose->IsBindPose()) {
                 continue;
             }
 
-            for (Index_t Item{}; Item < Pose->GetCount(); ++Item) {
+            for (Int32 Item{}; Item < Pose->GetCount(); ++Item) {
                 FbxNode* Node{Pose->GetNode(Item)};
 
                 if (Node != nullptr && !mPoseBindPoses.contains(Node)) {
@@ -655,10 +673,10 @@ namespace Asset {
         Core::TArray<Core::TArray<std::pair<Index_t, float>>> Influences(static_cast<Index_t>(Mesh.GetControlPointsCount()));
         bool Found{};
 
-        for (Index_t DeformerIndex{}; DeformerIndex < Mesh.GetDeformerCount(FbxDeformer::eSkin); ++DeformerIndex) {
+        for (Int32 DeformerIndex{}; DeformerIndex < Mesh.GetDeformerCount(FbxDeformer::eSkin); ++DeformerIndex) {
             auto* Skin{static_cast<FbxSkin*>(Mesh.GetDeformer(DeformerIndex, FbxDeformer::eSkin))};
 
-            for (Index_t ClusterIndex{}; ClusterIndex < Skin->GetClusterCount(); ++ClusterIndex) {
+            for (Int32 ClusterIndex{}; ClusterIndex < Skin->GetClusterCount(); ++ClusterIndex) {
                 FbxCluster* Cluster{Skin->GetCluster(ClusterIndex)};
                 const auto Bone{mBoneIndices.find(Cluster->GetLink())};
 
@@ -825,7 +843,7 @@ namespace Asset {
         const int StackCount{mScene->GetSrcObjectCount<FbxAnimStack>()};
         Core::TArray<std::pair<Core::FString, Asset::FAnimDataModel>> Stacks{};
 
-        for (Index_t StackIndex{}; StackIndex < StackCount; ++StackIndex) {
+        for (Int32 StackIndex{}; StackIndex < StackCount; ++StackIndex) {
             FbxAnimStack* Stack{mScene->GetSrcObject<FbxAnimStack>(StackIndex)};
             Asset::FAnimDataModel DataModel{};
             bool Animated{};
@@ -869,7 +887,7 @@ namespace Asset {
         // 본 사이의 일반 노드(Blender의 Armature 등)가 움직여도 본 전역 변환이 바뀌므로 장면 전체를 기준으로 판단합니다.
         FbxTimeSpan AnimatedSpan{};
 
-        for (Index_t LayerIndex{}; LayerIndex < Stack.GetMemberCount<FbxAnimLayer>(); ++LayerIndex) {
+        for (Int32 LayerIndex{}; LayerIndex < Stack.GetMemberCount<FbxAnimLayer>(); ++LayerIndex) {
             FbxTimeSpan LayerSpan{};
 
             if (Root->GetAnimationInterval(LayerSpan, &Stack, LayerIndex)) {
@@ -900,7 +918,7 @@ namespace Asset {
         Asset::FFrameRate FrameRate{Asset::FFrameRate::FromDecimal(Rate)};
 
         if (!FrameRate.IsValid()) {
-            FrameRate = {30, 1};
+            FrameRate = {static_cast<Uint32>((30_Hz).GetBase()), 1};
         }
 
         const double Interval{FrameRate.AsInterval()};

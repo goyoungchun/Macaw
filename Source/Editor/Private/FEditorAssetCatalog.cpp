@@ -13,6 +13,21 @@
 
 namespace Editor {
 
+    namespace {
+        std::filesystem::path GetTextureAssetPath(const std::filesystem::path& Source) {
+            const auto Parent{Core::FilePath::ToLower(Source.parent_path())};
+
+            if (!Asset::FAssetManager::IsTextureSource(Source) || Parent == std::filesystem::path{L"editor/icon"} || Core::FilePath::ToLower(Source) == std::filesystem::path{L"fonts/default.png"}) {
+                return {};
+            }
+
+            auto Target{Source};
+            Target += L".masset";
+
+            return Target;
+        }
+    }
+
     /**
      * @brief 에셋 항목을 만듭니다.
      */
@@ -64,49 +79,11 @@ namespace Editor {
             return false;
         }
 
-        const auto& Root{mAssets->GetContentRoot()};
-        std::error_code Code{};
-        std::filesystem::recursive_directory_iterator Iterator{Root, Code};
-        const std::filesystem::recursive_directory_iterator End{};
-
-        while (!Code && Iterator != End) {
-            const auto Path{Iterator->path().lexically_relative(Root)};
-            const bool Link{Iterator->is_symlink(Code)};
-            const bool Directory{!Code && Iterator->is_directory(Code)};
-            Core::FString PathError{};
-
-            if (Link || mAssets->ResolvePath(Iterator->path(), PathError).empty()) {
-                Iterator.disable_recursion_pending();
-            } else if (Directory) {
-                mDirectories.push_back(Path);
-            } else if (!Code && Iterator->is_regular_file(Code)) {
-                const std::wstring Extension{Core::FilePath::ToLowerExtension(Path)};
-
-                std::optional<Asset::EAssetType> Type{};
-
-                if (Extension == L".masset") {
-                    Asset::EAssetType Value{};
-
-                    if (Asset::FAssetFile::GetType(Iterator->path(), Value, PathError)) {
-                        Type = Value;
-                    } else if (Error.empty()) {
-                        Error = Core::FilePath::ToUtf8(Path) + ": " + PathError;
-                    }
-                } else if (Extension == L".png" || Extension == L".jpg" || Extension == L".jpeg" || Extension == L".bmp" || Extension == L".tga" || Extension == L".dds" || Extension == L".hdr") {
-                    Type = Asset::EAssetType::Texture;
-                }
-
-                mEntries.emplace_back(Path, Type);
-            }
-
-            if (!Code) {
-                Iterator.increment(Code);
-            }
+        if (!ScanContent(mAssets->GetContentRoot(), false, Error) || !ScanContent(mAssets->GetEngineContentRoot(), true, Error) || !ScanContent(mAssets->GetEngineShaderRoot(), true, Error, true)) {
+            return false;
         }
 
-        std::sort(mEntries.begin(), mEntries.end(), [](const Editor::FEditorAssetEntry& First, const Editor::FEditorAssetEntry& Second) {
-            return First.GetPath() < Second.GetPath();
-        });
+        std::ranges::sort(mEntries, {}, &Editor::FEditorAssetEntry::GetPath);
 
         mIndices.clear();
 
@@ -117,11 +94,121 @@ namespace Editor {
         std::sort(mDirectories.begin(), mDirectories.end());
         mDirectories.erase(std::unique(mDirectories.begin(), mDirectories.end()), mDirectories.end());
 
+        return true;
+    }
+
+    bool FEditorAssetCatalog::ScanContent(const std::filesystem::path& Root, bool Engine, Core::FString& Error, bool ShaderSources) {
+        const std::filesystem::path EngineMount{L"/Engine"};
+        std::error_code Code{};
+
+        if (Engine && (Root.empty() || (!std::filesystem::exists(Root, Code) && !Code))) {
+            return true;
+        }
+
+        if (Engine) {
+            mDirectories.push_back(EngineMount);
+        }
+
+        std::filesystem::recursive_directory_iterator Iterator{Root, Code};
+        const std::filesystem::recursive_directory_iterator End{};
+
+        while (!Code && Iterator != End) {
+            const bool Link{Iterator->is_symlink(Code)};
+            const bool Directory{!Code && Iterator->is_directory(Code)};
+            Core::FString PathError{};
+            const auto Relative{Core::FilePath::FromUtf8(mAssets->GetRelativePath(Iterator->path(), PathError))};
+
+            if (Link || Relative.empty() || Relative.has_root_directory() != Engine) {
+                Iterator.disable_recursion_pending();
+            } else if (Directory && !Engine) {
+                if (mAssets->IsRedirectorDirectory(Iterator->path())) {
+                    Iterator.disable_recursion_pending();
+                } else {
+                    mDirectories.push_back(Relative);
+                }
+            } else if (!Directory && !Code && Iterator->is_regular_file(Code)) {
+                const std::wstring Extension{Core::FilePath::ToLowerExtension(Relative)};
+                std::optional<Asset::EAssetType> Type{};
+
+                if (!ShaderSources && Extension == L".masset") {
+                    Asset::EAssetType Value{};
+
+                    if (Asset::FAssetFile::GetType(Iterator->path(), Value, PathError)) {
+                        Type = Value;
+                    } else if (Error.empty()) {
+                        Error = Core::FilePath::ToGenericUtf8(Relative) + ": " + PathError;
+                    }
+                } else if (!Engine && Asset::FAssetManager::IsTextureSource(Relative)) {
+                    Type = Asset::EAssetType::Texture;
+                }
+
+                if (Type != Asset::EAssetType::Redirector && (Type.has_value() || !Engine || (ShaderSources && (Extension == L".hlsl" || Extension == L".hlsli")))) {
+                    mEntries.emplace_back(Relative, Type);
+
+                    if (Engine) {
+                        for (auto DirectoryPath{Relative.parent_path()}; DirectoryPath.has_relative_path() && DirectoryPath != EngineMount; DirectoryPath = DirectoryPath.parent_path()) {
+                            mDirectories.push_back(DirectoryPath);
+                        }
+                    }
+                }
+            }
+
+            if (!Code) {
+                Iterator.increment(Code);
+            }
+        }
+
         if (Code) {
-            Error = "Cannot read Content: " + Code.message();
+            Error = "Cannot read " + Core::FilePath::ToUtf8(Root) + ": " + Code.message();
         }
 
         return !Code;
+    }
+
+    bool FEditorAssetCatalog::ImportLooseTextures(Core::FString& Error) {
+        if (mAssets == nullptr) {
+            return false;
+        }
+
+        bool Imported{};
+        for (const auto& Entry : mEntries) {
+            if (Entry.GetType() != Asset::EAssetType::Texture) {
+                continue;
+            }
+
+            const auto Target{GetTextureAssetPath(Entry.GetPath())};
+            if (Target.empty() || Find(Target) != nullptr) {
+                continue;
+            }
+
+            const auto Source{mAssets->GetContentRoot() / Entry.GetPath()};
+            Core::FString ImportError{};
+            if (mAssets->ImportTexture(Source, Target, ImportError)) {
+                Imported = true;
+            } else if (Error.empty()) {
+                Error = Core::FilePath::ToUtf8(Entry.GetPath()) + ": " + ImportError;
+            }
+        }
+
+        return Imported;
+    }
+
+    bool FEditorAssetCatalog::IsImportedTextureSource(const std::filesystem::path& Path) const {
+        const auto Target{GetTextureAssetPath(Path)};
+        const auto* Entry{Target.empty() ? nullptr : Find(Target)};
+
+        return Entry != nullptr && Entry->GetType() == Asset::EAssetType::Texture;
+    }
+
+    std::filesystem::path FEditorAssetCatalog::FindTextureSource(const std::filesystem::path& AssetPath) const {
+        if (Core::FilePath::ToLowerExtension(AssetPath) != L".masset") {
+            return {};
+        }
+
+        auto Source{AssetPath};
+        Source.replace_extension();
+
+        return GetTextureAssetPath(Source).empty() || Find(Source) == nullptr || !IsImportedTextureSource(Source) ? std::filesystem::path{} : Source;
     }
 
     /**

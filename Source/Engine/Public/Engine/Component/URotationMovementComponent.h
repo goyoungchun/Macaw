@@ -1,22 +1,22 @@
 /**
  * @file URotationMovementComponent.h
- * @brief Game과 PIE 월드에서 소유 액터의 루트를 초당 회전 속도에 따라 로컬 또는 월드 공간으로 회전합니다.
+ * @brief Game과 PIE 월드에서 지정한 이동 대상을 피벗 중심으로 회전합니다.
  * @ingroup Engine
  */
 
 #pragma once
 
-#include "Engine/Component/UActorComponent.h"
 #include "Core/Math/FRotator.h"
+#include "Engine/Component/UMovementComponent.h"
 #include "URotationMovementComponent.generated.h"
 
 namespace Engine {
 
     /**
-     * @brief Game과 PIE 월드에서 소유 액터의 루트를 초당 회전 속도에 따라 로컬 또는 월드 공간으로 회전합니다.
+     * @brief 이동 대상의 피벗을 중심으로 로컬 또는 월드 축 회전을 적용합니다.
      */
     UCLASS()
-    class URotationMovementComponent final : public Engine::UActorComponent {
+    class URotationMovementComponent final : public Engine::UMovementComponent {
         GENERATED_BODY()
 
     public:
@@ -32,7 +32,7 @@ namespace Engine {
 
     public:
         /**
-         * @brief Game 또는 PIE의 실행 시작 상태를 확인한 뒤 축별 속도로 소유 액터의 루트 회전을 갱신합니다.
+         * @brief Game 또는 PIE의 실행 중 축별 회전 속도와 피벗에 따라 이동 대상을 갱신합니다.
          * @param[in] DeltaTime 이번 갱신에서 적분할 유한한 초 단위 시간입니다.
          */
         void Tick(float DeltaTime) override;
@@ -63,18 +63,28 @@ namespace Engine {
          */
         bool SetRotationInLocalSpace(bool LocalSpace);
 
+        /** @brief 이동 대상의 원점에서 피벗까지의 로컬 오프셋을 반환합니다. */
+        const FVector& GetPivotTranslation() const;
+
+        /** @brief 유한한 피벗 오프셋을 설정합니다. 스케일과 관계없이 이동 대상의 회전에 따라 해석합니다. */
+        bool SetPivotTranslation(const FVector& Translation);
+
     private:
         /**
          * @brief Pitch·Yaw·Roll 축별 초당 회전 각도이며 단위는 도입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetRotationRate, Setter = SetRotationRate)
-        FRotator mRotationRate{0.0f, 90.0f, 0.0f};
+        UPROPERTY(Edit, Serialize, Category = "Movement", Getter = GetRotationRate, Setter = SetRotationRate)
+        FRotator mRotationRate{};
 
         /**
-         * @brief true이면 루트의 로컬 축, false이면 월드 축에 회전 증분을 합성합니다.
+         * @brief true이면 이동 대상의 로컬 축, false이면 월드 축에 회전 증분을 합성합니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetRotationInLocalSpace, Setter = SetRotationInLocalSpace)
+        UPROPERTY(Edit, Serialize, Category = "Movement", Getter = GetRotationInLocalSpace, Setter = SetRotationInLocalSpace)
         bool mRotationInLocalSpace{true};
+
+        /** @brief 회전 중심의 로컬 오프셋이며 기본값은 이동 대상의 원점입니다. */
+        UPROPERTY(Edit, Serialize, Getter = GetPivotTranslation, Setter = SetPivotTranslation)
+        FVector mPivotTranslation{};
     };
 
 }

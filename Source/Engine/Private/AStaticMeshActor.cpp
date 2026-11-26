@@ -6,7 +6,6 @@
 
 #include "Engine/AStaticMeshActor.h"
 #include "Engine/Component/UStaticMeshComponent.h"
-#include "CoreUObject/Reflection/Cast.h"
 #include "CoreUObject/Reflection/NewObject.h"
 
 #include <utility>
@@ -41,7 +40,7 @@ namespace Engine {
      * @brief 액터의 기본 메시 컴포넌트 비소유 주소를 반환합니다.
      */
     Engine::UStaticMeshComponent* Engine::AStaticMeshActor::GetStaticMeshComponent() const {
-        return CoreUObject::Cast<Engine::UStaticMeshComponent>(GetRootComponent());
+        return static_cast<Engine::UStaticMeshComponent*>(FindDefaultComponent(Engine::UStaticMeshComponent::StaticClass(), Core::FName{"StaticMeshComponent"}));
     }
 
 }

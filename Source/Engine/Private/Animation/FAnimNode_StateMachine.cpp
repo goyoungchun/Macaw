@@ -205,8 +205,8 @@ namespace Engine {
         Engine::FAnimNode_Base::Initialize(AnimInstance);
         mCurrent = FindStateIndex(mEntry);
         mTarget = -1;
-        mBlendElapsed = 0.0f;
-        mBlendDuration = 0.0f;
+        mBlendElapsed = {};
+        mBlendDuration = {};
         mRuleDebugValues.clear();
 
         for (auto& State : mStates) {
@@ -228,7 +228,7 @@ namespace Engine {
             auto& Target{mStates[static_cast<Int32>(mTarget)]};
             Target.mPose.Update(Context);
             Target.mElapsed += Delta;
-            mBlendElapsed += Delta;
+            mBlendElapsed += Core::FTime::FromBase(Delta);
 
             if (mBlendElapsed >= mBlendDuration) {
                 mCurrent = mTarget;
@@ -263,10 +263,10 @@ namespace Engine {
             Target.mElapsed = 0.0f;
             const Engine::FAnimationUpdateContext InitialContext{Context.GetAnimInstance(), 0.0f};
             Target.mPose.Update(InitialContext);
-            mBlendElapsed = 0.0f;
-            mBlendDuration = std::max(Transition.mDuration, 0.0f);
+            mBlendElapsed = {};
+            mBlendDuration = std::max(Transition.mDuration, Core::FTime{});
 
-            if (mBlendDuration <= 0.0f || TargetIndex == mCurrent) {
+            if (mBlendDuration <= Core::FTime{} || TargetIndex == mCurrent) {
                 mCurrent = TargetIndex;
             } else {
                 mTarget = TargetIndex;
@@ -334,7 +334,7 @@ namespace Engine {
     }
 
     float FAnimNode_StateMachine::GetBlendAlpha() const {
-        return mTarget >= 0 && mBlendDuration > 0.0f ? std::clamp(mBlendElapsed / mBlendDuration, 0.0f, 1.0f) : 1.0f;
+        return mTarget >= 0 && mBlendDuration > Core::FTime{} ? std::clamp(static_cast<float>(mBlendElapsed / mBlendDuration), 0.0f, 1.0f) : 1.0f;
     }
 
     FTransform FAnimNode_StateMachine::GetRootMotionDelta() const {

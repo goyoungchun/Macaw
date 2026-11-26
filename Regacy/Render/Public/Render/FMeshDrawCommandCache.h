@@ -7,6 +7,7 @@
 #include "Render/FMeshDrawCommand.h"
 #include "Render/FRenderAssetStamp.h"
 #include "Core/Base/TCachedValue.h"
+#include "Core/Types.h"
 
 #include <map>
 
@@ -31,7 +32,7 @@ struct FMeshDrawCommandStamp {
     FRenderAssetStamp mMesh{};
     FRenderAssetStamp mMaterial{};
     FRenderAssetStamp mPipeline{};
-    std::array<FRenderAssetStamp, MaxMaterialTextureFields> mTextures{};
+    Core::TStaticArray<FRenderAssetStamp, MaxMaterialTextureFields> mTextures{};
 
     bool operator==(const FMeshDrawCommandStamp&) const = default;
 };

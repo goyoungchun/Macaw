@@ -77,7 +77,13 @@ namespace Asset {
          * @brief UObject Emitter와 모듈의 구성·설정을 JSON 본문으로 저장하는 파티클 시스템 에셋입니다.
          */
         ParticleSystem,
-        Shader
+        Shader,
+
+        /**
+         * @brief 뼈별 충돌 모양과 관절 설정을 바이너리 본문으로 저장하는 물리 에셋입니다.
+         */
+        PhysicsAsset,
+        Redirector
     };
 
     /**
@@ -116,6 +122,11 @@ namespace Asset {
          * @return 요청한 처리를 완료하면 true, 실패하면 false입니다.
          */
         static bool Load(const std::filesystem::path& Path, Asset::EAssetType Type, Core::TArray<Uint8>& Payload, Core::FString& Error);
+
+        static bool Migrate(const std::filesystem::path& Path, Asset::EAssetType& Type, bool& Migrated, Core::FString& Error);
+
+        static bool LoadThumbnail(const std::filesystem::path& Path, Asset::EAssetType Type, Core::TArray<Uint8>& Thumbnail);
+        static bool SaveThumbnail(const std::filesystem::path& Path, Asset::EAssetType Type, std::span<const Uint8> Thumbnail, std::filesystem::file_time_type SavedTime, Core::FString& Error);
     };
 
 }

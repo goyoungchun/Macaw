@@ -120,25 +120,25 @@ namespace Engine {
         /**
          * @brief UTF-8 문자열입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetText, Setter = SetText)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Meta = (MultiLine), Getter = GetText, Setter = SetText)
         Core::FString mText{"Text"};
 
         /**
          * @brief 월드 텍스트의 글자 크기입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetTextSize, Setter = SetTextSize)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetTextSize, Setter = SetTextSize)
         float mTextSize{0.5f};
 
         /**
          * @brief 글자의 RGBA 색상입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetTextColor, Setter = SetTextColor)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetTextColor, Setter = SetTextColor)
         FVector4 mTextColor{1.0f, 1.0f, 1.0f, 1.0f};
 
         /**
          * @brief 빌보드 텍스트를 장면 깊이와 비교할지 여부입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetDepthTest, Setter = SetDepthTest)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetDepthTest, Setter = SetDepthTest)
         bool mDepthTest{true};
     };
 

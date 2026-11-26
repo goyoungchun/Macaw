@@ -8,6 +8,7 @@
 
 #include "Core/Types.h"
 #include "Core/Math/FVector.h"
+#include "Core/Literals/QuantityTypes.h"
 #include "CoreUObject/TObjectRef.h"
 
 #include <cfloat>
@@ -93,7 +94,7 @@ namespace Engine {
         /**
          * @brief 추적 시작점부터 적중점까지의 거리입니다.
          */
-        float mDistance{FLT_MAX};
+        Core::FLength mDistance{Core::FLength::FromBase(FLT_MAX)};
 
         /**
          * @brief 충돌 시 이동 도형의 위치입니다.
@@ -128,7 +129,7 @@ namespace Engine {
         /**
          * @brief 초기 겹침을 해소할 침투 깊이입니다.
          */
-        float mPenetrationDepth{};
+        Core::FLength mPenetrationDepth{};
 
         /**
          * @brief 이동을 차단하는 충돌 여부입니다.

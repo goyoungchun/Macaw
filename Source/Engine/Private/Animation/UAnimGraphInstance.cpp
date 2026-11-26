@@ -36,7 +36,7 @@ namespace Engine {
     bool UAnimGraphInstance::SetAnimGraph(const Core::FString& Path) {
         const std::filesystem::path AssetPath{Core::FilePath::FromUtf8(Path)};
 
-        if (Path.find('\0') != Core::FString::npos || (!Path.empty() && (AssetPath.has_root_path() || AssetPath.extension() != L".masset"))) {
+        if (Path.find('\0') != Core::FString::npos || (!Path.empty() && (Core::FilePath::GetContentMount(AssetPath) == Core::FilePath::EContentMount::Invalid || AssetPath.extension() != L".masset"))) {
             return false;
         }
 

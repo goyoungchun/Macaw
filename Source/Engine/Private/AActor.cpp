@@ -5,9 +5,10 @@
  */
 
 #include "Engine/AActor.h"
-#include "Engine/EngineStats.h"
 #include "Engine/Component/UActorComponent.h"
+#include "Engine/Component/UMovementComponent.h"
 #include "Engine/Component/USceneComponent.h"
+#include "Engine/ULevel.h"
 #include "Engine/UWorld.h"
 #include "Core/Math/FTransform.h"
 #include "CoreUObject/FObjectRegistry.h"
@@ -38,7 +39,15 @@ namespace Engine {
     }
 
     /**
+     * @brief 액터의 직접 외부 객체에서 Tick을 등록할 레벨을 찾습니다.
+     */
+    Engine::ULevel* Engine::AActor::GetLevel() const {
+        return CoreUObject::Cast<Engine::ULevel>(GetOuter());
+    }
+
+    /**
      * @brief 객체가 소속된 월드 연결을 지정합니다.
+     * @details 기존 컴포넌트와 액터 Tick 등록을 해제한 뒤 새 월드에서 액터 Tick을 먼저 등록합니다.
      */
     void Engine::AActor::SetWorld(Engine::UWorld* World) {
         if (mWorld == World || mChangingWorld) {
@@ -52,12 +61,24 @@ namespace Engine {
         DispatchEndPlay();
 
         for (const auto& Component : mComponents) {
+            if (mWorld != nullptr) {
+                if (auto* Scene{CoreUObject::Cast<Engine::USceneComponent>(Component.get())}) {
+                    Scene->DetachExternalAttachments();
+                }
+            }
+
             Component->UnregisterComponent();
+        }
+
+        if (mWorld != nullptr) {
+            RegisterActorTickFunctions(false);
         }
 
         mWorld = World;
 
         if (mWorld != nullptr) {
+            RegisterActorTickFunctions(true);
+
             for (const auto& Component : mComponents) {
                 Component->RegisterComponent(mWorld);
             }
@@ -78,11 +99,11 @@ namespace Engine {
         Engine::UActorComponent* Added{Component.get()};
         Added->SetOwner(this);
 
-        if (mRootComponent == nullptr) {
-            mRootComponent = CoreUObject::Cast<Engine::USceneComponent>(Added);
-        }
-
         mComponents.push_back(std::move(Component));
+
+        if (mRootComponent == nullptr) {
+            SetRootComponent(CoreUObject::Cast<Engine::USceneComponent>(Added));
+        }
 
         if (mWorld != nullptr) {
             Added->RegisterComponent(mWorld);
@@ -95,11 +116,88 @@ namespace Engine {
         return true;
     }
 
+    bool Engine::AActor::RemoveComponent(Engine::UActorComponent* Component) {
+        if (Component == nullptr || mPendingDestroy || mChangingWorld || (mWorld != nullptr && (!mWorld->CanAddActor() || mWorld->IsDispatching()))) {
+            return false;
+        }
+
+        const auto Position{std::ranges::find(mComponents, Component, &std::unique_ptr<Engine::UActorComponent>::get)};
+
+        if (Position == mComponents.end()) {
+            return false;
+        }
+
+        Engine::UWorld::FDispatchScope Scope{mWorld};
+        auto* Scene{CoreUObject::Cast<Engine::USceneComponent>(Component)};
+        const bool RemovingRoot{Scene != nullptr && Scene == mRootComponent};
+
+        if (Scene != nullptr) {
+            Engine::USceneComponent* Parent{Scene->GetAttachParent()};
+            Engine::USceneComponent* ChildParent{Parent != nullptr ? Parent : mRootComponent};
+
+            if (RemovingRoot) {
+                const auto Replacement{std::ranges::find_if(mComponents, [Scene](const auto& Entry) {
+                    return Entry.get() != Scene && Entry->IsA(Engine::USceneComponent::StaticClass());
+                })};
+
+                ChildParent = Replacement != mComponents.end() ? static_cast<Engine::USceneComponent*>(Replacement->get()) : nullptr;
+            }
+
+            if (ChildParent != nullptr) {
+                ChildParent->mAttachChildren.reserve(ChildParent->mAttachChildren.size() + Scene->mAttachChildren.size());
+            }
+
+            Scene->UpdateAttachParent(nullptr);
+
+            if (RemovingRoot) {
+                mRootComponent = ChildParent;
+
+                if (mRootComponent != nullptr) {
+                    mRootComponent->UpdateAttachParent(nullptr);
+                    mRootComponent->UpdateAttachParent(Parent);
+                }
+            }
+
+            while (!Scene->mAttachChildren.empty()) {
+                Scene->mAttachChildren.back()->UpdateAttachParent(ChildParent);
+            }
+        }
+
+        auto Removed{std::move(*Position)};
+        mComponents.erase(Position);
+        Removed->UnregisterComponent();
+        Removed->SetOwner(nullptr);
+
+        if (RemovingRoot) {
+            UpdateRootMovementComponents();
+        }
+
+        return true;
+    }
+
     /**
      * @brief 액터가 소유한 컴포넌트 목록을 반환합니다.
      */
     const Core::TArray<std::unique_ptr<Engine::UActorComponent>>& Engine::AActor::GetComponents() const {
         return mComponents;
+    }
+
+    Engine::UActorComponent* Engine::AActor::FindDefaultComponent(const CoreUObject::UClass* Class, const Core::FName& Name) const {
+        Engine::UActorComponent* Match{mRootComponent != nullptr && mRootComponent->IsA(Class) ? mRootComponent : nullptr};
+
+        for (const auto& Component : mComponents) {
+            if (Component->IsA(Class)) {
+                if (Component->GetFName() == Name) {
+                    return Component.get();
+                }
+
+                if (Match == nullptr) {
+                    Match = Component.get();
+                }
+            }
+        }
+
+        return Match;
     }
 
     Engine::AActor::FComponentCollisionDelegate& Engine::AActor::GetOnComponentCollision() {
@@ -117,13 +215,73 @@ namespace Engine {
      * @brief 소유한 공간 컴포넌트를 액터의 루트로 지정합니다.
      */
     bool Engine::AActor::SetRootComponent(Engine::USceneComponent* Component) {
+        if (Component == mRootComponent) {
+            return true;
+        }
+
+        if ((mRootComponent != nullptr && mRootComponent->GetAttachParent() != nullptr) || (Component != nullptr && Component->GetAttachParent() != nullptr)) {
+            return false;
+        }
+
         if (Component != nullptr && std::none_of(mComponents.begin(), mComponents.end(), [Component](const auto& Entry) {
             return Entry.get() == Component;
         })) {
             return false;
         }
 
+        Engine::UWorld::FDispatchScope Scope{mWorld};
         mRootComponent = Component;
+        UpdateRootMovementComponents();
+
+        return true;
+    }
+
+    void Engine::AActor::UpdateRootMovementComponents() {
+        for (const auto& OwnedComponent : GetComponentRefs()) {
+            auto* Movement{CoreUObject::Cast<Engine::UMovementComponent>(OwnedComponent.Get())};
+
+            if (Movement != nullptr && Movement->mUseOwnerRoot) {
+                Movement->UpdateTickEnabledState();
+            }
+        }
+    }
+
+    bool Engine::AActor::CanPromoteRootComponent(const Engine::USceneComponent* Component) const {
+        return Component != nullptr && Component != mRootComponent && Component->GetOwner() == this && !mPendingDestroy && !mChangingWorld;
+    }
+
+    bool Engine::AActor::PromoteRootComponent(Engine::USceneComponent* Component) {
+        if (!CanPromoteRootComponent(Component)) {
+            return false;
+        }
+
+        Engine::UWorld::FDispatchScope Scope{mWorld};
+        Engine::USceneComponent* PreviousRoot{mRootComponent};
+        Engine::USceneComponent* ExternalParent{PreviousRoot != nullptr ? PreviousRoot->GetAttachParent() : nullptr};
+        Core::TArray<Engine::USceneComponent*> PreviousChildren{};
+
+        if (PreviousRoot != nullptr) {
+            for (const auto& Entry : mComponents) {
+                auto* Scene{CoreUObject::Cast<Engine::USceneComponent>(Entry.get())};
+
+                if (Scene != nullptr && Scene != PreviousRoot && Scene != Component && Scene->GetAttachParent() == nullptr) {
+                    PreviousChildren.push_back(Scene);
+                }
+            }
+
+            PreviousRoot->mAttachChildren.reserve(PreviousRoot->mAttachChildren.size() + PreviousChildren.size());
+            PreviousRoot->UpdateAttachParent(nullptr);
+        }
+
+        Component->UpdateAttachParent(nullptr);
+        mRootComponent = Component;
+        Component->UpdateAttachParent(ExternalParent);
+
+        for (Engine::USceneComponent* Child : PreviousChildren) {
+            Child->UpdateAttachParent(PreviousRoot);
+        }
+
+        UpdateRootMovementComponents();
 
         return true;
     }
@@ -132,43 +290,7 @@ namespace Engine {
      * @brief 루트 공간 컴포넌트에 액터의 변환을 적용합니다.
      */
     bool Engine::AActor::SetActorTransform(const FTransform& Transform) {
-        if (mRootComponent == nullptr) {
-            return false;
-        }
-
-        const FTransform Previous{mRootComponent->GetTransform()};
-
-        if (!mRootComponent->SetTransform(Transform)) {
-            return false;
-        }
-
-        // 컴포넌트 변환은 월드 기준이고 계층이 없으므로, 충돌 도형 같은 나머지 컴포넌트를 루트와 함께 옮깁니다.
-        const FQuat Inverse{Previous.mRotation.Inverse()};
-        const FQuat Rotation{Transform.mRotation * Inverse};
-        const auto ScaleRatio{[](float New, float Old) {
-            return Old != 0.0f ? New / Old : 1.0f;
-        }};
-
-        const FVector Ratio{ScaleRatio(Transform.mScale.x, Previous.mScale.x), ScaleRatio(Transform.mScale.y, Previous.mScale.y), ScaleRatio(Transform.mScale.z, Previous.mScale.z)};
-
-        for (const auto& Component : mComponents) {
-            auto* Scene{CoreUObject::Cast<Engine::USceneComponent>(Component.get())};
-
-            if (Scene == nullptr || Scene == mRootComponent) {
-                continue;
-            }
-
-            FTransform Moved{Scene->GetTransform()};
-            const FVector Local{Inverse.RotateVector(Moved.mLocation - Previous.mLocation)};
-
-            Moved.mLocation = Transform.mLocation + Transform.mRotation.RotateVector(FVector{Local.x * Ratio.x, Local.y * Ratio.y, Local.z * Ratio.z});
-            Moved.mRotation = Rotation * Moved.mRotation;
-            Moved.mScale = FVector{Moved.mScale.x * Ratio.x, Moved.mScale.y * Ratio.y, Moved.mScale.z * Ratio.z};
-
-            Scene->SetTransform(Moved);
-        }
-
-        return true;
+        return mRootComponent != nullptr && mRootComponent->SetTransform(Transform);
     }
 
     /**
@@ -176,6 +298,31 @@ namespace Engine {
      */
     FTransform Engine::AActor::GetActorTransform() const {
         return mRootComponent != nullptr ? mRootComponent->GetTransform() : FTransform{};
+    }
+
+    /**
+     * @brief 루트 컴포넌트의 월드 위치를 반환합니다.
+     */
+    FVector Engine::AActor::GetActorLocation() const {
+        return mRootComponent != nullptr ? mRootComponent->GetTransform().mLocation : FVector{};
+    }
+
+    /**
+     * @brief 액터를 지정한 월드 위치로 옮기고, 요청하면 이동 경로를 쓸어 막히는 지점에서 멈춥니다.
+     */
+    bool Engine::AActor::SetActorLocation(const FVector& NewLocation, bool Sweep, Engine::FHitResult* OutSweepHitResult) {
+        if (mRootComponent == nullptr) {
+            return false;
+        }
+
+        return AddActorWorldOffset(NewLocation - mRootComponent->GetTransform().mLocation, Sweep, OutSweepHitResult);
+    }
+
+    /**
+     * @brief 액터를 월드 변위만큼 옮기고, 요청하면 이동 경로를 쓸어 막히는 지점에서 멈춥니다.
+     */
+    bool Engine::AActor::AddActorWorldOffset(const FVector& DeltaLocation, bool Sweep, Engine::FHitResult* OutSweepHitResult) {
+        return mRootComponent != nullptr && mRootComponent->MoveComponent(DeltaLocation, Sweep, OutSweepHitResult);
     }
 
     /**
@@ -199,9 +346,9 @@ namespace Engine {
     }
 
     /**
-     * @brief 액터의 실행 또는 허용된 편집 갱신 시 호출되는 확장 지점입니다.
+     * @brief 기본 액터 Tick 함수가 실행 차례에 호출하는 갱신 확장 지점입니다.
      */
-    void Engine::AActor::Tick(float DeltaTime) {
+    void Engine::AActor::Tick(float) {
     }
 
     /**
@@ -242,6 +389,41 @@ namespace Engine {
      */
     void Engine::AActor::SetEditorTickable(bool EditorTickable) {
         mEditorTickable = EditorTickable;
+    }
+
+    /**
+     * @brief 액터가 직접 소유한 기본 Tick 함수를 반환합니다.
+     */
+    Engine::FActorTickFunction& Engine::AActor::GetPrimaryActorTick() {
+        return mPrimaryActorTick;
+    }
+
+    /**
+     * @brief 기본 액터 Tick에 지정한 그룹을 조회합니다.
+     */
+    Engine::ETickingGroup Engine::AActor::GetTickGroup() const {
+        return mPrimaryActorTick.GetTickGroup();
+    }
+
+    /**
+     * @brief 검증과 그룹 설정을 기본 액터 Tick에 전달합니다.
+     */
+    bool Engine::AActor::SetTickGroup(Engine::ETickingGroup Group) {
+        return mPrimaryActorTick.SetTickGroup(Group);
+    }
+
+    /**
+     * @brief 등록을 요청하면 소속 레벨에서 기본 Tick을 등록하고, 해제 시에는 기존 등록을 끊습니다.
+     */
+    void Engine::AActor::RegisterActorTickFunctions(bool Register) {
+        if (!Register) {
+            mPrimaryActorTick.UnregisterTickFunction();
+            return;
+        }
+
+        if (Engine::ULevel* Level{GetLevel()}) {
+            mPrimaryActorTick.RegisterTickFunction(*Level);
+        }
     }
 
     /**
@@ -306,32 +488,6 @@ namespace Engine {
             mBeginPlayCalled = true;
 
             BeginPlay();
-        }
-    }
-
-    /**
-     * @brief 액터와 각 컴포넌트의 실행 상태 및 편집 Tick 설정에 따라 갱신을 전달합니다.
-     */
-    void Engine::AActor::DispatchTick(float DeltaTime, bool EditorTick) {
-        if (mWorld == nullptr || mPendingDestroy || (!EditorTick && !mHasBegunPlay)) {
-            return;
-        }
-
-        const auto Handles{GetComponentRefs()};
-
-        if (!EditorTick || mEditorTickable) {
-            Engine::EngineStats::ActorTicks.Add();
-            Tick(DeltaTime);
-        }
-
-        for (const CoreUObject::TObjectRef<Engine::UActorComponent> Handle : Handles) {
-            if (mPendingDestroy || mWorld == nullptr || (!EditorTick && !mHasBegunPlay) || mWorld->mEndPlayRequested || mWorld->mShutdownRequested) {
-                break;
-            }
-
-            if (auto* Component{CoreUObject::Cast<Engine::UActorComponent>(Handle.Get())}; Component != nullptr && Component->GetOwner() == this) {
-                Component->DispatchTick(DeltaTime, EditorTick);
-            }
         }
     }
 

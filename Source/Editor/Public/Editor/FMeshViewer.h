@@ -15,17 +15,21 @@
 
 #include "Core/Types.h"
 #include "Core/Guid.h"
+#include "Core/Literals/QuantityTypes.h"
 #include "Core/Math/FRotator.h"
 #include "Core/Math/FVector.h"
 #include "Core/Math/FVector2.h"
 #include "Core/Math/FMatrix.h"
+#include "Viewer/FFlyCameraController.h"
 #include "Editor/FGizmoCore.h"
 #include "Engine/EEditorMesh.h"
 #include "Engine/FSceneView.h"
 #include "Engine/EViewMode.h"
 #include "Engine/FSkeletalMeshPose.h"
+#include "PhysicsRuntime/FClothingSimulationContextCommon.h"
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 
 namespace Asset {
@@ -41,6 +45,7 @@ namespace RenderCore {
 }
 
 namespace Engine {
+    class FPrimitiveDrawInterface;
     class FSceneInterface;
     class FRenderTarget;
 }
@@ -48,6 +53,13 @@ namespace Engine {
 namespace Viewer {
     class FBoneShape;
     class FMeshViewerContent;
+}
+
+namespace PhysicsRuntime {
+    class FClothingSystemRuntimeModuleNv;
+    class IClothingSimulation;
+    class UClothConfigNv;
+    class UClothingAssetCommon;
 }
 
 namespace Editor {
@@ -146,6 +158,13 @@ namespace Editor {
          */
         void FrameMesh();
 
+        /**
+         * @brief 미리 보기에서 천을 움직일 천 시스템을 연결합니다.
+         * @details 연결하지 않으면 천 칸에서 천을 만들고 칠할 수는 있지만 미리 보기에서 천이 움직이지 않습니다.
+         * @param[in] ClothingSystem 엔진이 소유하는 천 시스템이며 nullptr이면 미리 보기 시뮬레이션을 끕니다.
+         */
+        void SetClothingSystem(PhysicsRuntime::FClothingSystemRuntimeModuleNv* ClothingSystem);
+
     private:
 
         /**
@@ -173,6 +192,104 @@ namespace Editor {
          * @brief 메시 미리 보기의 정보와 표시 속성을 그립니다.
          */
         void DrawProperties();
+
+        /**
+         * @brief 천 칸 전체를 그립니다. 섹션 표, 미리 보기 조작, 고른 천의 탭, 저장 순서입니다.
+         */
+        void DrawClothing();
+
+        /**
+         * @brief 정적 메시의 단순 충돌 형상(상자, 구, 캡슐)을 편집하는 칸을 그립니다. 추가, 삭제, 값 편집, 메시 경계에 맞추기, 저장입니다.
+         */
+        void DrawCollision();
+
+        /**
+         * @brief 정적 메시의 충돌 형상을 메시 로컬 공간의 선으로 그립니다. 고른 형상은 주황색입니다.
+         * @param[in,out] Draw 선을 추가할 편집 표시 목록입니다.
+         */
+        void BuildCollisionLines(Engine::FPrimitiveDrawInterface& Draw) const;
+
+        /**
+         * @brief 섹션마다 머티리얼, 천 상태, 천 만들기 버튼을 표로 그리고 천을 고르게 합니다.
+         */
+        void DrawClothSections();
+
+        /**
+         * @brief 고른 천 에셋의 설정을 묶음별 표로 그리고 바꾼 값을 미리 보기에 반영합니다.
+         * @param[in,out] Config 고른 천 에셋의 설정입니다.
+         */
+        void DrawClothSettings(PhysicsRuntime::UClothConfigNv& Config);
+
+        /**
+         * @brief 칠하기 켜기, 대상, 도구, 값, 붓 크기, 색 범례를 그립니다.
+         * @param[in,out] ClothingAsset 칠할 천 에셋입니다.
+         */
+        void DrawClothPaintSettings(PhysicsRuntime::UClothingAssetCommon& ClothingAsset);
+
+        /**
+         * @brief 천이 부딪힐 물리 에셋을 고르는 칸과 충돌체 수를 그립니다.
+         * @param[in,out] ClothingAsset 물리 에셋을 바꿀 천 에셋입니다.
+         */
+        void DrawClothCollision(PhysicsRuntime::UClothingAssetCommon& ClothingAsset);
+
+        /**
+         * @brief 칠할 천 메시를 가중치 색 와이어프레임으로 그리고, 왼쪽 버튼으로 고른 도구를 적용합니다.
+         * @details 마우스 광선이 천 표면에 처음 맞은 점을 붓 중심으로 삼고, 그 점에서 3D 반지름 안의 입자만 바꿉니다.
+         *          천 메시는 바인드 포즈 위치에 그리며, 버튼을 놓으면 칠한 값을 천 에셋에 반영합니다.
+         * @param[in] View 미리 보기의 뷰입니다.
+         * @param[in] Origin 미리 보기 이미지 왼쪽 위의 화면 위치입니다.
+         * @param[in] Mouse 미리 보기 안의 마우스 위치입니다.
+         * @param[in] Hovered 마우스가 미리 보기 위에 있는지 나타냅니다.
+         * @param[in] Input 이번 프레임의 입력입니다.
+         * @param[in,out] DrawInterface 와이어프레임과 붓 원을 담을 편집 표시 목록입니다.
+         */
+        void DrawClothPaint(const Engine::FSceneView& View, const FVector2& Origin, const FVector2& Mouse, bool Hovered, const Core::FInput& Input, Engine::FPrimitiveDrawInterface& DrawInterface);
+
+        /**
+         * @brief 천 칠하기를 쓸 수 있는 상태인지 검사합니다.
+         * @return 칠하기를 켰고 고른 천 에셋이 있으면 true입니다.
+         */
+        bool IsClothPainting() const;
+
+        /**
+         * @brief 고른 천 에셋을 반환합니다.
+         * @return 고른 천 에셋이며 없으면 nullptr입니다.
+         */
+        PhysicsRuntime::UClothingAssetCommon* GetSelectedClothingAsset() const;
+
+        /**
+         * @brief 천 에셋이 바뀌었음을 기록하고 미리 보기 천을 다시 만들게 합니다.
+         * @param[in] Message 천 칸 아래에 잠시 보여 줄 결과 문장입니다.
+         */
+        void MarkClothChanged(const Core::FString& Message);
+
+        /**
+         * @brief 천 칸 아래에 결과 문장을 잠시 보여 줍니다.
+         * @param[in] Message 보여 줄 문장입니다.
+         */
+        void ShowClothMessage(const Core::FString& Message);
+
+        /**
+         * @brief 미리 보기 천 시뮬레이션을 지금 천 에셋과 포즈로 다시 만듭니다.
+         */
+        void RecreateClothPreview();
+
+        /**
+         * @brief 미리 보기 천 시뮬레이션을 해제하고 천 섹션을 스키닝 위치로 그리게 합니다.
+         */
+        void ReleaseClothPreview();
+
+        /**
+         * @brief 미리 보기 천을 한 프레임 진행하고 결과를 미리 보기 장면에 넣습니다.
+         * @param[in] DeltaTime 지난 프레임부터 지난 시간(초)입니다.
+         */
+        void TickClothPreview(float DeltaTime);
+
+        /**
+         * @brief 미리 보기 포즈로 천 시뮬레이션 입력을 채웁니다.
+         * @param[in] DeltaTime 이번에 진행할 시간(초)이며 처음 만들 때는 0입니다.
+         */
+        void UpdateClothPreviewContext(float DeltaTime);
 
         /**
          * @brief 본 하나와 그 자손을 계층 트리 노드로 표시하고 클릭하면 조작 대상으로 선택합니다.
@@ -220,6 +337,11 @@ namespace Editor {
          * @param Bone 기즈모 변환을 적용할 스켈레톤 본 인덱스입니다.
          */
         void ApplyBoneGizmo(Index_t Bone);
+
+        /**
+         * @brief 미리 보기 위에 보기 방식 선택 칸과 표시 항목 메뉴를 그립니다.
+         */
+        void DrawViewportToolbar();
 
         /**
          * @brief 카메라 입력을 처리하고 공통 렌더 경로로 메시와 본 도형을 그리며 아이콘·스프라이트·텍스트 표시는 제외합니다.
@@ -330,6 +452,146 @@ namespace Editor {
         Core::FString mError{};
 
         /**
+         * @brief 천 칸에서 마지막으로 한 작업의 결과입니다.
+         */
+        Core::FString mClothMessage{};
+
+        /**
+         * @brief 결과 문장을 보여 주기 시작한 ImGui 시각(초)입니다.
+         */
+        double mClothMessageTime{};
+
+        /**
+         * @brief 천 에셋을 바꾼 뒤 아직 메시 파일에 저장하지 않았는지 나타냅니다.
+         */
+        bool mClothUnsaved{};
+
+        /**
+         * @brief 천 칸에서 고른 천 에셋 번호입니다.
+         */
+        Index_t mClothSelectedAsset{};
+
+        /**
+         * @brief 충돌 형상을 미리 보기에 그릴지 나타냅니다.
+         */
+        bool mShowCollision{true};
+
+        /**
+         * @brief 충돌 칸에서 고른 형상의 종류입니다. 0은 없음, 1은 구, 2는 상자, 3은 캡슐입니다.
+         */
+        Uint32 mCollisionShapeType{};
+
+        /**
+         * @brief 충돌 칸에서 고른 형상의 같은 종류 안의 번호입니다.
+         */
+        Index_t mCollisionShapeIndex{};
+
+        /**
+         * @brief 저장하지 않은 충돌 형상 편집이 있는지 나타냅니다.
+         */
+        bool mCollisionUnsaved{};
+
+        /**
+         * @brief 충돌 칸의 마지막 저장 결과나 오류 안내입니다.
+         */
+        Core::FString mCollisionMessage{};
+
+        /**
+         * @brief 엔진이 소유하는 천 시스템이며 없으면 미리 보기에서 천이 움직이지 않습니다.
+         */
+        PhysicsRuntime::FClothingSystemRuntimeModuleNv* mClothingSystem{};
+
+        /**
+         * @brief 미리 보기에서 천을 움직이는 시뮬레이션입니다.
+         */
+        std::unique_ptr<PhysicsRuntime::IClothingSimulation> mClothPreview{};
+
+        /**
+         * @brief 미리 보기 천 시뮬레이션에 매 프레임 넣는 입력입니다.
+         */
+        PhysicsRuntime::FClothingSimulationContextCommon mClothPreviewContext{};
+
+        /**
+         * @brief 미리 보기에서 천을 움직일지 나타냅니다.
+         */
+        bool mClothSimulate{true};
+
+        /**
+         * @brief 다음 프레임에 미리 보기 천을 다시 만들어야 하는지 나타냅니다.
+         */
+        bool mClothPreviewStale{true};
+
+        /**
+         * @brief Show 메뉴에서 바람 세기를 0으로 내렸다가 다시 올릴 때 쓸 바람 방향입니다.
+         */
+        FVector mClothWindDirection{1.0f, 0.0f, 0.0f};
+
+        /**
+         * @brief 미리 보기에서 천 가중치를 칠하는지 나타냅니다.
+         */
+        bool mClothPaintEnabled{};
+
+        /**
+         * @brief 고른 칠하기 도구입니다.
+         */
+        int mClothPaintTool{};
+
+        /**
+         * @brief 다듬기 도구가 한 프레임에 이웃 평균 쪽으로 옮기는 비율입니다.
+         */
+        float mClothSmoothStrength{0.2f};
+
+        /**
+         * @brief 채우기 도구가 시작 값과 이만큼까지 다른 입자를 채우는 기준입니다.
+         */
+        float mClothFillThreshold{0.01f};
+
+        /**
+         * @brief 마우스 아래 입자 번호이며 없으면 InvalidIndex입니다.
+         */
+        Index_t mClothHoveredParticle{InvalidIndex};
+
+        /**
+         * @brief 마우스 아래 입자의 칠한 값입니다.
+         */
+        float mClothHoveredValue{};
+
+        /**
+         * @brief 색 범례의 가장 큰 값이며 칠한 값 중 최댓값입니다.
+         */
+        float mClothPaintMaxValue{};
+
+        /**
+         * @brief 칠할 가중치 맵 대상 번호입니다.
+         */
+        int mClothPaintTarget{};
+
+        /**
+         * @brief 붓으로 칠할 값입니다. 최대 거리와 뒤쪽 거리, 반지름은 미터입니다.
+         */
+        float mClothPaintValue{};
+
+        /**
+         * @brief 붓의 3D 반지름(m)이며 천 표면에 맞은 점에서 이 거리 안의 입자를 칠합니다.
+         */
+        Core::FLength mClothPaintRadius{Core::FLength::FromBase(0.05f)};
+
+        /**
+         * @brief 카메라 반대쪽을 향한 삼각형의 와이어프레임을 그리지 않을지 나타냅니다.
+         */
+        bool mClothCullBackFaces{true};
+
+        /**
+         * @brief 카메라를 향한 입자만 칠할지 나타냅니다.
+         */
+        bool mClothFrontFacingOnly{true};
+
+        /**
+         * @brief 칠한 뒤 아직 천 에셋에 반영하지 않은 값이 있는지 나타냅니다.
+         */
+        bool mClothPaintDirty{};
+
+        /**
          * @brief 뷰어의 표시 모드입니다.
          */
         Engine::EViewMode mViewMode{Engine::EViewMode::Lit};
@@ -343,6 +605,11 @@ namespace Editor {
          * @brief 미리보기에서 시작한 마우스 드래그의 캡처 상태입니다.
          */
         bool mMouseCaptured{};
+
+        /**
+         * @brief 오른쪽 버튼을 누른 동안 시선 회전과 WASD/QE 이동을 처리하는 비행 카메라 컨트롤러입니다.
+         */
+        Viewer::FFlyCameraController mFlyCamera{};
     };
 
 }

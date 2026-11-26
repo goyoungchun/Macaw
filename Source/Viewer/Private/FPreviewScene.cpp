@@ -5,6 +5,7 @@
  */
 
 #include "Viewer/FPreviewScene.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include "Asset/UMaterial.h"
 #include "Core/Math/FTransform.h"
@@ -22,6 +23,8 @@
 #include <algorithm>
 #include <cmath>
 
+using namespace Core::Literals;
+
 using namespace Viewer;
 
 namespace {
@@ -33,12 +36,12 @@ namespace {
         }
 
         const FVector FarCorner{View.mForward.x >= 0.0f ? FloorBounds.mMaximum.x : FloorBounds.mMinimum.x, View.mForward.y >= 0.0f ? FloorBounds.mMaximum.y : FloorBounds.mMinimum.y, View.mForward.z >= 0.0f ? FloorBounds.mMaximum.z : FloorBounds.mMinimum.z};
-        const float FloorDepth{(FarCorner - View.mLocation).Dot(View.mForward)};
-        const float DepthOffset{-View.mProjection(3, 2)};
-        const float FarPlane{DepthOffset / (DepthScale - 1.0f)};
+        const Core::FLength FloorDepth{Core::FLength::FromBase((FarCorner - View.mLocation).Dot(View.mForward))};
+        const Core::FLength DepthOffset{Core::FLength::FromBase(-View.mProjection(3, 2))};
+        const Core::FLength FarPlane{DepthOffset / (DepthScale - 1.0f)};
 
-        if (std::isfinite(FloorDepth) && FloorDepth >= FarPlane) {
-            const float NearPlane{DepthOffset / DepthScale};
+        if (FloorDepth.IsFinite() && FloorDepth >= FarPlane) {
+            const Core::FLength NearPlane{DepthOffset / DepthScale};
             const float Aspect{std::max(View.mSize.x, 1.0f) / std::max(View.mSize.y, 1.0f)};
 
             View.mProjection = FMatrix::Perspective(View.mFieldOfView, Aspect, NearPlane, FloorDepth * 1.1f);
@@ -101,7 +104,7 @@ void FPreviewScene::PrepareEnvironment(Engine::FSceneViewFamily& Family, const F
 
     const FVector Size{Bounds.mMaximum - Bounds.mMinimum};
     const FVector Center{Bounds.mMinimum + Size * 0.5f};
-    const float AssetSize{std::max({Size.x, Size.y, Size.z, 0.02f})};
+    const float AssetSize{std::max({Size.x, Size.y, Size.z, (0.02_m).GetBase()})};
     const float Width{AssetSize * 8.0f};
     const float Thickness{AssetSize * 0.18f};
 
@@ -122,7 +125,7 @@ void FPreviewScene::PrepareEnvironment(Engine::FSceneViewFamily& Family, const F
     if (mFloorMaterial == nullptr) {
         static const auto Shader{[] {
             auto FloorShader{CoreUObject::NewObject<RenderCore::UShader>()};
-            FloorShader->SetSourcePath("Shaders/PreviewFloor.hlsl");
+            FloorShader->SetSourcePath("/Engine/Shaders/PreviewFloor.hlsl");
             FloorShader->SetWritesGBuffer(true);
 
             return FloorShader;

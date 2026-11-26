@@ -5,22 +5,30 @@
  */
 
 #include "Engine/Component/UHeightFogComponent.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Engine/UWorld.h"
 #include "Engine/FSceneInterface.h"
 #include "Asset/FAssetManager.h"
+#include "Core/FilePath.h"
 #include "Asset/UTexture2D.h"
 #include "CoreUObject/Reflection/NewObject.h"
+#include "Core/Types.h"
 
-#include <Windows.h>
 #include <algorithm>
 #include <cmath>
+
+using namespace Core::Literals;
 
 namespace Engine {
 
     /**
      * @brief 기본 설정으로 UHeightFogComponent 객체를 초기화합니다.
      */
-    Engine::UHeightFogComponent::UHeightFogComponent() = default;
+    Engine::UHeightFogComponent::UHeightFogComponent()
+		: mFogDensity{0.02f / 1_m},
+		  mFogHeightFalloff{0.2f / 1_m},
+		  mEndDistance{1000_m} {
+    }
 
     /**
      * @brief 소멸 전에 렌더 장면에서 안개를 등록 해제하고 아이콘 자원을 정리합니다.
@@ -32,15 +40,15 @@ namespace Engine {
     /**
      * @brief 안개 기준 높이의 밀도를 반환합니다.
      */
-    float Engine::UHeightFogComponent::GetFogDensity() const {
+    Core::FInverseLength Engine::UHeightFogComponent::GetFogDensity() const {
         return mFogDensity;
     }
 
     /**
      * @brief 0~10 범위의 유한한 안개 밀도를 설정하고 장면 프록시를 갱신합니다.
      */
-    bool Engine::UHeightFogComponent::SetFogDensity(float Density) {
-        if (!std::isfinite(Density) || Density < 0.0f || Density > 10.0f) {
+    bool Engine::UHeightFogComponent::SetFogDensity(Core::FInverseLength Density) {
+        if (!Density.IsFinite() || Density < Core::FInverseLength{} || Density > 10.0f / 1_m) {
             return false;
         }
 
@@ -54,15 +62,15 @@ namespace Engine {
     /**
      * @brief 높이에 따른 안개 밀도의 지수 감쇠 계수를 반환합니다.
      */
-    float Engine::UHeightFogComponent::GetFogHeightFalloff() const {
+    Core::FInverseLength Engine::UHeightFogComponent::GetFogHeightFalloff() const {
         return mFogHeightFalloff;
     }
 
     /**
      * @brief 0~100 범위의 유한한 높이 감쇠 계수를 적용하고 장면을 동기화합니다.
      */
-    bool Engine::UHeightFogComponent::SetFogHeightFalloff(float Falloff) {
-        if (!std::isfinite(Falloff) || Falloff < 0.0f || Falloff > 100.0f) {
+    bool Engine::UHeightFogComponent::SetFogHeightFalloff(Core::FInverseLength Falloff) {
+        if (!Falloff.IsFinite() || Falloff < Core::FInverseLength{} || Falloff > 100.0f / 1_m) {
             return false;
         }
 
@@ -76,15 +84,15 @@ namespace Engine {
     /**
      * @brief 카메라에서 안개 적분을 시작하는 거리를 반환합니다.
      */
-    float Engine::UHeightFogComponent::GetStartDistance() const {
+    Core::FLength Engine::UHeightFogComponent::GetStartDistance() const {
         return mStartDistance;
     }
 
     /**
      * @brief 0 이상의 유한한 안개 시작 거리를 설정하고 장면 프록시를 갱신합니다.
      */
-    bool Engine::UHeightFogComponent::SetStartDistance(float Distance) {
-        if (!std::isfinite(Distance) || Distance < 0.0f) {
+    bool Engine::UHeightFogComponent::SetStartDistance(Core::FLength Distance) {
+        if (!Distance.IsFinite() || Distance < 0_m) {
             return false;
         }
 
@@ -98,15 +106,15 @@ namespace Engine {
     /**
      * @brief 안개를 적분할 최대 거리를 반환합니다.
      */
-    float Engine::UHeightFogComponent::GetEndDistance() const {
+    Core::FLength Engine::UHeightFogComponent::GetEndDistance() const {
         return mEndDistance;
     }
 
     /**
      * @brief 안개 적분의 종료 거리를 설정하며 0이면 거리 상한을 해제합니다.
      */
-    bool Engine::UHeightFogComponent::SetEndDistance(float Distance) {
-        if (!std::isfinite(Distance) || Distance < 0.0f) {
+    bool Engine::UHeightFogComponent::SetEndDistance(Core::FLength Distance) {
+        if (!Distance.IsFinite() || Distance < 0_m) {
             return false;
         }
 
@@ -120,15 +128,15 @@ namespace Engine {
     /**
      * @brief 먼 표면을 안개 적용에서 제외하는 경계 거리를 반환합니다.
      */
-    float Engine::UHeightFogComponent::GetFogCutoffDistance() const {
+    Core::FLength Engine::UHeightFogComponent::GetFogCutoffDistance() const {
         return mFogCutoffDistance;
     }
 
     /**
      * @brief 이 거리보다 먼 표면의 안개를 생략하도록 설정하며 0이면 제한을 해제합니다.
      */
-    bool Engine::UHeightFogComponent::SetFogCutoffDistance(float Distance) {
-        if (!std::isfinite(Distance) || Distance < 0.0f) {
+    bool Engine::UHeightFogComponent::SetFogCutoffDistance(Core::FLength Distance) {
+        if (!Distance.IsFinite() || Distance < 0_m) {
             return false;
         }
 
@@ -276,21 +284,14 @@ namespace Engine {
         if (mIconAssets != nullptr) {
             Core::FString Error{};
 
-            mIcon = mIconAssets->LoadTexture("Editor/Icon/ExponentialHeightFog_64x.png", Error);
+            mIcon = mIconAssets->LoadTexture("/Engine/Editor/Icon/ExponentialHeightFog_64x.png", Error);
         }
 
         if (mIcon != nullptr) {
             return;
         }
 
-        std::array<wchar_t, 32768> Executable{};
-        const DWORD Length{GetModuleFileNameW(nullptr, Executable.data(), static_cast<DWORD>(Executable.size()))};
-        std::filesystem::path Path{Length > 0 && Length < Executable.size() ? std::filesystem::path{Executable.data()}.parent_path() / "Templates/Project/Content/Editor/Icon/ExponentialHeightFog_64x.png" : std::filesystem::path{}};
-        std::error_code Error{};
-
-        if (Path.empty() || !std::filesystem::is_regular_file(Path, Error)) {
-            Path = "Templates/Project/Content/Editor/Icon/ExponentialHeightFog_64x.png";
-        }
+        const auto Path{Core::FilePath::GetEngineContentRoot() / "Editor/Icon/ExponentialHeightFog_64x.png"};
 
         auto Icon{CoreUObject::NewObject<Asset::UTexture2D>()};
 

@@ -46,7 +46,7 @@ namespace Asset {
     bool Asset::FTextureAssetData::ApplyTo(Asset::UTexture2D& Texture, Core::FString& Error) const {
         Error.clear();
 
-        if (mFormat >= static_cast<Uint32>(Asset::ETextureFormat::D24S8)) {
+        if (mFormat >= static_cast<Uint32>(Asset::ETextureFormat::D24S8) && !(mFormat == static_cast<Uint32>(Asset::ETextureFormat::BC7) && mDDS)) {
             Error = "Invalid texture asset data";
 
             return false;

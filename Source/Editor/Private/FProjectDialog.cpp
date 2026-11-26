@@ -5,12 +5,12 @@
  */
 
 #include "Editor/FProjectDialog.h"
+#include "Core/Types.h"
 
 #include <Windows.h>
 #include <commdlg.h>
 #include <shobjidl.h>
 #include <wrl/client.h>
-#include <array>
 
 namespace Editor {
 
@@ -18,7 +18,7 @@ namespace Editor {
      * @brief 프로젝트 생성 또는 열기 대화상자로 선택한 파일 경로를 반환합니다.
      */
     std::filesystem::path Editor::FProjectDialog::Choose(void* Owner, bool Create) {
-        std::array<wchar_t, 32768> Buffer{};
+        Core::TStaticArray<wchar_t, 32768> Buffer{};
         OPENFILENAMEW Dialog{};
         Dialog.lStructSize = sizeof(Dialog);
         Dialog.hwndOwner = static_cast<HWND>(Owner);

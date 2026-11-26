@@ -44,7 +44,8 @@ namespace Asset {
         /**
          * @brief 깊이를 32비트 부동소수점으로 저장합니다.
          */
-        D32Float
+        D32Float,
+        BC7
     };
 
 }

@@ -1,6 +1,6 @@
 /**
  * @file FEditorToolkit.h
- * @brief 에디터 기능 단위의 프레임 갱신·그리기·닫기 확인 인터페이스입니다.
+ * @brief 에디터 기능 단위의 프레임 갱신·그리기 인터페이스입니다.
  * @ingroup Editor
  */
 
@@ -9,7 +9,7 @@
 namespace Editor {
 
     /**
-     * @brief 에디터 기능 단위의 프레임 갱신·그리기·닫기 확인 인터페이스입니다.
+     * @brief 에디터 기능 단위의 프레임 갱신·그리기 인터페이스입니다.
      */
     class FEditorToolkit {
     public:
@@ -35,12 +35,6 @@ namespace Editor {
          * @param[in] DeltaTime 이전 프레임 이후 경과한 시간이며 단위는 초입니다.
          */
         virtual void Draw(float DeltaTime) = 0;
-
-        /**
-         * @brief 툴킷을 닫을 수 있는지 조회합니다. 기본 구현은 닫기를 허용합니다.
-         * @return 기본 구현에서는 true입니다.
-         */
-        virtual bool CanClose();
     };
 
 }

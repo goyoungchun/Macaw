@@ -130,6 +130,15 @@ try {
             throw 'Could not bootstrap vcpkg.'
         }
     }
+    $PhysXPortCommit = 'c37cc7836a0e1cfd55747be8ec472eafa8055276'
+    & $Git.Source -C $VcpkgRoot rev-parse --verify --quiet "${PhysXPortCommit}^{commit}" | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        & $Git.Source -C $VcpkgRoot fetch origin $PhysXPortCommit --depth 1
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Could not fetch the PhysX 4.1.2 vcpkg port.'
+        }
+    }
+
     $env:VCPKG_ROOT = $VcpkgRoot
     & $Vcpkg install "--x-manifest-root=$WorkspaceRoot" "--x-install-root=$(Join-Path $WorkspaceRoot 'vcpkg_installed')" --triplet=x64-windows --x-wait-for-lock
     if ($LASTEXITCODE -ne 0) {

@@ -21,7 +21,10 @@
 #include <shellapi.h>
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <fstream>
+
+using namespace std::chrono_literals;
 
 /**
  * @brief Win32 메시지를 ImGui 입력 백엔드에 전달합니다.
@@ -277,7 +280,7 @@ namespace Editor {
 
             while (!mSubmitted && !mCancelled && Platform.PumpMessages()) {
                 if (Platform.IsMinimized()) {
-                    Platform.WaitForMessages(16);
+                    Platform.WaitForMessages(static_cast<Uint32>((16ms).count()));
 
                     continue;
                 }

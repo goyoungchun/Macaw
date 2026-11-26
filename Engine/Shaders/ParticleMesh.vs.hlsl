@@ -1,0 +1,1 @@
+#include "StaticMesh.vs.hlsl"

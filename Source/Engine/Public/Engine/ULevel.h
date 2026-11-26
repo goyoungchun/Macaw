@@ -10,6 +10,7 @@
 
 #include "Core/ReflectionMacros.h"
 #include "CoreUObject/UObject.h"
+#include "Engine/Tick/FTickTaskLevel.h"
 #include "ULevel.generated.h"
 
 namespace Engine {
@@ -69,6 +70,12 @@ namespace Engine {
          */
         friend class UWorld;
 
+        /** @brief Tick 함수가 레벨 소속을 검증하고 자신을 등록할 수 있게 합니다. */
+        friend class FTickFunction;
+
+        /** @brief 월드의 Tick 매니저가 이 레벨의 실행 후보를 읽을 수 있게 합니다. */
+        friend class FTickTaskManager;
+
         /**
          * @brief 안전한 삭제 경계에서 실행을 종료하고 액터의 소유권을 해제합니다.
          * @param[in] Handle 이 레벨에서 제거할 액터의 전역 핸들입니다.
@@ -81,6 +88,9 @@ namespace Engine {
          * @brief 레벨이 속한 월드입니다.
          */
         Engine::UWorld* mWorld{};
+
+        /** @brief 이 레벨의 액터와 컴포넌트가 등록한 Tick 함수 목록입니다. */
+        Engine::FTickTaskLevel mTickTaskLevel{};
 
         /**
          * @brief 레벨이 소유한 액터 목록입니다.

@@ -266,6 +266,40 @@ namespace Core {
         }
     }
 
+    void Core::FArchive::SerializeQuantity(std::string_view Name, float& BaseValue, const Core::FQuantityUnit& Unit) {
+        if (HasError()) {
+            return;
+        }
+
+        float Number{};
+
+        if (!IsLoading()) {
+            const auto Converted{Core::FromQuantityBase(BaseValue, Unit)};
+
+            if (!Converted.has_value()) {
+                SetError("Invalid quantity: " + Core::FString{Name});
+
+                return;
+            }
+
+            Number = *Converted;
+        }
+
+        Serialize(Name, Number);
+
+        if (IsLoading() && !HasError()) {
+            const auto Converted{Core::ToQuantityBase(Number, Unit)};
+
+            if (!Converted.has_value()) {
+                SetError("Invalid quantity: " + Core::FString{Name});
+
+                return;
+            }
+
+            BaseValue = *Converted;
+        }
+    }
+
     /**
      * @brief 아카이브 모드에 따라 값을 읽거나 저장합니다.
      */

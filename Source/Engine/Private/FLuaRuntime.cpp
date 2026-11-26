@@ -132,6 +132,8 @@ sol::protected_function FLuaRuntime::LoadChunk(const std::filesystem::path& Path
 bool FLuaRuntime::CreateExecution(const Engine::FLuaScriptInstance& Instance, const sol::protected_function& Chunk, FLuaExecution& Execution) {
     const auto BindActor{[&Instance](sol::environment& Environment) {
         Environment["Actor"] = FActorRef{Instance.mOwner};
+        // 스크립트를 실행하는 컴포넌트 자신입니다. Tick 그룹 변경 등에 사용합니다.
+        Environment["Script"] = FLuaComponentRef{Instance.mComponent.Get()};
     }};
     const auto ReportError{[&Instance](const char* Stage, std::string_view Message) {
         Report(Instance.mPath, Instance.mOwner.Get(), Stage, Message);

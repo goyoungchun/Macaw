@@ -12,7 +12,6 @@
 #include "FMeshImportTransform.h"
 
 #include <algorithm>
-#include <array>
 #include <assimp/Importer.hpp>
 #include <assimp/config.h>
 #include <assimp/material.h>
@@ -48,8 +47,8 @@ namespace Asset {
             // Assimp 행렬은 열 벡터 규약(이동이 4번째 열)이므로 전치해서 행 벡터 규약의 행렬로 만듭니다.
             FMatrix Result{};
 
-            for (Index_t Row{}; Row < 4; ++Row) {
-                for (Index_t Column{}; Column < 4; ++Column) {
+            for (Uint32 Row{}; Row < 4; ++Row) {
+                for (Uint32 Column{}; Column < 4; ++Column) {
                     Result(Row, Column) = Matrix[Column][Row];
                 }
             }
@@ -100,7 +99,7 @@ namespace Asset {
         Core::FString& Error{GetError()};
 
         constexpr std::size_t MaximumBytes{std::numeric_limits<Uint32>::max()};
-        const std::size_t MaximumVertices{MaximumBytes / sizeof(std::array<float, 7>)};
+        const std::size_t MaximumVertices{MaximumBytes / sizeof(Core::TStaticArray<float, 7>)};
         constexpr Index_t MaximumIndices{static_cast<Index_t>(MaximumBytes / sizeof(Uint32))};
         Core::TArray<FVector>& Positions{MeshData.GetPositions()};
         Core::TArray<FVector>& Normals{MeshData.GetNormals()};
@@ -119,7 +118,7 @@ namespace Asset {
         // UV 채널 수는 메시마다 다를 수 있으므로, 지금까지의 채널 수와 이 메시가 사용하는 가장 높은 채널 번호 + 1 중 큰 값으로 맞춥니다.
         std::size_t UVChannelCount{UVChannels.size()};
 
-        for (Index_t Channel{}; Channel < AI_MAX_NUMBER_OF_TEXTURECOORDS; ++Channel) {
+        for (Uint32 Channel{}; Channel < AI_MAX_NUMBER_OF_TEXTURECOORDS; ++Channel) {
             if (Source.HasTextureCoords(Channel)) {
                 UVChannelCount = std::max<std::size_t>(UVChannelCount, Channel + 1);
             }
@@ -147,7 +146,7 @@ namespace Asset {
         Colors.reserve(VertexCount + Source.mNumVertices);
         Indices.reserve(Indices.size() + static_cast<std::size_t>(Source.mNumFaces) * 3);
 
-        const Index_t BaseVertex{static_cast<Index_t>(static_cast<Uint32>(VertexCount))};
+        const Uint32 BaseVertex{static_cast<Uint32>(VertexCount)};
         const Index_t FirstIndex{static_cast<Index_t>(static_cast<Uint32>(Indices.size()))};
         const Index_t Slot{static_cast<Index_t>(Target.FindOrAddMaterialSlot(Source.mMaterialIndex, GetResult().GetMaterials()[Source.mMaterialIndex].GetName()))};
 
@@ -189,7 +188,7 @@ namespace Asset {
             for (Index_t Channel{}; Channel < UVChannelCount; ++Channel) {
                 // Assimp UV는 왼쪽 아래가 원점이고 D3D 텍스처 좌표는 왼쪽 위가 원점이므로 V를 1 - V로 뒤집습니다.
                 // 이 메시에 없는 채널은 (0, 0)을 넣습니다.
-                const bool HasChannel{Channel < AI_MAX_NUMBER_OF_TEXTURECOORDS && Source.HasTextureCoords(Channel)};
+                const bool HasChannel{Channel < AI_MAX_NUMBER_OF_TEXTURECOORDS && Source.HasTextureCoords(static_cast<Uint32>(Channel))};
                 const FVector2 UV{HasChannel ? FVector2{Source.mTextureCoords[Channel][VertexIndex].x, 1.0f - Source.mTextureCoords[Channel][VertexIndex].y} : FVector2{}};
 
                 if (!UV.IsFinite()) {
@@ -465,7 +464,7 @@ namespace Asset {
             Asset::FMeshImportTexture SpecularTexture{ReadTexture(Material, aiTextureType_SPECULAR, aiTextureType_SPECULAR)};
             Asset::FMeshImportTexture EmissiveTexture{ReadTexture(Material, aiTextureType_EMISSIVE, aiTextureType_EMISSION_COLOR)};
             Asset::FMeshImportTexture ReflectionTexture{ReadTexture(Material, aiTextureType_REFLECTION, aiTextureType_REFLECTION)};
-            const auto ReadColor{[&](const char* Key, Uint32 Type, Index_t PropertyIndex, const FVector4& Default) {
+            const auto ReadColor{[&](const char* Key, Uint32 Type, Uint32 PropertyIndex, const FVector4& Default) {
                 aiColor4D Value{Default.x, Default.y, Default.z, Default.w};
 
                 aiGetMaterialColor(&Material, Key, Type, PropertyIndex, &Value);
@@ -476,7 +475,13 @@ namespace Asset {
             const float SpecularDefault{SpecularTexture.GetSource() == Asset::EMeshImportTextureSource::None ? 0.0f : 1.0f};
             const float EmissiveDefault{EmissiveTexture.GetSource() == Asset::EMeshImportTextureSource::None ? 0.0f : 1.0f};
             const FVector4 SpecularColor{ReadColor(AI_MATKEY_COLOR_SPECULAR, {SpecularDefault, SpecularDefault, SpecularDefault, 1.0f})};
-            const FVector4 AmbientColor{ReadColor(AI_MATKEY_COLOR_AMBIENT, {1.0f, 1.0f, 1.0f, 1.0f})};
+            FVector4 AmbientColor{ReadColor(AI_MATKEY_COLOR_AMBIENT, {1.0f, 1.0f, 1.0f, 1.0f})};
+
+            // 검정 Ambient는 환경광을 전혀 받지 못하게 하므로, 지정되지 않은 값으로 보고 기본값(흰색)을 쓴다.
+            if (AmbientColor.x <= 0.0f && AmbientColor.y <= 0.0f && AmbientColor.z <= 0.0f) {
+                AmbientColor = {1.0f, 1.0f, 1.0f, 1.0f};
+            }
+
             const FVector4 EmissiveColor{ReadColor(AI_MATKEY_COLOR_EMISSIVE, {EmissiveDefault, EmissiveDefault, EmissiveDefault, 1.0f})};
             const FVector4 ReflectionColor{ReadColor(AI_MATKEY_COLOR_REFLECTIVE, {1.0f, 1.0f, 1.0f, 1.0f})};
 

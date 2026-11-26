@@ -10,7 +10,6 @@
 #include "Core/Types.h"
 
 #include <Windows.h>
-#include <array>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -28,7 +27,7 @@ namespace Platform {
         /**
          * @brief 0~1 범위의 선형 RGB 색입니다.
          */
-        using FColor = std::array<float, 3>;
+        using FColor = Core::TStaticArray<float, 3>;
 
         /**
          * @brief 미리 곱한 알파의 RGBA 실수 픽셀로 읽은 정사각형 아이콘입니다.
@@ -134,7 +133,7 @@ namespace Platform {
          * @param[in] V 세로 정규화 좌표입니다.
          * @return 미리 곱한 알파의 RGBA 값입니다.
          */
-        static std::array<float, 4> SampleIcon(const FIconImage& Image, float U, float V);
+        static Core::TStaticArray<float, 4> SampleIcon(const FIconImage& Image, float U, float V);
 
         /**
          * @brief 아이콘을 프레임 버퍼의 정사각형 영역에 알파 합성합니다.

@@ -5,8 +5,8 @@
 
 #pragma once
 #include "Core/Base/FAssetHandle.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <functional>
 
 /**
@@ -22,7 +22,7 @@ struct FMaterialChunkSignature {
     /**
      * @brief 필드 순서의 텍스처 핸들 배열입니다. 사용 구간은 mTextureFieldCount로 결정합니다.
      */
-    std::array<FAssetHandle, MaxMaterialTextureFields> mTextureHandles{};
+    Core::TStaticArray<FAssetHandle, MaxMaterialTextureFields> mTextureHandles{};
 
     /**
      * @brief 사용 중인 텍스처 필드 수입니다. MaxMaterialTextureFields 이하여야 합니다.

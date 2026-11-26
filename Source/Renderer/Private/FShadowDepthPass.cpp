@@ -74,22 +74,33 @@ namespace Renderer {
     /**
      * @brief SubMesh마다 머티리얼 없이 깊이 전용 파이프라인 드로를 추가합니다.
      */
-    void Renderer::FShadowDepthPass::AddCommands(const Renderer::FScenePrimitive& Primitive, Asset::UStaticMesh& Mesh, const Engine::FSceneViewFamily&, Core::TArray<Renderer::FMeshDrawCommand>& Commands) {
-        Renderer::FMaterialPipeline* Pipeline{Primitive.mProxy.mSkeletalMesh != nullptr ? mRenderer->GetDepthPipeline(true) : mPipeline};
+    void Renderer::FShadowDepthPass::AddCommands(const Renderer::FScenePrimitive& Primitive, Asset::UStaticMesh& Mesh, const Engine::FSceneViewFamily&, Core::TArray<Renderer::FMeshDrawCommand>& Commands, const Engine::FParticleMeshBatch*) {
+        const bool Skinned{Primitive.mProxy.mSkeletalMesh != nullptr};
+        Renderer::FMaterialPipeline* SurfacePipeline{Skinned ? mRenderer->GetDepthPipeline(true) : mPipeline};
 
-        if (Pipeline == nullptr) {
+        if (SurfacePipeline == nullptr) {
             return;
         }
 
-        for (const Asset::FSubMesh& SubMesh : Mesh.GetMeshData().GetSubMeshes()) {
-            Asset::UMaterial* SlotMaterial{SubMesh.GetMaterialIndex() < Primitive.mProxy.mMaterials.size() ? Primitive.mProxy.mMaterials[SubMesh.GetMaterialIndex()] : nullptr};
-            Asset::UMaterial* Material{Primitive.mProxy.mMaterial != nullptr ? Primitive.mProxy.mMaterial.Get() : SlotMaterial};
+        const auto& SubMeshes{Mesh.GetMeshData().GetSubMeshes()};
 
-            if (Material != nullptr && Material->GetBlendMode() == Asset::EBlendMode::Translucent) {
+        for (Index_t SubMeshIndex{}; SubMeshIndex < SubMeshes.size(); ++SubMeshIndex) {
+            const Asset::FSubMesh& SubMesh{SubMeshes[SubMeshIndex]};
+            Asset::UMaterial* Material{ResolveMaterial(Primitive, SubMesh.GetMaterialIndex(), nullptr, nullptr)};
+
+            if (Material != nullptr && Material->GetBlendMode() != Asset::EBlendMode::Opaque) {
                 continue;
             }
 
-            Commands.emplace_back(Pipeline, nullptr, &Mesh, &Primitive, SubMesh.GetFirstIndex(), SubMesh.GetIndexCount());
+            // 천 섹션은 그림자도 입자 위치로 옮긴 모양으로 그립니다.
+            const Index_t ClothAssetIndex{GetClothAssetIndex(Primitive, SubMeshIndex)};
+            Renderer::FMaterialPipeline* Pipeline{ClothAssetIndex != InvalidIndex ? mRenderer->GetDepthPipeline(true, true) : SurfacePipeline};
+
+            if (Pipeline == nullptr) {
+                continue;
+            }
+
+            Commands.emplace_back(Pipeline, nullptr, &Mesh, &Primitive, SubMesh.GetFirstIndex(), SubMesh.GetIndexCount(), ClothAssetIndex);
         }
     }
 

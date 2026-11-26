@@ -33,7 +33,7 @@ namespace Renderer {
         /**
          * @brief 가로·세로 타일 수와 광원 수입니다.
          */
-        std::array<Uint32, 4> mDimensions{};
+        Core::TStaticArray<Uint32, 4> mDimensions{};
 
         /**
          * @brief 현재 렌더 뷰의 픽셀 너비·높이입니다.
@@ -97,7 +97,7 @@ namespace Renderer {
         /**
          * @brief 타일별 광원 목록의 시작·개수를 보관하는 GPU 버퍼입니다.
          */
-        RenderCore::TRWStructuredBuffer<std::array<Uint32, 2>> mTileRanges{};
+        RenderCore::TRWStructuredBuffer<Core::TStaticArray<Uint32, 2>> mTileRanges{};
 
         /**
          * @brief 타일에 영향을 주는 광원 인덱스를 이어 붙인 GPU 버퍼입니다.

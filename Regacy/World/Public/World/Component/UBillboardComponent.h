@@ -2,10 +2,10 @@
 #include "CoreUObject/Reflection/ReflectionMacros.h"
 #include "World/Component/UPrimitiveComponent.h"
 #include "Core/Asset/FAssetReference.h"
-#include <array>
 #include "Math/FMath.h"
 #include "Asset/UTexture.h"
 #include "Asset/Pipeline/UPipeline.h"
+#include "Core/Types.h"
 
 class FProperty;
 
@@ -40,7 +40,7 @@ public:
 
     void OnRegister() override;
     bool BuildBillboardDrawData(FBillboardDrawData& OutData) const;
-    bool GetWorldCorners(const FMatrix& CameraWorld, std::array<FVector3, 4>& OutCorners) const;
+    bool GetWorldCorners(const FMatrix& CameraWorld, Core::TStaticArray<FVector3, 4>& OutCorners) const;
 
     bool ShouldCreateRenderState() const override;
     std::unique_ptr<FPrimitiveSceneProxy> CreateSceneProxy() const override;

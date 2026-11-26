@@ -5,12 +5,16 @@
  */
 
 #include "FEditorAnimation.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include <im_anim.h>
 #include <imgui_internal.h>
 #include <algorithm>
 
 using namespace Editor;
+using namespace Core::Literals;
+
+constinit const float Editor::FEditorAnimation::mDefaultAppearDuration{(0.12_s).GetBase()};
 
 /**
  * @brief FEditorAnimation 구현에 한정되는 내부 형식·상수·도우미 함수입니다.

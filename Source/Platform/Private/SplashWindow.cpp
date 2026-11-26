@@ -5,6 +5,7 @@
  */
 
 #include "Platform/SplashWindow.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Platform/WindowResources.h"
 #include "Core/Base/ErrorHandler.h"
 #include "FSplashCanvas.h"
@@ -14,6 +15,10 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+
+using namespace Core::Literals;
+
+using namespace std::chrono_literals;
 
 namespace Platform {
 
@@ -34,12 +39,12 @@ namespace Platform {
         /**
          * @brief 애니메이션 타이머의 밀리초 간격입니다.
          */
-        constexpr DWORD FrameMilliseconds{16};
+        constexpr auto FrameInterval{16ms};
 
         /**
          * @brief 완료 후 스플래시 창 유지 시간입니다.
          */
-        constexpr float FinishTimeout{0.4f};
+        constexpr float FinishTimeout{(0.4_s).GetBase()};
 
         /**
          * @brief 스플래시 Win32 창 클래스 이름입니다.
@@ -303,7 +308,7 @@ namespace Platform {
                 mSignal.notify_all();
             }
 
-            MsgWaitForMultipleObjects(0, nullptr, false, FrameMilliseconds, QS_ALLINPUT);
+            MsgWaitForMultipleObjects(0, nullptr, false, static_cast<DWORD>(FrameInterval.count()), QS_ALLINPUT);
         }
 
         if (Window != nullptr) {

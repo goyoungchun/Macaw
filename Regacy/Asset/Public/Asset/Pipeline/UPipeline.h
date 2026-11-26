@@ -1,8 +1,8 @@
 #pragma once
 #include "CoreUObject/Reflection/ReflectionMacros.h"
+#include "Core/Types.h"
 
 #include <filesystem>
-#include <array>
 #include <string>
 #include <vector>
 #include "RenderCore/Pipeline/FPipelineDescription.h"
@@ -50,7 +50,7 @@ public:
 
 private:
     bool InitializeFamily(const std::filesystem::path& FamilyDirectory);
-    bool InitializeModes(const std::array<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)>& ModePaths);
+    bool InitializeModes(const Core::TStaticArray<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)>& ModePaths);
     bool LoadPipelineDescription(const std::filesystem::path& Path, FPipelineDescription& OutDescription);
 
     virtual void Serialize(FArchive& Ar) override;
@@ -59,8 +59,8 @@ private:
 
     std::size_t mModeIndex{0};
 
-    std::array<FPipelineDescription, static_cast<std::size_t>(ERenderMode::Max)> mDescriptions{};
-    std::array<bool, static_cast<std::size_t>(ERenderMode::Max)> mEnabledModes{};
+    Core::TStaticArray<FPipelineDescription, static_cast<std::size_t>(ERenderMode::Max)> mDescriptions{};
+    Core::TStaticArray<bool, static_cast<std::size_t>(ERenderMode::Max)> mEnabledModes{};
 
     Uint64 mRenderRevision{1};
 

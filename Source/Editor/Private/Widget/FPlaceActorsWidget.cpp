@@ -67,7 +67,7 @@ namespace Editor {
             return;
         }
 
-        static constexpr std::array<const char*, static_cast<std::size_t>(Editor::EPlaceActorIcon::Count)> Paths{nullptr, "Editor/Icon/Pawn_64x.png", "Editor/Icon/SkyLight_64x.png", "Editor/Icon/DirectionalLight_64x.png", "Editor/Icon/PointLight_64x.png", "Editor/Icon/SpotLight_64x.png", "Editor/Icon/ExponentialHeightFog_64x.png"};
+        static constexpr Core::TStaticArray<const char*, static_cast<std::size_t>(Editor::EPlaceActorIcon::Count)> Paths{nullptr, "/Engine/Editor/Icon/Pawn_64x.png", "/Engine/Editor/Icon/SkyLight_64x.png", "/Engine/Editor/Icon/DirectionalLight_64x.png", "/Engine/Editor/Icon/PointLight_64x.png", "/Engine/Editor/Icon/SpotLight_64x.png", "/Engine/Editor/Icon/ExponentialHeightFog_64x.png", "/Engine/Editor/Icon/EmptyActor_64x.png", "/Engine/Editor/Icon/DecalActor_64x.png", "/Engine/Editor/Icon/LevelSequenceActor_64x.png", "/Engine/Editor/Icon/Emitter_64x.png", "/Engine/Editor/Icon/Pawn_64x.png", "/Engine/Editor/Icon/SkyAtmosphere_64x.png"};
 
         mIcons = {};
 
@@ -99,6 +99,7 @@ namespace Editor {
         ImGui::BeginDisabled(!GetEditorContext()->CanEditWorld());
 
         if (mCategory == 0 || mCategory == 2) {
+            DrawEntry("AActor", "Empty Actor", "SceneComponent", Editor::EPlaceActorIcon::EmptyActor);
             DrawEntry("Cube", "Cube", "StaticMeshComponent", Editor::EPlaceActorIcon::None);
             DrawEntry("Sphere", "Sphere", "StaticMeshComponent", Editor::EPlaceActorIcon::None);
             DrawEntry("Plane", "Plane", "StaticMeshComponent", Editor::EPlaceActorIcon::None);
@@ -114,16 +115,57 @@ namespace Editor {
             const Core::FString& Name{Class->GetName()};
             const bool Light{Name.find("Light") != Core::FString::npos};
             const bool Fog{Name.find("Fog") != Core::FString::npos};
+            const bool Atmosphere{Name == "ASkyAtmosphereActor"};
+            const bool SkyDome{Name == "ASkyDomeActor"};
             const bool Decal{Name == "ADecalActor"};
+            const bool Particle{Name == "AParticleSystemActor"};
 
-            if ((mCategory == 1 && !Light) || (mCategory == 2 && (Light || Fog || Decal)) || (mCategory == 3 && !(Fog || Decal))) {
+            const bool VisualEffect{Fog || Decal || Particle || Atmosphere || SkyDome};
+
+            if ((mCategory == 1 && !Light) || (mCategory == 2 && (Light || VisualEffect)) || (mCategory == 3 && !VisualEffect)) {
+                continue;
+            }
+
+            if (SkyDome) {
+                DrawEntry(Name, "Sky Dome", "SkyDomeComponent", Editor::EPlaceActorIcon::None);
+
+                continue;
+            }
+
+            if (Atmosphere) {
+                DrawEntry(Name, "Sky Atmosphere", "SkyAtmosphereComponent", Editor::EPlaceActorIcon::SkyAtmosphere);
+
+                continue;
+            }
+
+            if (Particle) {
+                DrawEntry(Name, "Particle System", "ParticleSystemComponent", Editor::EPlaceActorIcon::ParticleSystem);
+
+                continue;
+            }
+
+            if (Decal) {
+                DrawEntry(Name, "Decal Actor", "DecalComponent", Editor::EPlaceActorIcon::Decal);
+
+                continue;
+            }
+
+            if (Name == "ALevelSequenceActor") {
+                DrawEntry(Name, "Level Sequence Actor", "SceneComponent", Editor::EPlaceActorIcon::LevelSequence);
+
+                continue;
+            }
+
+            if (Name == "APawn") {
+                DrawEntry(Name, "Pawn", "SceneComponent", Editor::EPlaceActorIcon::Pawn);
+
                 continue;
             }
 
             const Editor::EPlaceActorIcon Icon{Fog ? Editor::EPlaceActorIcon::HeightFog : Name.find("Directional") != Core::FString::npos ? Editor::EPlaceActorIcon::DirectionalLight : Name.find("Ambient") != Core::FString::npos ? Editor::EPlaceActorIcon::AmbientLight : Name.find("Spot") != Core::FString::npos ? Editor::EPlaceActorIcon::SpotLight : Light ? Editor::EPlaceActorIcon::PointLight : Editor::EPlaceActorIcon::None};
             Core::FString Label{Name.starts_with('A') ? Name.substr(1) : Name};
 
-            DrawEntry(Name, Label, Decal ? "DecalComponent" : Fog ? "HeightFogComponent" : Light ? "LightComponent" : Name.find("Camera") != Core::FString::npos ? "CameraComponent" : "Default components", Icon);
+            DrawEntry(Name, Label, Fog ? "HeightFogComponent" : Light ? "LightComponent" : Name.find("Camera") != Core::FString::npos ? "CameraComponent" : "Default components", Icon);
         }
 
         ImGui::EndDisabled();

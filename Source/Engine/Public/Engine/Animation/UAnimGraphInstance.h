@@ -230,7 +230,7 @@ namespace Engine {
         /**
          * @brief 실행할 그래프 에셋의 Content 기준 경로입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "AnimGraph", Getter = GetAnimGraph, Setter = SetAnimGraph)
+        UPROPERTY(Edit, Serialize, Category = "Animation", Name = "AnimGraph", Meta = (AssetType = "AnimGraph"), Getter = GetAnimGraph, Setter = SetAnimGraph)
         Core::FString mAnimGraph{};
 
         /**

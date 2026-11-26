@@ -9,12 +9,17 @@
 namespace Engine {
 
     /**
-     * @brief 뷰 모드가 GBuffer 속성 시각화에 해당하는지 확인합니다.
+     * @brief 뷰 모드가 버퍼 시각화에 해당하는지 확인합니다.
      * @param Mode 설정할 동작 또는 표시 모드입니다.
      * @return 버퍼 시각화 모드이면 true입니다.
      */
     bool IsBufferVisualization(Engine::EViewMode Mode) {
-        return (Mode >= Engine::EViewMode::WorldNormal && Mode <= Engine::EViewMode::ReceiveShadows) || Mode == Engine::EViewMode::SceneStencil;
+        return Mode == Engine::EViewMode::WorldNormal || Mode == Engine::EViewMode::SceneDepth ||
+            Mode == Engine::EViewMode::DepthOfFieldWeights || RequiresDeferredShading(Mode);
+    }
+
+    bool RequiresDeferredShading(Engine::EViewMode Mode) {
+        return (Mode >= Engine::EViewMode::BaseColor && Mode <= Engine::EViewMode::ReceiveShadows) || Mode == Engine::EViewMode::SceneStencil;
     }
 
 }

@@ -6,12 +6,15 @@
 
 #pragma once
 
+#include "Core/Literals/QuantityTypes.h"
+
 #include "CoreUObject/TObjectRef.h"
 
 #include "Core/ReflectionMacros.h"
 #include "CoreUObject/UObject.h"
 #include "Engine/EWorldType.h"
 #include "Engine/FWorldHandle.h"
+#include "PhysicsRuntime/FClothingSystemRuntimeModuleNv.h"
 #include "PhysicsRuntime/FPhysicsRuntime.h"
 #include "Engine.generated.h"
 
@@ -78,7 +81,7 @@ namespace Engine {
          * @param[in] TickEditorWorlds 편집 및 편집 미리보기 월드의 Tick 전달을 허용할지 지정합니다.
          * @note 월드 상태와 객체별 설정으로 Tick을 제어하며 콜백에서 요청한 엔진 종료는 순회를 마친 뒤 처리합니다.
          */
-        void Tick(float DeltaTime, bool TickEditorWorlds = true);
+        void Tick(Core::FTime DeltaTime, bool TickEditorWorlds = true);
 
         /**
          * @brief 지정한 용도의 월드 컨텍스트를 생성하여 엔진이 소유합니다.
@@ -174,6 +177,18 @@ namespace Engine {
         RenderCore::IRendererModule* GetRenderer() const;
 
         /**
+         * @brief 엔진이 소유한 PhysX 런타임을 반환합니다.
+         * @return 엔진 수명 동안 유효한 런타임의 참조입니다.
+         */
+        PhysicsRuntime::FPhysicsRuntime& GetPhysicsRuntime();
+
+        /**
+         * @brief 엔진이 소유한 천 시스템 모듈을 반환합니다.
+         * @return 엔진 수명 동안 유효한 천 시스템 모듈의 참조입니다.
+         */
+        PhysicsRuntime::FClothingSystemRuntimeModuleNv& GetClothingSystem();
+
+        /**
          * @brief 새 월드 컨텍스트를 검증하고 장면을 연결한 뒤 현재 월드를 교체합니다.
          * @param[in] Context 새 현재 월드로 등록할 월드 컨텍스트입니다.
          * @return 조건을 만족하거나 작업이 성공하면 true, 그렇지 않으면 false입니다.
@@ -187,7 +202,7 @@ namespace Engine {
          * @param Error 실패 원인을 기록할 출력 문자열입니다.
          * @return 전환 처리에 성공하면 true이며 새 핸들은 Replacement에 기록합니다.
          */
-        bool ProcessSceneTransition(Engine::FWorldHandle Source, Engine::FWorldHandle& Replacement, Core::FString& Error);
+        bool ProcessSceneTransition(Engine::FWorldHandle Source, Engine::FWorldHandle& Replacement, Core::FString& Error, bool RequireActiveCamera = true);
 
         /**
          * @brief 월드 교체 시 증가하는 컨텍스트 세대를 반환합니다.
@@ -236,7 +251,17 @@ namespace Engine {
 
     private:
 
+        /**
+         * @brief 월드별 물리 장면이 공유하는 PhysX SDK 객체입니다.
+         * @note 월드 컨텍스트를 모두 정리한 뒤 종료합니다.
+         */
         PhysicsRuntime::FPhysicsRuntime mPhysicsRuntime{};
+
+        /**
+         * @brief 모든 천 시뮬레이션이 공유하는 NvCloth 팩토리입니다.
+         * @note 월드 컨텍스트를 모두 정리한 뒤 종료합니다.
+         */
+        PhysicsRuntime::FClothingSystemRuntimeModuleNv mClothingSystem{};
 
         /**
          * @brief 월드를 각각 소유하는 컨텍스트 슬롯입니다.

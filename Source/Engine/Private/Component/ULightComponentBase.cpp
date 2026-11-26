@@ -9,6 +9,7 @@
 #include "Engine/UWorld.h"
 #include "Engine/FSceneInterface.h"
 #include "Asset/FAssetManager.h"
+#include "Core/FilePath.h"
 #include "Engine/FPrimitiveDrawInterface.h"
 #include "Core/Math/FTransform.h"
 #include "Core/Math.h"
@@ -16,7 +17,6 @@
 #include "CoreUObject/Reflection/NewObject.h"
 #include "Core/Literals.h"
 
-#include <Windows.h>
 #include <algorithm>
 #include <cmath>
 
@@ -172,21 +172,14 @@ namespace Engine {
         if (Assets != nullptr) {
             Core::FString Error{};
 
-            mIcon = Assets->LoadTexture(Core::FString{"Editor/Icon/"} + Name, Error);
+            mIcon = Assets->LoadTexture(Core::FString{"/Engine/Editor/Icon/"} + Name, Error);
         }
 
         if (mIcon != nullptr) {
             return;
         }
 
-        std::array<wchar_t, 32768> Executable{};
-        const DWORD Length{GetModuleFileNameW(nullptr, Executable.data(), static_cast<DWORD>(Executable.size()))};
-        std::filesystem::path Path{Length > 0 && Length < Executable.size() ? std::filesystem::path{Executable.data()}.parent_path() / "Templates/Project/Content/Editor/Icon" / Name : std::filesystem::path{}};
-        std::error_code Error{};
-
-        if (Path.empty() || !std::filesystem::is_regular_file(Path, Error)) {
-            Path = std::filesystem::path{"Templates/Project/Content/Editor/Icon"} / Name;
-        }
+        const auto Path{Core::FilePath::GetEngineContentRoot() / "Editor/Icon" / std::filesystem::path{Name}};
 
         auto Icon{CoreUObject::NewObject<Asset::UTexture2D>()};
 
@@ -209,11 +202,11 @@ namespace Engine {
         const FVector Up{Rotation.UpVector()};
 
         if (Proxy.mType == Engine::ELightType::Directional || Proxy.mType == Engine::ELightType::Spot) {
-            const FVector End{Position + Forward * 2.0f};
+            const FVector End{Position + Forward * (2_m).GetBase()};
 
             Draw.DrawLine(Position, End, Color, true, 2.0f);
-            Draw.DrawLine(End, End - Forward * 0.4f + Right * 0.2f, Color, true, 2.0f);
-            Draw.DrawLine(End, End - Forward * 0.4f - Right * 0.2f, Color, true, 2.0f);
+            Draw.DrawLine(End, End - Forward * (0.4_m).GetBase() + Right * (0.2_m).GetBase(), Color, true, 2.0f);
+            Draw.DrawLine(End, End - Forward * (0.4_m).GetBase() - Right * (0.2_m).GetBase(), Color, true, 2.0f);
         }
 
         if (!Selected || (Proxy.mType != Engine::ELightType::Point && Proxy.mType != Engine::ELightType::Spot)) {
@@ -221,10 +214,10 @@ namespace Engine {
         }
 
         constexpr Uint32 Segments{64};
-        const float Radius{Proxy.mAttenuationRadius};
+        const float Radius{Proxy.mAttenuationRadius.GetBase()};
 
         if (Proxy.mType == Engine::ELightType::Point) {
-            const std::array<FVector, 3> Axes{{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
+            const Core::TStaticArray<FVector, 3> Axes{{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
 
             for (Index_t Axis{}; Axis < 3; ++Axis) {
                 for (Index_t Index{}; Index < Segments; ++Index) {
@@ -238,9 +231,9 @@ namespace Engine {
             return;
         }
 
-        for (const float Angle : {Proxy.mOuterConeAngle, Proxy.mInnerConeAngle}) {
-            const float ConeRadius{Radius * Core::Math::Sin(Angle * 1_deg)};
-            const FVector Center{Position + Forward * (Radius * Core::Math::Cos(Angle * 1_deg))};
+        for (const Core::FAngle Angle : {Proxy.mOuterConeAngle, Proxy.mInnerConeAngle}) {
+            const float ConeRadius{Radius * Core::Math::Sin(Angle)};
+            const FVector Center{Position + Forward * (Radius * Core::Math::Cos(Angle))};
             const FVector ConeColor{Angle == Proxy.mOuterConeAngle ? Color : Color * 0.5f};
 
             for (Index_t Index{}; Index < Segments; ++Index) {

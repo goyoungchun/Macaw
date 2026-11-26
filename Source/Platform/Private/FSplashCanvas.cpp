@@ -5,6 +5,7 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "FSplashCanvas.h"
 #include "Platform/WindowResources.h"
 
@@ -12,6 +13,8 @@
 #include <wrl/client.h>
 #include <algorithm>
 #include <cmath>
+
+using namespace Core::Literals;
 
 #pragma comment(lib, "windowscodecs.lib")
 
@@ -195,7 +198,7 @@ namespace Platform {
          * @return 논리 픽셀 기준 능선 Y 좌표입니다.
          */
         float FarRidge(float X) {
-            return HorizonY + 6.0f - 16.0f * std::sin(X * 0.011f + 1.3f) - 8.0f * std::sin(X * 0.029f + 0.4f) - 3.0f * std::sin(X * 0.083f + 2.2f);
+            return HorizonY + 6.0f - 16.0f * Core::Math::Sin(X * 0.011_rad + 1.3_rad) - 8.0f * Core::Math::Sin(X * 0.029_rad + 0.4_rad) - 3.0f * Core::Math::Sin(X * 0.083_rad + 2.2_rad);
         }
 
         /**
@@ -204,7 +207,7 @@ namespace Platform {
          * @return 논리 픽셀 기준 능선 Y 좌표입니다.
          */
         float NearRidge(float X) {
-            return HorizonY + 40.0f - 24.0f * std::sin(X * 0.0072f + 2.1f) - 11.0f * std::sin(X * 0.024f + 0.7f) - 5.0f * std::sin(X * 0.061f + 1.9f) - 2.0f * std::sin(X * 0.19f);
+            return HorizonY + 40.0f - 24.0f * Core::Math::Sin(X * 0.0072_rad + 2.1_rad) - 11.0f * Core::Math::Sin(X * 0.024_rad + 0.7_rad) - 5.0f * Core::Math::Sin(X * 0.061_rad + 1.9_rad) - 2.0f * Core::Math::Sin(X * 0.19_rad);
         }
 
         /**
@@ -376,7 +379,7 @@ namespace Platform {
         return true;
     }
 
-    std::array<float, 4> Platform::FSplashCanvas::SampleIcon(const FIconImage& Image, float U, float V) {
+    Core::TStaticArray<float, 4> Platform::FSplashCanvas::SampleIcon(const FIconImage& Image, float U, float V) {
         const float X{std::clamp(U * static_cast<float>(Image.Size) - 0.5f, 0.0f, static_cast<float>(Image.Size - 1))};
         const float Y{std::clamp(V * static_cast<float>(Image.Size) - 0.5f, 0.0f, static_cast<float>(Image.Size - 1))};
         const Int32 X0{static_cast<Int32>(X)};
@@ -385,7 +388,7 @@ namespace Platform {
         const Int32 Y1{std::min(Y0 + 1, Image.Size - 1)};
         const float FX{X - static_cast<float>(X0)};
         const float FY{Y - static_cast<float>(Y0)};
-        std::array<float, 4> Result{};
+        Core::TStaticArray<float, 4> Result{};
 
         for (Index_t Channel{}; Channel < 4; ++Channel) {
             const auto At{[&Image, Channel](Int32 PX, Int32 PY) {
@@ -408,7 +411,7 @@ namespace Platform {
 
         for (Int32 Y{Y0}; Y < Y1; ++Y) {
             for (Int32 X{X0}; X < X1; ++X) {
-                const std::array<float, 4> Sample{SampleIcon(Image, (static_cast<float>(X) + 0.5f - Left) / Size, (static_cast<float>(Y) + 0.5f - Top) / Size)};
+                const Core::TStaticArray<float, 4> Sample{SampleIcon(Image, (static_cast<float>(X) + 0.5f - Left) / Size, (static_cast<float>(Y) + 0.5f - Top) / Size)};
                 Uint32& Pixel{mBits[static_cast<std::size_t>(Y) * mWidth + X]};
                 const FColor Under{Unpack(Pixel)};
                 const float Inverse{1.0f - Sample[3]};

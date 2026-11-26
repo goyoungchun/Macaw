@@ -7,6 +7,7 @@
 #pragma once
 
 #include "CoreUObject/TObjectRef.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include "Engine/Component/USceneComponent.h"
 #include "UDecalComponent.generated.h"
@@ -26,6 +27,8 @@ namespace Engine {
         GENERATED_BODY()
 
     public:
+        UDecalComponent();
+
 
         /**
          * @brief 객체의 수명을 끝내고 소유한 리소스를 정리합니다.
@@ -155,37 +158,37 @@ namespace Engine {
         /**
          * @brief 데칼 색상 텍스처의 Content 기준 경로입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "Texture", Getter = GetTexturePath, Setter = SetTexturePath)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "Texture", Meta = (AssetType = "Texture"), Getter = GetTexturePath, Setter = SetTexturePath)
         Core::FString mTexturePath{};
 
         /**
          * @brief 데칼 노멀 텍스처의 Content 기준 경로입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "NormalMap", Getter = GetNormalMapPath, Setter = SetNormalMapPath)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "NormalMap", Meta = (AssetType = "Texture"), Getter = GetNormalMapPath, Setter = SetNormalMapPath)
         Core::FString mNormalMapPath{};
 
         /**
          * @brief 데칼 노멀 혼합 강도이며 허용 범위는 0~8입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetNormalStrength, Setter = SetNormalStrength)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetNormalStrength, Setter = SetNormalStrength)
         float mNormalStrength{1.0f};
 
         /**
          * @brief 로컬 투영 박스의 양의 반크기입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetExtent, Setter = SetExtent)
-        FVector mExtent{0.25f, 0.5f, 0.5f};
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetExtent, Setter = SetExtent)
+        FVector mExtent{};
 
         /**
          * @brief 데칼 불투명도이며 범위는 0~1입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetOpacity, Setter = SetOpacity)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetOpacity, Setter = SetOpacity)
         float mOpacity{1.0f};
 
         /**
          * @brief 겹치는 데칼을 정렬할 순서 값입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetSortOrder, Setter = SetSortOrder)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetSortOrder, Setter = SetSortOrder)
         Int32 mSortOrder{};
 
         /**

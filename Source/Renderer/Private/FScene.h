@@ -14,6 +14,8 @@
 #include "FScenePrimitive.h"
 #include "Engine/FLightSceneProxy.h"
 #include "Engine/FHeightFogSceneProxy.h"
+#include "Engine/FSkyAtmosphereSceneProxy.h"
+#include "Engine/FSkyDomeSceneProxy.h"
 #include "Engine/FDecalSceneProxy.h"
 
 #include <d3d11.h>
@@ -77,6 +79,15 @@ namespace Renderer {
          * @return 장면이 소유하는 안개 프록시 목록의 읽기 전용 참조입니다.
          */
         const Core::TArray<Engine::FHeightFogSceneProxy>& GetHeightFogs() const;
+
+        void AddSkyAtmosphere(const Engine::FSkyAtmosphereSceneProxy& Proxy) override;
+        void RemoveSkyAtmosphere(const Core::FGuid& Id) override;
+        const Engine::FSkyAtmosphereSceneProxy* GetSkyAtmosphere() const;
+        const Engine::FLightSceneProxy* GetAtmosphereSunLight() const;
+
+        void AddSkyDome(const Engine::FSkyDomeSceneProxy& Proxy) override;
+        void RemoveSkyDome(const Core::FGuid& Id) override;
+        const Engine::FSkyDomeSceneProxy* GetSkyDome() const;
 
         /**
          * @brief GUID가 같은 데칼 프록시를 갱신하거나 새로 등록합니다.
@@ -170,6 +181,13 @@ namespace Renderer {
         bool UploadSkinning(Renderer::FScenePrimitive& Primitive);
 
         /**
+         * @brief 천 에셋마다 입자 위치와 법선, 천 상수를 GPU에 반영합니다.
+         * @details 올리지 못한 천은 목록에서 빼서 그 섹션을 스키닝만으로 그립니다.
+         * @param Primitive 갱신할 프리미티브입니다.
+         */
+        void UploadCloth(Renderer::FScenePrimitive& Primitive);
+
+        /**
          * @brief 프록시가 그림자 깊이 패스에 그려지는 캐스터인지 검사합니다.
          * @param[in] Proxy 검사할 프리미티브 프록시입니다.
          * @return 그림자를 드리우는 메시 프리미티브이면 true입니다.
@@ -187,6 +205,9 @@ namespace Renderer {
          * @brief 컴포넌트 GUID별로 추가·갱신되는 높이 안개 프록시 목록입니다.
          */
         Core::TArray<Engine::FHeightFogSceneProxy> mHeightFogs{};
+
+        Core::TArray<Engine::FSkyAtmosphereSceneProxy> mSkyAtmospheres{};
+        Core::TArray<Engine::FSkyDomeSceneProxy> mSkyDomes{};
 
         /**
          * @brief 장면에 등록된 데칼 프록시 목록입니다.

@@ -7,7 +7,6 @@
 #pragma once
 
 #include "Core/Types.h"
-
 namespace Viewer {
 
     /**
@@ -45,7 +44,7 @@ namespace Viewer {
          * @param Seed 촬영 상태를 재현할 난수 시드입니다.
          * @param FixedStep 촬영 준비에서 사용할 양의 고정 간격(초)입니다.
          */
-        explicit FViewerCaptureState(double Time = 0.0, Uint32 Seed = 0, float FixedStep = 1.0f / 60.0f);
+        explicit FViewerCaptureState(double Time = 0.0, Uint32 Seed = 0, float FixedStep = mDefaultFixedStep);
 
     public:
 
@@ -69,6 +68,8 @@ namespace Viewer {
 
     private:
 
+        static const float mDefaultFixedStep;
+
         /**
          * @brief 촬영할 콘텐츠 시각(초)입니다.
          */
@@ -82,6 +83,6 @@ namespace Viewer {
         /**
          * @brief 촬영 준비 시 사용할 고정 시뮬레이션 간격(초)입니다.
          */
-        float mFixedStep{1.0f / 60.0f};
+        float mFixedStep{};
     };
 }

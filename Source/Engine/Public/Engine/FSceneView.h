@@ -7,8 +7,10 @@
 #pragma once
 
 #include "Core/ReflectionMacros.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FVector2.h"
 #include "Core/Math/FMatrix.h"
+#include "Engine/FDepthOfFieldSettings.h"
 
 struct FRay;
 
@@ -62,7 +64,7 @@ namespace Engine {
         /**
          * @brief 수직 시야각입니다.
          */
-        float mFieldOfView{60.0f};
+        Core::FAngle mFieldOfView{mDefaultFieldOfView};
 
         /**
          * @brief 정사영 카메라 여부입니다.
@@ -72,7 +74,24 @@ namespace Engine {
         /**
          * @brief 정사영 가로 가시 범위의 월드 길이입니다.
          */
-        float mOrthographicWidth{20.0f};
+        float mOrthographicWidth{mDefaultOrthographicWidth};
+
+        /**
+         * @brief 센서의 세로 크기입니다. 피사계 심도가 수직 시야각으로 렌즈 초점거리를 구할 때 씁니다.
+         */
+        Core::FLength mSensorHeight{Core::FLength::FromBase(Engine::Lens::DefaultSensorHeightMillimeters * 0.001f)};
+
+        /**
+         * @brief 피사계 심도에 쓸 렌즈 초점거리입니다. 0이면 시야각과 센서 높이로 계산합니다.
+         * @details 에디터 자유 시점처럼 화면 시야각이 카메라 렌즈와 다를 때 카메라의 렌즈로 흐림을 미리 보도록 지정합니다.
+         */
+        Core::FLength mLensFocalLength{};
+
+        Engine::FDepthOfFieldSettings mDepthOfFieldSettings{};
+
+    private:
+        static const Core::FAngle mDefaultFieldOfView;
+        static const float mDefaultOrthographicWidth;
     };
 
 }

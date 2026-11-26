@@ -11,13 +11,10 @@
 #include "Editor/FAssetPicker.h"
 #include "Engine/EPrimitiveType.h"
 #include "Viewer/FAssetViewer.h"
+#include "Viewer/FFlyCameraController.h"
 
 namespace Asset {
     class UMaterial;
-}
-
-namespace Platform {
-    class FWindowsApplication;
 }
 
 namespace Editor {
@@ -37,13 +34,13 @@ namespace Editor {
         /**
          * @brief FMaterialEditorToolkit의 초기 상태와 전달받은 의존성을 구성합니다.
          * @param[in] Context 편집 대상과 공유 서비스를 제공하는 에디터 컨텍스트의 비소유 주소입니다.
-         * @param[in] Platform 창·입력·파일 대화상자를 제공하는 플랫폼 애플리케이션입니다.
          * @param[in] Path 대상 에셋 또는 콘텐츠 경로입니다.
          * @param[in] Material 연결할 머티리얼의 비소유 주소입니다.
          * @param[in] Catalog 에셋 검색과 메타데이터를 제공하는 카탈로그입니다.
          * @param[in] Thumbnails 에셋 썸네일과 애니메이션 미리 보기 캐시입니다.
+         * @param[in] Messages 저장 확인을 표시하는 서비스입니다.
          */
-        FMaterialEditorToolkit(Editor::FEditorContext* Context, Platform::FWindowsApplication* Platform, const std::filesystem::path& Path, Asset::UMaterial* Material, Editor::FEditorAssetCatalog& Catalog, Editor::FAssetThumbnailCache& Thumbnails);
+        FMaterialEditorToolkit(Editor::FEditorContext* Context, const std::filesystem::path& Path, Asset::UMaterial* Material, Editor::FEditorAssetCatalog& Catalog, Editor::FAssetThumbnailCache& Thumbnails, Editor::FMessageBox& Messages);
 
         /**
          * @brief 객체를 소멸하고 소유 멤버와 연결 상태를 정리합니다.
@@ -52,10 +49,9 @@ namespace Editor {
 
     public:
         /**
-         * @brief 편집기를 닫아도 되는지 확인하며 필요한 경우 변경 내용의 처리를 요청합니다.
-         * @return 닫기를 허용하면 true입니다.
+         * @brief 저장하지 않은 머티리얼을 확인할 항목을 반환합니다.
          */
-        bool CanClose() override;
+        std::optional<Editor::FMessageBox::FSavePrompt> GetClosePrompt() override;
 
     private:
         /**
@@ -68,7 +64,10 @@ namespace Editor {
          * @brief 저장하지 않은 머티리얼 변경의 저장·폐기·취소를 확인합니다.
          * @return 변경 처리를 마쳐 계속할 수 있으면 true입니다.
          */
-        bool ConfirmMaterialChange();
+        bool RequestTabClose();
+
+        bool ReloadMaterial();
+        void RequestReload();
 
         /**
          * @brief 선택한 텍스처 경로를 머티리얼에 적용합니다.
@@ -112,9 +111,9 @@ namespace Editor {
         Editor::FEditorContext* mContext{};
 
         /**
-         * @brief Win32 창·입력·파일 선택을 제공하는 플랫폼 애플리케이션입니다.
+         * @brief 저장 확인을 표시하는 서비스입니다.
          */
-        Platform::FWindowsApplication* mPlatform{};
+        Editor::FMessageBox& mMessages;
 
         /**
          * @brief 현재 편집 중인 머티리얼의 비소유 주소입니다.
@@ -147,6 +146,11 @@ namespace Editor {
         Editor::FAssetPicker mAssetPicker{};
 
         Viewer::FAssetViewer mViewer;
+
+        /**
+         * @brief 오른쪽 버튼을 누른 동안 시선 회전과 WASD/QE 이동을 처리하는 비행 카메라 컨트롤러입니다.
+         */
+        Viewer::FFlyCameraController mFlyCamera{};
         Engine::EPrimitiveType mPreviewPrimitive{Engine::EPrimitiveType::Sphere};
         Core::FString mViewportError{};
         bool mNeedsFrame{true};

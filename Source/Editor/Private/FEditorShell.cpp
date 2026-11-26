@@ -30,6 +30,7 @@
 #include "Platform/Window.h"
 #include "Platform/WindowResources.h"
 #include "RenderCore/IRendererModule.h"
+#include "Core/Types.h"
 #include <d3d11.h>
 #include <imgui_internal.h>
 #include <algorithm>
@@ -80,7 +81,9 @@ FEditorShell::FEditorShell(FEditorContext* Context, FEditorViewport* Viewport, F
 	  mStopButton{"Stop", {}, [this]() {
           mPlaySession->Stop();
       }},
-	  mSimulateButton{"Simulate", {}},
+	  mSimulateButton{"Simulate", {}, [this]() {
+          mPlaySession->Start(nullptr, FPlayInEditorSession::EMode::Simulate);
+      }},
 	  mPlayOptionsButton{"PlayOptions", {}, []() {
           ImGui::OpenPopup("PlayOptionsMenu");
       }} {
@@ -102,8 +105,7 @@ FEditorShell::FEditorShell(FEditorContext* Context, FEditorViewport* Viewport, F
     mPauseButton.SetToolTip("일시 정지");
     mStepButton.SetToolTip("한 프레임 진행");
     mStopButton.SetToolTip("중지 (Esc)");
-    mSimulateButton.SetToolTip("시뮬레이션 (준비 중)");
-    mSimulateButton.SetEnabled(false);
+    mSimulateButton.SetToolTip("시뮬레이션 실행");
     mPlayOptionsButton.SetToolTip("PIE 실행 옵션");
 }
 
@@ -159,9 +161,7 @@ void FEditorShell::DrawMenu() {
             ImGui::BeginDisabled(!mContext->CanEditWorld());
 
             if (ImGui::MenuItem("New Level", "Ctrl+N")) {
-                if (mCommands.ConfirmSceneChange()) {
-                    mContext->NewScene();
-                }
+                mCommands.NewLevel();
             }
 
             if (ImGui::MenuItem("Open Level...", "Ctrl+O")) {
@@ -205,7 +205,7 @@ void FEditorShell::DrawMenu() {
             ImGui::EndDisabled();
             ImGui::Separator();
 
-            if (ImGui::MenuItem("Exit") && mCommands.ConfirmSceneChange()) {
+            if (ImGui::MenuItem("Exit")) {
                 mCommands.RequestExit();
             }
 
@@ -304,8 +304,8 @@ void FEditorShell::DrawMenu() {
 
     const Core::FInput& Input{mPlatform->GetInput()};
 
-    if (Input.IsDown(EKey::Control)) {
-        if (Input.WasPressed(EKey::Space) && !mAssetEditors.IsSourceEditorFocused() && ImGui::GetTopMostPopupModal() == nullptr) {
+    if (Input.IsDown(EKey::Control) && ImGui::GetTopMostPopupModal() == nullptr) {
+        if (Input.WasPressed(EKey::Space) && !mAssetEditors.IsSourceEditorFocused()) {
             mDrawers.ToggleDrawer("Content");
         } else if (Input.WasPressed(EKey::Comma) && !ImGui::GetIO().WantTextInput) {
             mSettings.OpenSettings(0);
@@ -320,7 +320,7 @@ void FEditorShell::DrawMenu() {
         }
     }
 
-    if (Input.IsDown(EKey::Control) && !ImGui::GetIO().WantTextInput && mContext->CanEditWorld()) {
+    if (Input.IsDown(EKey::Control) && !ImGui::GetIO().WantTextInput && ImGui::GetTopMostPopupModal() == nullptr && mContext->CanEditWorld()) {
         const bool AssetEditorFocused{mAssetEditors.IsFocused()};
         const ImGuiWindow* Focused{ImGui::GetCurrentContext()->NavWindow};
         const ImGuiWindow* Root{Focused != nullptr ? Focused->RootWindow : nullptr};
@@ -339,9 +339,7 @@ void FEditorShell::DrawMenu() {
         } else if (Input.WasPressed(EKey::O)) {
             mCommands.OpenLevel();
         } else if (Input.WasPressed(EKey::N)) {
-            if (mCommands.ConfirmSceneChange()) {
-                mContext->NewScene();
-            }
+            mCommands.NewLevel();
         }
     }
 }
@@ -460,9 +458,12 @@ void FEditorShell::DrawEditorToolbar() {
         DrawPlayControls();
 
         if (mPlaySession->IsActive()) {
+            const bool Paused{mPlaySession->IsPaused()};
+            const char* Status{mPlaySession->IsSimulating() ? (Paused ? "Simulation Paused" : "Simulating") : (Paused ? "Paused" : "Playing")};
+
             ImGui::SameLine(0.0f, 12.0f * Scale);
             ImGui::AlignTextToFramePadding();
-            ImGui::TextDisabled("%s", mPlaySession->IsPaused() ? "Paused" : "Playing");
+            ImGui::TextDisabled("%s", Status);
         }
 
 
@@ -589,7 +590,9 @@ void FEditorShell::DrawPlayControls() {
     const float Scale{mUIScale.GetScale()};
     const bool Active{mPlaySession->IsActive()};
     const bool Paused{mPlaySession->IsPaused()};
-    const bool CanStart{!Active && mViewportLayout.CanChangeLayout() && mPlaySession->CanStart()};
+    const bool CanStartSession{!Active && mViewportLayout.CanChangeLayout()};
+    const bool CanStart{CanStartSession && mPlaySession->CanStart()};
+    const bool Simulating{mPlaySession->IsSimulating()};
     const float Height{ImGui::GetFrameHeight()};
     const float Padding{2.0f * Scale};
     const ImVec2 Origin{ImGui::GetCursorScreenPos()};
@@ -608,7 +611,7 @@ void FEditorShell::DrawPlayControls() {
     if (Active && !Paused) {
         mPauseButton.Draw(0.0f);
     } else {
-        const char* PlayTooltip{Paused ? "PIE 재개" : CanStart ? "PIE 실행 (Alt+P)" : "PIE를 실행하려면 활성 월드 카메라가 있고 에디터가 다른 작업 중이 아니어야 합니다"};
+        const char* PlayTooltip{Paused ? (Simulating ? "시뮬레이션 재개" : "PIE 재개") : CanStart ? "PIE 실행 (Alt+P)" : "PIE를 실행하려면 활성 월드 카메라가 있고 에디터가 다른 작업 중이 아니어야 합니다"};
 
         mPlayButton.SetEnabled(Paused || CanStart);
         mPlayButton.SetToolTip(PlayTooltip);
@@ -626,6 +629,8 @@ void FEditorShell::DrawPlayControls() {
     mStopButton.Draw(0.0f);
 
     ImGui::SameLine(0.0f, 0.0f);
+    mSimulateButton.SetEnabled(CanStartSession && mPlaySession->CanStart(FPlayInEditorSession::EMode::Simulate));
+    mSimulateButton.SetSelected(Simulating);
     mSimulateButton.Draw(0.0f);
 
     ImGui::SameLine(0.0f, 0.0f);
@@ -680,7 +685,7 @@ void FEditorShell::DrawPlayOptions() {
     ImGui::SeparatorText("New Window Size");
     ImGui::BeginDisabled(!Options.mNewWindow);
 
-    std::array<int, 2> Size{static_cast<int>(Options.mWindowWidth), static_cast<int>(Options.mWindowHeight)};
+    Core::TStaticArray<int, 2> Size{static_cast<int>(Options.mWindowWidth), static_cast<int>(Options.mWindowHeight)};
 
     ImGui::SetNextItemWidth(240.0f * mUIScale.GetScale());
 
@@ -691,7 +696,7 @@ void FEditorShell::DrawPlayOptions() {
     }
 
     if (ImGui::BeginMenu("Resolution Presets")) {
-        for (const std::array<Uint32, 2>& Preset : {std::array<Uint32, 2>{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440}}) {
+        for (const Core::TStaticArray<Uint32, 2>& Preset : {Core::TStaticArray<Uint32, 2>{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440}}) {
             const Core::FString Label{std::format("{} x {}", Preset[0], Preset[1])};
 
             if (ImGui::MenuItem(Label.c_str(), nullptr, Options.mWindowWidth == Preset[0] && Options.mWindowHeight == Preset[1])) {

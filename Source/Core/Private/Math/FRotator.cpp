@@ -5,18 +5,41 @@
  */
 
 #include "Core/Math/FRotator.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FQuat.h"
 #include "Core/Math/FVector.h"
 #include "Math/SimdMath.h"
+#include "Core/Types.h"
 
 #include <cmath>
-#include <numbers>
+
+using namespace Core::Literals;
+
+namespace Core::Math {
+
+    Core::FAngle GetPitch(const FRotator& Rotation) {
+        return Rotation.pitch * 1_deg;
+    }
+
+    Core::FAngle GetYaw(const FRotator& Rotation) {
+        return Rotation.yaw * 1_deg;
+    }
+
+    Core::FAngle GetRoll(const FRotator& Rotation) {
+        return Rotation.roll * 1_deg;
+    }
+
+}
 
 /**
  * @brief FRotator의 초기 상태와 전달받은 의존성을 구성합니다.
  */
 FRotator::FRotator(float Pitch, float Yaw, float Roll)
 	: mValue{_mm_set_ps(0.0f, Roll, Yaw, Pitch)} {
+}
+
+FRotator::FRotator(Core::FAngle Pitch, Core::FAngle Yaw, Core::FAngle Roll)
+	: FRotator{Core::Math::ToDegrees(Pitch), Core::Math::ToDegrees(Yaw), Core::Math::ToDegrees(Roll)} {
 }
 
 /**
@@ -115,7 +138,7 @@ bool FRotator::operator==(const FRotator& Other) const {
  * @brief 도 단위 오일러 각을 쿼터니언 회전으로 변환합니다.
  */
 FQuat FRotator::Quaternion() const {
-    constexpr float HalfRadiansPerDegree{std::numbers::pi_v<float> / 360.0f};
+    constexpr float HalfRadiansPerDegree{(0.5_deg).GetBase()};
     const float HalfYaw{yaw * HalfRadiansPerDegree};
     const float HalfPitch{pitch * HalfRadiansPerDegree};
     const float HalfRoll{roll * HalfRadiansPerDegree};
@@ -173,7 +196,13 @@ FRotator FRotator::Inverse() const {
  * @brief 각 오일러 각도를 360도 나머지 범위로 정규화한 복사본을 반환합니다.
  */
 FRotator FRotator::Normalized() const {
-    return {std::remainder(pitch, 360.0f), std::remainder(yaw, 360.0f), std::remainder(roll, 360.0f)};
+    constexpr float FullTurn{1_turn / 1_deg};
+    FRotator Result{};
+    Result.pitch = std::remainder(pitch, FullTurn);
+    Result.yaw = std::remainder(yaw, FullTurn);
+    Result.roll = std::remainder(roll, FullTurn);
+
+    return Result;
 }
 
 /**
@@ -228,6 +257,6 @@ FRotator operator*(float Value, const FRotator& Rotation) {
 /**
  * @brief 유효한 성분을 원래 순서의 일반 배열로 반환합니다.
  */
-std::array<float, 3> FRotator::ToArray() const {
+Core::TStaticArray<float, 3> FRotator::ToArray() const {
     return {pitch, yaw, roll};
 }

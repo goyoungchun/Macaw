@@ -5,6 +5,7 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Editor/Widget/FAnimGraphWidget.h"
 #include "Editor/FEditorContext.h"
 #include "Engine/AActor.h"
@@ -29,6 +30,8 @@
 #include <cstdint>
 #include <format>
 #include <functional>
+
+using namespace Core::Literals;
 
 namespace ed = ax::NodeEditor;
 
@@ -846,7 +849,7 @@ namespace Editor {
         // 링크는 입력 노드의 출력 핀에서 받는 노드의 입력 핀으로 이어지며, 이번 갱신에서 입력 노드가 기여한 가중치만큼 굵고 밝게 그립니다.
         // 활성 링크에는 흐름 표시를 띄워 포즈가 어느 쪽으로 흐르는지 보여 줍니다.
         // 흐름 표시는 한 번 띄우면 잠시 이어지므로 1.5초마다 다시 띄웁니다.
-        const bool Pulse{Playing && std::fmod(ImGui::GetTime(), 1.5) < static_cast<double>(ImGui::GetIO().DeltaTime)};
+        const bool Pulse{Playing && std::fmod(ImGui::GetTime(), static_cast<double>((1.5_s).GetBase())) < static_cast<double>(ImGui::GetIO().DeltaTime)};
         const auto DrawLink{[Pulse, &LinkColor](Uint64 Id, Uint64 From, Uint64 To, float Weight) {
             const ed::LinkId Link{static_cast<std::uintptr_t>(Id)};
 

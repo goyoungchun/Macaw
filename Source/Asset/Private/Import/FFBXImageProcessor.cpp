@@ -10,7 +10,6 @@
 
 #include <DirectXTex.h>
 #include <algorithm>
-#include <array>
 #include <d3d11.h>
 #include <fstream>
 #include <limits>
@@ -48,7 +47,7 @@ namespace Asset {
         // Import가 끝나면 텍스처와 FbxVideo의 연결, FbxVideo 속성, 내장 바이트를 모두 알 수 있으므로 파일 텍스처마다 한 번씩 판별합니다.
         // 판별 실패는 바로 임포트를 실패시키지 않고 mTextureErrors에 기록해 두며, 재질 속성에서 그 텍스처를 실제로 읽을 때 ReadTexture가 보고합니다.
         // 그래서 어느 재질에서도 쓰지 않는 깨진 텍스처는 임포트를 막지 않습니다.
-        for (Index_t Index{}; Index < Scene.GetSrcObjectCount<FbxFileTexture>(); ++Index) {
+        for (Int32 Index{}; Index < Scene.GetSrcObjectCount<FbxFileTexture>(); ++Index) {
             auto* Texture{Scene.GetSrcObject<FbxFileTexture>(Index)};
             Asset::FMeshImportTexture Resolved{};
             Core::FString Error{};
@@ -209,8 +208,8 @@ namespace Asset {
         }};
 
         // PNG 시그니처가 아니면 APNG일 수 없습니다.
-        constexpr std::array<Uint8, 8> Signature{137, 80, 78, 71, 13, 10, 26, 10};
-        std::array<Uint8, 8> Header{};
+        constexpr Core::TStaticArray<Uint8, 8> Signature{137, 80, 78, 71, 13, 10, 26, 10};
+        Core::TStaticArray<Uint8, 8> Header{};
 
         if (!Read(0, Header) || Header != Signature) {
             return false;
@@ -416,7 +415,7 @@ namespace Asset {
 
         // 내장되지 않았으면 원본 FBX 폴더 기준으로 상대 경로, 기록된 경로, 파일 이름만 순서대로 찾습니다.
         // 기록된 경로가 다른 PC의 절대 경로일 수 있으므로 마지막에는 파일 이름만으로 찾아봅니다.
-        const std::array<std::filesystem::path, 3> Candidates{SourceDirectory / Core::FilePath::FromUtf8(RelativeName), SourceDirectory / Core::FilePath::FromUtf8(FileName), SourceDirectory / Core::FilePath::FromUtf8(FileName).filename()};
+        const Core::TStaticArray<std::filesystem::path, 3> Candidates{SourceDirectory / Core::FilePath::FromUtf8(RelativeName), SourceDirectory / Core::FilePath::FromUtf8(FileName), SourceDirectory / Core::FilePath::FromUtf8(FileName).filename()};
 
         for (const auto& Candidate : Candidates) {
             std::error_code Code{};
@@ -460,7 +459,7 @@ namespace Asset {
      */
     bool Asset::FFBXImageProcessor::IsImageSequence(const FbxFileTexture& Texture) const {
         // 시퀀스 여부는 이미지 바이트가 아니라 텍스처에 연결된 FbxVideo의 속성입니다.
-        for (Index_t Index{}; Index < Texture.GetSrcObjectCount<FbxVideo>(); ++Index) {
+        for (Int32 Index{}; Index < Texture.GetSrcObjectCount<FbxVideo>(); ++Index) {
             if (Texture.GetSrcObject<FbxVideo>(Index)->GetImageSequence()) {
                 return true;
             }

@@ -16,4 +16,5 @@ MacawContentSequenceIconResource RCDATA "Resources/UE5ContentIcons/AssetIcons/Le
 MacawContentAnimationSequenceIconResource RCDATA "Resources/UE5ContentIcons/AssetIcons/AnimSequence_64x.png"
 MacawContentSceneIconResource RCDATA "Resources/UE5ContentIcons/AssetIcons/World_64x.png"
 MacawContentLuaIconResource RCDATA "Resources/UE5ContentIcons/AssetIcons/SourceCodeEditor_64x.png"
+MacawContentParticleSystemIconResource RCDATA "Resources/UE5ContentIcons/AssetIcons/ParticleSystem_64x.png"
 MacawContentIconNoticeResource RCDATA "Resources/UE5ContentIcons/Sources.txt"

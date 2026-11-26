@@ -12,13 +12,14 @@ namespace Renderer {
     /**
      * @brief 전달된 설정과 기본값으로 FMeshDrawCommand 객체를 생성합니다.
      */
-    Renderer::FMeshDrawCommand::FMeshDrawCommand(Renderer::FMaterialPipeline* Pipeline, Asset::UMaterial* Material, Asset::UStaticMesh* Mesh, const Renderer::FScenePrimitive* Primitive, Index_t FirstIndex, Uint32 IndexCount)
+    Renderer::FMeshDrawCommand::FMeshDrawCommand(Renderer::FMaterialPipeline* Pipeline, Asset::UMaterial* Material, Asset::UStaticMesh* Mesh, const Renderer::FScenePrimitive* Primitive, Index_t FirstIndex, Uint32 IndexCount, Index_t ClothAssetIndex)
 		: mPipeline{Pipeline},
 		  mMaterial{Material},
 		  mMesh{Mesh},
 		  mPrimitive{Primitive},
 		  mFirstIndex{FirstIndex},
-		  mIndexCount{IndexCount} {
+		  mIndexCount{IndexCount},
+		  mClothAssetIndex{ClothAssetIndex} {
     }
 
 }

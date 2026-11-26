@@ -9,6 +9,7 @@
 #include "Core/Types.h"
 #include "Core/ReflectionMacros.h"
 #include "Core/Math/FMatrix.h"
+#include "Core/Math/FVector4.h"
 #include "RenderCore/TConstantBuffer.h"
 
 #include <d3d11.h>
@@ -18,16 +19,33 @@
 
 namespace Engine {
     struct FSceneView;
+    struct FSkyAtmosphereSceneProxy;
+    struct FLightSceneProxy;
 }
 
 namespace Renderer {
 
     struct FPassTarget;
+    class FScene;
 
     /**
      * @brief 등장방형 파노라마를 전체 화면 삼각형으로 그리는 기본 하늘 패스의 자원입니다.
      */
     class FSkyResources {
+    private:
+        struct FSkyConstants {
+            FMatrix mInverseViewRotationProjection{};
+            FVector4 mPanoramaParameters{};
+        };
+
+        struct FSkyAtmosphereConstants {
+            FVector4 mCameraPositionAndGroundRadius{};
+            FVector4 mSunDirectionAndAtmosphereHeight{};
+            FVector4 mSunColorAndMieAnisotropy{};
+            FVector4 mDensityScaleHeightsAndScatteringScales{};
+            FVector4 mOzoneAbsorptionScaleAndSunDisk{};
+        };
+
     public:
         /**
          * @brief 기본 설정으로 FSkyResources 객체를 초기화합니다.
@@ -43,12 +61,12 @@ namespace Renderer {
         /**
          * @brief 상수 버퍼·샘플러·깊이·래스터라이저 상태를 생성하고 파노라마를 불러옵니다.
          * @param[in] Device GPU 자원을 생성할 Direct3D 11 장치입니다.
-         * @param[in] PanoramaPath BC7 DDS 형식의 등장방형 파노라마 경로입니다.
-         * @param[in] PreviewPath 에셋 뷰어 미리 보기에 사용할 BC7 DDS 형식의 등장방형 파노라마 경로입니다.
+         * @param[in] PreviewFallbackPath 프리뷰 파노라마를 불러오지 못했을 때 사용할 텍스처 경로입니다.
+         * @param[in] PreviewPath 에셋 뷰어에 사용할 프리뷰 텍스처 에셋 또는 DDS 경로입니다.
          * @return 고정 GPU 상태를 생성하면 true입니다.
-         * @note 파노라마를 읽지 못하면 경고만 보고하고 true를 반환하며 Render는 아무것도 그리지 않습니다.
+         * @note 프리뷰 파노라마를 읽지 못하면 경고를 보고하고 나머지 하늘 렌더링을 초기화합니다.
          */
-        bool Initialize(ID3D11Device* Device, const std::filesystem::path& PanoramaPath, const std::filesystem::path& PreviewPath);
+        bool Initialize(ID3D11Device* Device, const std::filesystem::path& PreviewFallbackPath, const std::filesystem::path& PreviewPath);
 
         /**
          * @brief 정점·픽셀 바이트 코드로 하늘 셰이더를 생성하고 둘 다 성공한 경우에만 교체합니다.
@@ -58,6 +76,7 @@ namespace Renderer {
          * @return 두 셰이더를 생성하면 true이며 실패하면 기존 셰이더를 유지하고 false입니다.
          */
         bool CreateShaders(ID3D11Device* Device, std::span<const Uint8> VertexCode, std::span<const Uint8> PixelCode);
+        bool CreateAtmosphereShader(ID3D11Device* Device, std::span<const Uint8> PixelCode);
 
         /**
          * @brief 불투명 패스의 깊이가 비어 있는 픽셀에만 하늘을 그립니다.
@@ -67,17 +86,18 @@ namespace Renderer {
          * @param[in] Preview true이면 미리 보기 파노라마를 사용하며 불러오지 못했으면 기본 파노라마로 대체합니다.
          * @return 제출한 드로 수이며 파노라마가 없거나 역행렬을 구하지 못하면 0입니다.
          */
-        Uint32 Render(ID3D11DeviceContext* Context, const Renderer::FPassTarget& Target, const Engine::FSceneView& View, bool Preview);
+        Uint32 Render(ID3D11Device* Device, ID3D11DeviceContext* Context, const Renderer::FPassTarget& Target, const Engine::FSceneView& View, const Renderer::FScene& Scene, bool Preview);
 
     private:
         /**
-         * @brief BC7 DDS를 CPU 변환 없이 밉 체인 그대로 GPU 텍스처로 생성합니다.
+         * @brief 하늘 텍스처를 표시 공간의 값으로 샘플링하도록 GPU 자원을 생성합니다.
          * @param[in] Device GPU 자원을 생성할 Direct3D 11 장치입니다.
-         * @param[in] Path 읽을 DDS 파일 경로입니다.
+         * @param[in] Path 읽을 텍스처 에셋 또는 DDS 경로입니다.
          * @param[out] Panorama 생성한 셰이더 리소스 뷰를 기록할 대상입니다.
          * @return 셰이더 리소스 뷰를 생성하면 true입니다.
          */
         bool LoadPanorama(ID3D11Device* Device, const std::filesystem::path& Path, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>& Panorama);
+        void BindAtmosphere(ID3D11DeviceContext* Context, const Engine::FSceneView& View, const Engine::FSkyAtmosphereSceneProxy& Atmosphere, const Engine::FLightSceneProxy* Sun);
 
     private:
         /**
@@ -93,7 +113,10 @@ namespace Renderer {
         /**
          * @brief 이동을 제거한 역뷰투영 행렬을 픽셀 셰이더 b0에 전달하는 상수 버퍼입니다.
          */
-        RenderCore::TConstantBuffer<FMatrix> mConstants{};
+        RenderCore::TConstantBuffer<FSkyConstants> mConstants{};
+
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> mAtmospherePixelShader{};
+        RenderCore::TConstantBuffer<FSkyAtmosphereConstants> mAtmosphereConstants{};
 
         /**
          * @brief 가로 반복·세로 고정 주소 모드의 선형 샘플러입니다.
@@ -109,11 +132,6 @@ namespace Renderer {
          * @brief 전체 화면 삼각형을 면 제거 없이 채우는 래스터라이저 상태입니다.
          */
         Microsoft::WRL::ComPtr<ID3D11RasterizerState> mRasterizer{};
-
-        /**
-         * @brief 등장방형 파노라마의 셰이더 리소스 뷰이며 불러오지 못하면 비어 있습니다.
-         */
-        Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mPanorama{};
 
         /**
          * @brief 에셋 뷰어 미리 보기용 등장방형 파노라마의 셰이더 리소스 뷰이며 불러오지 못하면 비어 있습니다.

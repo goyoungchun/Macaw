@@ -37,6 +37,18 @@ namespace Engine {
     void Engine::FSceneInterface::RemoveHeightFog(const Core::FGuid&) {
     }
 
+    void Engine::FSceneInterface::AddSkyAtmosphere(const Engine::FSkyAtmosphereSceneProxy&) {
+    }
+
+    void Engine::FSceneInterface::RemoveSkyAtmosphere(const Core::FGuid&) {
+    }
+
+    void Engine::FSceneInterface::AddSkyDome(const Engine::FSkyDomeSceneProxy&) {
+    }
+
+    void Engine::FSceneInterface::RemoveSkyDome(const Core::FGuid&) {
+    }
+
     void Engine::FSceneInterface::AddDecal(const Engine::FDecalSceneProxy&) {
     }
 

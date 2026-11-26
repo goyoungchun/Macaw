@@ -7,15 +7,17 @@
 #pragma once
 
 #include "Core/Math/FQuat.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FVector.h"
 #include "Core/Math/FVector2.h"
+#include "Engine/FDepthOfFieldSettings.h"
 
 namespace Engine {
 
     struct FSceneView;
 
     /**
-     * @brief 한 프레임의 카메라 위치·회전·시야각입니다.
+     * @brief 한 프레임의 카메라 위치·회전·시야각과 피사계 심도 설정입니다.
      * @ingroup Engine
      */
     struct FMinimalViewInfo {
@@ -24,7 +26,7 @@ namespace Engine {
          * @brief 두 시점 사이를 보간합니다.
          * @param[in] Other Alpha가 1일 때의 시점입니다.
          * @param[in] Alpha 0에서 1 사이의 보간 비율입니다.
-         * @return 위치·시야각은 선형, 회전은 구면 선형 보간한 시점입니다.
+         * @return 위치·시야각은 선형, 회전은 구면 선형 보간한 시점입니다. 피사계 심도는 보간 비율이 0.5 이상일 때 대상 설정을 사용합니다.
          */
         Engine::FMinimalViewInfo Blend(const Engine::FMinimalViewInfo& Other, float Alpha) const;
 
@@ -50,7 +52,17 @@ namespace Engine {
         /**
          * @brief 수직 시야각이며 도 단위입니다.
          */
-        float mFieldOfView{60.0f};
+        Core::FAngle mFieldOfView{mDefaultFieldOfView};
+
+        /**
+         * @brief 센서의 세로 크기입니다. 시야각과 함께 렌즈 초점거리를 정합니다.
+         */
+        Core::FLength mSensorHeight{Core::FLength::FromBase(Engine::Lens::DefaultSensorHeightMillimeters * 0.001f)};
+
+        Engine::FDepthOfFieldSettings mDepthOfFieldSettings{};
+
+    private:
+        static const Core::FAngle mDefaultFieldOfView;
     };
 
 }

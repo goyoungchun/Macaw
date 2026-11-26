@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Core/ReflectionMacros.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FQuat.h"
 #include "Core/Math/FVector.h"
 #include "Engine/AActor.h"
@@ -68,7 +69,7 @@ namespace Engine {
          * @param[in] Function 블렌드 곡선입니다.
          * @return 블렌드를 시작했거나 바로 바꿨으면 true입니다.
          */
-        bool SetViewTargetWithBlend(Engine::AActor* Target, float BlendTime, Engine::EViewTargetBlendFunction Function);
+        bool SetViewTargetWithBlend(Engine::AActor* Target, Core::FTime BlendTime, Engine::EViewTargetBlendFunction Function);
 
         /**
          * @brief 뷰 타깃 블렌드가 진행 중인지 검사합니다.
@@ -92,13 +93,13 @@ namespace Engine {
          * @brief 마지막으로 계산한 수직 시야각을 반환합니다.
          * @return 도 단위 시야각입니다.
          */
-        float GetFieldOfView() const;
+        Core::FAngle GetFieldOfView() const;
 
         /**
          * @brief 뷰 타깃에서 시점을 다시 계산해 캐시합니다.
          * @param[in] DeltaTime 블렌드를 진행할 초 단위 시간입니다.
          */
-        void UpdateCamera(float DeltaTime);
+        void UpdateCamera(Core::FTime DeltaTime);
 
         /**
          * @brief 마지막 갱신에서 유효한 시점을 계산했는지 검사합니다.
@@ -159,14 +160,14 @@ namespace Engine {
          * @param[in] DeltaTime 이번 갱신의 초 단위 시간입니다.
          * @param[in] HasBaseView mBaseView를 계산했으면 true입니다.
          */
-        void FinishUpdate(float DeltaTime, bool HasBaseView);
+        void FinishUpdate(Core::FTime DeltaTime, bool HasBaseView);
 
         /**
          * @brief 켜진 모디파이어를 Priority 순서로 시점에 적용합니다.
          * @param[in] DeltaTime 이번 갱신의 초 단위 시간입니다.
          * @param[in,out] ViewInfo 고칠 시점입니다.
          */
-        void ApplyCameraModifiers(float DeltaTime, Engine::FMinimalViewInfo& ViewInfo);
+        void ApplyCameraModifiers(Core::FTime DeltaTime, Engine::FMinimalViewInfo& ViewInfo);
 
         /**
          * @brief 핸들을 이 월드에 살아 있는 액터로 해석합니다.
@@ -207,12 +208,12 @@ namespace Engine {
         /**
          * @brief 블렌드 전체 시간이며 초 단위입니다.
          */
-        float mBlendTime{};
+        Core::FTime mBlendTime{};
 
         /**
          * @brief 블렌드를 시작한 뒤 지난 시간이며 초 단위입니다.
          */
-        float mBlendElapsed{};
+        Core::FTime mBlendElapsed{};
 
         /**
          * @brief 블렌드 곡선입니다.
@@ -242,8 +243,8 @@ namespace Engine {
         /**
          * @brief 뷰 타깃에 카메라가 없을 때 쓰는 수직 시야각이며 도 단위입니다.
          */
-        UPROPERTY(Edit)
-        float mDefaultFieldOfView{60.0f};
+        UPROPERTY(Edit, Category = "Settings")
+        Core::FAngle mDefaultFieldOfView{};
 
         /**
          * @brief 적용 순서대로 정렬하는 모디파이어 목록입니다.

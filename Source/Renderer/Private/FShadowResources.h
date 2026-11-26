@@ -190,7 +190,7 @@ namespace Renderer {
          * @brief 원본 광원별 그림자 맵 구간을 반환합니다.
          * @return 각 원소가 1 기반 시작 인덱스와 개수인 배열의 참조이며 시작값 0은 그림자 없음입니다.
          */
-        const Core::TArray<std::array<Uint32, 2>>& GetLightRanges() const;
+        const Core::TArray<Core::TStaticArray<Uint32, 2>>& GetLightRanges() const;
 
         /**
          * @brief 현재 그림자 아틀라스의 미리보기와 타일 정보를 반환합니다.
@@ -318,7 +318,7 @@ namespace Renderer {
         /**
          * @brief 원본 광원마다 그림자 맵의 1 기반 시작 인덱스와 개수를 저장합니다.
          */
-        Core::TArray<std::array<Uint32, 2>> mLightRanges{};
+        Core::TArray<Core::TStaticArray<Uint32, 2>> mLightRanges{};
 
         /**
          * @brief 미리보기 전체 화면 삼각형의 정점 셰이더입니다.
@@ -338,7 +338,7 @@ namespace Renderer {
         /**
          * @brief 그림자 캐스케이드 선택에 필요한 카메라와 필터 옵션의 상수 버퍼입니다.
          */
-        RenderCore::TConstantBuffer<std::array<FVector4, 3>> mViewBuffer{};
+        RenderCore::TConstantBuffer<Core::TStaticArray<FVector4, 3>> mViewBuffer{};
 
         /**
          * @brief 현재 뷰에 적용 중인 그림자 렌더링 옵션입니다.

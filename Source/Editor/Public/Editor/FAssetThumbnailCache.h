@@ -19,6 +19,7 @@ namespace Asset {
 }
 
 namespace Editor {
+    class FEditorAssetCatalog;
 
     /**
      * @brief 공통 에셋 뷰어에서 촬영한 이미지를 캐시하고 변경된 에셋의 생성을 예약합니다.
@@ -64,11 +65,6 @@ namespace Editor {
             std::size_t mSignature{};
 
             /**
-             * @brief 대기 중인 촬영 요청의 에셋 변경 서명입니다.
-             */
-            std::size_t mPendingSignature{};
-
-            /**
              * @brief 재시도를 보류할 실패 시점의 에셋 변경 서명입니다.
              */
             std::size_t mFailedSignature{};
@@ -77,6 +73,10 @@ namespace Editor {
              * @brief 마지막으로 이미지를 요청한 프레임 번호입니다.
              */
             Uint64 mLastUsed{};
+
+            Uint64 mLastChecked{};
+            std::filesystem::file_time_type mFileTime{};
+            bool mEmbedded{};
 
             /**
              * @brief 현재 이미지의 변경 서명이 유효한지 여부입니다.
@@ -95,21 +95,19 @@ namespace Editor {
         };
 
         /**
-         * @brief 촬영할 에셋의 비소유 포인터, 경로와 요청 시점 변경 서명입니다.
+         * @brief 촬영할 에셋의 캐시 키, 경로와 종류입니다.
          * @ingroup Editor
          */
         struct FPendingThumbnail {
         public:
 
             /**
-             * @brief 촬영 대상의 비소유 포인터와 요청 시점 경로·서명을 보관합니다.
+             * @brief 촬영할 에셋의 경로와 종류를 보관합니다.
              * @param Key 조회하거나 저장할 캐시 키입니다.
              * @param Path 처리할 에셋 또는 파일 경로입니다.
-             * @param Object 외부에서 수명을 보장하는 에셋 객체입니다.
              * @param Type 처리할 에셋 또는 노드 종류입니다.
-             * @param Signature 요청 시점 에셋의 변경 비교 서명입니다.
              */
-            FPendingThumbnail(const Core::FString& Key, const std::filesystem::path& Path, CoreUObject::UObject* Object, Asset::EAssetType Type, std::size_t Signature);
+            FPendingThumbnail(const Core::FString& Key, const std::filesystem::path& Path, Asset::EAssetType Type);
 
         private:
 
@@ -131,29 +129,20 @@ namespace Editor {
             std::filesystem::path mPath{};
 
             /**
-             * @brief 외부에서 소유하는 촬영 대상 UObject입니다.
-             */
-            CoreUObject::TObjectRef<CoreUObject::UObject> mObject{};
-
-            /**
              * @brief 촬영할 객체의 에셋 종류입니다.
              */
             Asset::EAssetType mType{};
 
-            /**
-             * @brief 현재 이미지에 반영된 에셋 변경 서명입니다.
-             */
-            std::size_t mSignature{};
         };
 
     public:
 
         /**
          * @brief 에셋·렌더러 서비스와 촬영 뷰어를 연결하고 저장된 미리보기 설정을 읽습니다.
-         * @param Assets 외부에서 소유하는 에셋 관리자입니다.
+         * @param Catalog 외부에서 소유하는 에셋 카탈로그입니다.
          * @param Renderer 외부에서 소유하는 렌더러 서비스입니다.
          */
-        FAssetThumbnailCache(Asset::FAssetManager* Assets, RenderCore::IRendererModule* Renderer);
+        FAssetThumbnailCache(Editor::FEditorAssetCatalog& Catalog, RenderCore::IRendererModule* Renderer);
 
         /**
          * @brief 객체의 수명을 끝내고 소유한 리소스를 정리합니다.
@@ -162,10 +151,13 @@ namespace Editor {
 
     public:
 
+        static bool Supports(Asset::EAssetType Type);
+
         /**
          * @brief 이전 프레임의 임시 캡처를 정리하고 대기 중인 썸네일 요청을 처리합니다.
          */
         void BeginFrame();
+        void FlushSavedThumbnails();
 
         /**
          * @brief 캐시를 무효화하고 기존 이미지의 해제를 프레임 경계까지 보류합니다.
@@ -216,6 +208,12 @@ namespace Editor {
          */
         static std::size_t MaterialSignature(const Asset::UMaterial* Material);
 
+        void QueueSavedThumbnail(const std::filesystem::path& Path, Asset::EAssetType Type);
+        void SaveNextThumbnail();
+        void ReplaceCapture(FThumbnail& Thumbnail, std::unique_ptr<Viewer::FViewerCapture> Capture);
+        std::unique_ptr<Viewer::FViewerCapture> LoadEmbeddedThumbnail(const std::filesystem::path& Path, Asset::EAssetType Type) const;
+        std::unique_ptr<Viewer::FViewerCapture> CaptureThumbnail(const FPendingThumbnail& Pending, CoreUObject::UObject* Object, Core::FString& Error);
+
         /**
          * @brief 에셋 종류에 맞는 관리자 로드 함수를 호출합니다.
          * @param Path 처리할 에셋 또는 파일 경로입니다.
@@ -231,7 +229,7 @@ namespace Editor {
          * @param Type 처리할 에셋 또는 노드 종류입니다.
          * @return 현재 에셋 내용의 변경 비교용 해시입니다.
          */
-        std::size_t AssetSignature(CoreUObject::UObject* Object, Asset::EAssetType Type);
+        std::size_t AssetSignature(const std::filesystem::path& Path, CoreUObject::UObject* Object, Asset::EAssetType Type);
 
         /**
          * @brief 대기 요청의 에셋과 미리보기 설정을 촬영 뷰어에 연결합니다.
@@ -239,7 +237,7 @@ namespace Editor {
          * @param Error 실패 원인을 기록할 출력 문자열입니다.
          * @return 촬영 콘텐츠를 준비했으면 true이며 실패 원인은 Error에 기록합니다.
          */
-        bool BindCaptureAsset(const FPendingThumbnail& Pending, Core::FString& Error);
+        bool BindCaptureAsset(const FPendingThumbnail& Pending, CoreUObject::UObject* Object, Core::FString& Error);
 
         /**
          * @brief 요청 큐를 순서대로 준비·Fit·촬영하고 완료 이미지를 캐시에 반영합니다.
@@ -258,6 +256,8 @@ namespace Editor {
         bool SavePreviewSettings();
 
     private:
+
+        Editor::FEditorAssetCatalog& mCatalog;
 
         /**
          * @brief 외부에서 소유하는 에셋 관리자입니다.
@@ -279,6 +279,8 @@ namespace Editor {
          */
         std::unique_ptr<Asset::UMaterial> mDefaultMaterial{};
 
+        std::unique_ptr<Asset::UMaterial> mCaptureMaterial{};
+
         /**
          * @brief 썸네일 요청을 순차적으로 촬영하는 공통 뷰어입니다.
          */
@@ -293,6 +295,7 @@ namespace Editor {
          * @brief 아직 촬영이 완료되지 않은 썸네일 요청 큐입니다.
          */
         std::deque<FPendingThumbnail> mRequests{};
+        Core::TMap<std::filesystem::path, std::pair<Asset::EAssetType, std::filesystem::file_time_type>> mSavedThumbnails{};
 
         /**
          * @brief 현재 UI가 참조할 수 있어 프레임 경계까지 해제를 늦춘 이전 캡처입니다.
@@ -314,9 +317,5 @@ namespace Editor {
          */
         Uint64 mFrame{};
 
-        /**
-         * @brief 촬영 뷰어가 현재 요청의 준비 상태를 보관 중인지 여부입니다.
-         */
-        bool mWorkerActive{};
     };
 }

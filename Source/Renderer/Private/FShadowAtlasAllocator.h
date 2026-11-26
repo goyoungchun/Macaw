@@ -10,7 +10,6 @@
 
 #include "Core/Types.h"
 
-#include <array>
 #include <optional>
 
 namespace Renderer {
@@ -71,7 +70,7 @@ namespace Renderer {
             /**
              * @brief 사분할된 네 자식 노드의 배열 인덱스입니다.
              */
-            std::array<Index_t, 4> mChildren{};
+            Core::TStaticArray<Index_t, 4> mChildren{};
 
             /**
              * @brief 이 노드가 네 자식 영역으로 분할되었는지 나타냅니다.

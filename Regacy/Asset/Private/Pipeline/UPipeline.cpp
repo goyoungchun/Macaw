@@ -2,12 +2,13 @@
 #include "Asset/Pipeline/UPipeline.h"
 #include "Core/Base/ErrorHandler.h"
 #include "Pipeline/FPipelineParser.h"
+#include "Core/Types.h"
 
 #include <memory>
 
 namespace {
     EStencillOp ParseStencilOperation(const char* Value) {
-        constexpr std::array Names{"Keep", "Zero", "Replace", "IncrementClamp", "IncrementWrap", "DecrementClamp", "DecrementWrap", "Invert"};
+        constexpr Core::TStaticArray<const char*, 8> Names{"Keep", "Zero", "Replace", "IncrementClamp", "IncrementWrap", "DecrementClamp", "DecrementWrap", "Invert"};
 
         for (std::size_t Index{}; Index < Names.size(); ++Index) {
             if (std::strcmp(Value, Names[Index]) == 0) {
@@ -30,7 +31,7 @@ bool UPipeline::Initialize(const std::filesystem::path& PipelinePath) {
         return false;
     }
 
-    std::array<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)> ModePaths{};
+    Core::TStaticArray<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)> ModePaths{};
 
     ModePaths[static_cast<std::size_t>(ERenderMode::Lit)] = PipelinePath;
 
@@ -42,8 +43,8 @@ bool UPipeline::InitializeFamily(const std::filesystem::path& FamilyDirectory) {
         return false;
     }
 
-    constexpr std::array<const char*, static_cast<std::size_t>(ERenderMode::Max)> ModeNames{"Lit", "Outline", "Unlit", "Wireframe"};
-    std::array<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)> ModePaths{};
+    constexpr Core::TStaticArray<const char*, static_cast<std::size_t>(ERenderMode::Max)> ModeNames{"Lit", "Outline", "Unlit", "Wireframe"};
+    Core::TStaticArray<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)> ModePaths{};
     const std::string FamilyName{FamilyDirectory.filename().generic_string()};
 
     for (std::size_t Index{0}; Index < ModeNames.size(); ++Index) {
@@ -61,9 +62,9 @@ bool UPipeline::InitializeFamily(const std::filesystem::path& FamilyDirectory) {
     return InitializeModes(ModePaths);
 }
 
-bool UPipeline::InitializeModes(const std::array<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)>& ModePaths) {
-    std::array<FPipelineDescription, static_cast<std::size_t>(ERenderMode::Max)> Descriptions{};
-    std::array<bool, static_cast<std::size_t>(ERenderMode::Max)> EnabledModes{};
+bool UPipeline::InitializeModes(const Core::TStaticArray<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)>& ModePaths) {
+    Core::TStaticArray<FPipelineDescription, static_cast<std::size_t>(ERenderMode::Max)> Descriptions{};
+    Core::TStaticArray<bool, static_cast<std::size_t>(ERenderMode::Max)> EnabledModes{};
 
     EnabledModes.fill(true);
 

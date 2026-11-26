@@ -5,13 +5,15 @@
  */
 
 #include "Core/Math/FQuat.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FRotator.h"
 #include "Core/Math/FVector.h"
 #include "Math/SimdMath.h"
 
 #include <algorithm>
 #include <cmath>
-#include <numbers>
+
+using namespace Core::Literals;
 
 /**
  * @brief FQuat의 초기 상태와 전달받은 의존성을 구성합니다.
@@ -45,14 +47,18 @@ FQuat::FQuat(const FRotator& Rotation) {
  * @brief FQuat의 초기 상태와 전달받은 의존성을 구성합니다.
  */
 FQuat::FQuat(const FVector& Axis, float Radians)
+	: FQuat{Axis, Core::FAngle::FromBase(Radians)} {
+}
+
+FQuat::FQuat(const FVector& Axis, Core::FAngle Angle)
 	: FQuat{} {
     FVector Direction{Axis};
 
     if (Direction.Normalize()) {
-        const float HalfAngle{Radians * 0.5f};
-        const __m128 Vector{_mm_mul_ps(Direction.mValue, _mm_set1_ps(std::sin(HalfAngle)))};
+        const Core::FAngle HalfAngle{Angle * 0.5f};
+        const __m128 Vector{_mm_mul_ps(Direction.mValue, _mm_set1_ps(Core::Math::Sin(HalfAngle)))};
 
-        *this = FQuat{_mm_add_ps(Vector, _mm_set_ps(std::cos(HalfAngle), 0.0f, 0.0f, 0.0f))};
+        *this = FQuat{_mm_add_ps(Vector, _mm_set_ps(Core::Math::Cos(HalfAngle), 0.0f, 0.0f, 0.0f))};
     }
 }
 
@@ -260,16 +266,17 @@ FRotator FQuat::Rotator() const {
     const double Singularity{Z * X - W * Y};
     const double YawY{2.0 * (W * Z + X * Y)};
     const double YawX{1.0 - 2.0 * (Y * Y + Z * Z)};
-    constexpr double DegreesPerRadian{180.0 / std::numbers::pi_v<double>};
+    using FDoubleAngle = Core::TQuantity<Core::Dim::Angle, double>;
+    constexpr double DegreesPerRadian{Core::Math::ToDegrees(FDoubleAngle::FromBase((1_rad).GetBase()))};
 
     FRotator Result{};
     Result.yaw = static_cast<float>(std::atan2(YawY, YawX) * DegreesPerRadian);
 
     if (Singularity < -0.499999999999) {
-        Result.pitch = -90.0f;
+        Result.pitch = Core::Math::ToDegrees(-90_deg);
         Result.roll = static_cast<float>(-Result.yaw - 2.0 * std::atan2(X, W) * DegreesPerRadian);
     } else if (Singularity > 0.499999999999) {
-        Result.pitch = 90.0f;
+        Result.pitch = Core::Math::ToDegrees(90_deg);
         Result.roll = static_cast<float>(Result.yaw - 2.0 * std::atan2(X, W) * DegreesPerRadian);
     } else {
         Result.pitch = static_cast<float>(std::asin(std::clamp(2.0 * Singularity, -1.0, 1.0)) * DegreesPerRadian);

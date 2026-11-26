@@ -11,7 +11,6 @@
 #include "Editor/FImGuiUIScale.h"
 #include "Editor/FProjectTemplatePicker.h"
 
-#include <array>
 #include <filesystem>
 #include <vector>
 #include <wrl/client.h>
@@ -175,17 +174,17 @@ namespace Editor {
         /**
          * @brief 프로젝트 이름 입력 버퍼입니다.
          */
-        std::array<char, 256> mProjectName{};
+        Core::TStaticArray<char, 256> mProjectName{};
 
         /**
          * @brief 프로젝트 생성 폴더의 UTF-8 입력 버퍼입니다.
          */
-        std::array<char, 4096> mLocation{};
+        Core::TStaticArray<char, 4096> mLocation{};
 
         /**
          * @brief 프로젝트 검색 문자열 입력 버퍼입니다.
          */
-        std::array<char, 256> mSearch{};
+        Core::TStaticArray<char, 256> mSearch{};
 
         /**
          * @brief 프로젝트 브라우저의 기본 미리 보기에 사용하는 마스코트 텍스처입니다.

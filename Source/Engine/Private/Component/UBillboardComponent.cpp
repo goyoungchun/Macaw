@@ -72,7 +72,7 @@ namespace Engine {
 
         const bool Supported{Extension == L".masset" || Extension == L".png" || Extension == L".jpg" || Extension == L".jpeg" || Extension == L".bmp" || Extension == L".tga" || Extension == L".dds" || Extension == L".hdr"};
 
-        if (Path.find('\0') != Core::FString::npos || (!Path.empty() && (AssetPath.has_root_path() || !Supported))) {
+        if (Path.find('\0') != Core::FString::npos || (!Path.empty() && (Core::FilePath::GetContentMount(AssetPath) == Core::FilePath::EContentMount::Invalid || !Supported))) {
             return false;
         }
 

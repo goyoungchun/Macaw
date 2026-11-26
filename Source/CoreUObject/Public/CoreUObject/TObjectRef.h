@@ -230,6 +230,16 @@ namespace CoreUObject {
         std::size_t operator()(const CoreUObject::TObjectRef<T>& Reference) const;
     };
 
+    namespace ObjectHandlePrivate {
+
+        template <typename T>
+        struct TObjectHashType<CoreUObject::TObjectRef<T>> {
+        public:
+            using Type = CoreUObject::TObjectRefHash<T>;
+        };
+
+    }
+
     /**
      * @brief 형식이 TObjectRef 특수화인지 판별하고 참조 대상 형식을 제공합니다.
      * @tparam T 참조 대상의 형식입니다.

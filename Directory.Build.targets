@@ -9,13 +9,11 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.targets" Condition="'$(MacawToolBuild)' != 'true' And Exists('$(VcpkgRoot)scripts\buildsystems\msbuild\vcpkg.targets')" />
-  <ItemDefinitionGroup Condition="'$(MacawToolBuild)' != 'true' And '$(VcpkgEnabled)' == 'true'">
-    <ClCompile>
-      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(VcpkgInstalledDir)$(VcpkgTriplet)\include\physx</AdditionalIncludeDirectories>
-    </ClCompile>
-  </ItemDefinitionGroup>
-  <Target Name="CopyPhysXCommon" AfterTargets="AppLocalFromInstalled;AppLocalFromInstalledPreserve" Condition="'$(VcpkgApplocalDeps)' == 'true' And '@(Link)' != '' And Exists('$(TargetDir)PhysX_64.dll')">
-    <Copy SourceFiles="$(_ZVcpkgCurrentInstalledDir)$(_ZVcpkgConfigSubdir)bin\PhysXCommon_64.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true">
+  <Target Name="CopyPhysXRuntime" AfterTargets="AppLocalFromInstalled;AppLocalFromInstalledPreserve" Condition="'$(VcpkgApplocalDeps)' == 'true' And '@(Link)' != '' And Exists('$(TargetDir)PhysX_64.dll')">
+    <PropertyGroup>
+      <PhysXBinDir>$(_ZVcpkgCurrentInstalledDir)$(_ZVcpkgConfigSubdir)bin\</PhysXBinDir>
+    </PropertyGroup>
+    <Copy SourceFiles="$(PhysXBinDir)PhysX_64.dll;$(PhysXBinDir)PhysXCommon_64.dll;$(PhysXBinDir)PhysXFoundation_64.dll;$(PhysXBinDir)PhysXCooking_64.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true">
       <Output TaskParameter="CopiedFiles" ItemName="FileWrites" />
     </Copy>
   </Target>

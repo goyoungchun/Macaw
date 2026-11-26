@@ -30,6 +30,49 @@ namespace Engine {
      * @brief 이 구현 파일에서만 사용하는 내부 상태와 보조 함수입니다.
      */
     namespace {
+        using FAttachmentList = Core::TArray<std::pair<Engine::USceneComponent*, Core::FGuid>>;
+
+        void SerializeAttachment(Core::FArchive& Archive, Engine::USceneComponent* Component, FAttachmentList& Attachments) {
+            if (Component == nullptr || (Archive.IsLoading() && !Archive.HasField("AttachParent"))) {
+                return;
+            }
+
+            const Engine::USceneComponent* Parent{Component->GetAttachParent()};
+            Core::FString Reference{Parent != nullptr && !Parent->GetOwner()->IsPendingDestroy() ? Parent->GetGuid().ToString() : Core::FString{}};
+
+            Archive.Serialize("AttachParent", Reference);
+
+            if (Archive.IsLoading() && !Archive.HasError() && !Reference.empty()) {
+                Core::FGuid Guid{};
+
+                if (Core::FGuid::Parse(Reference, Guid)) {
+                    Attachments.emplace_back(Component, Guid);
+                } else {
+                    Archive.SetError("Invalid attachment parent GUID");
+                }
+            }
+        }
+
+        void RestoreAttachments(Core::FArchive& Archive, const CoreUObject::FObjectGuidMap& Objects, const FAttachmentList& Attachments) {
+            for (const auto& [Component, Guid] : Attachments) {
+                Core::FGuid ParentGuid{Guid};
+                Archive.RemapWeakObjectReference(ParentGuid);
+                const auto Position{Objects.find(ParentGuid)};
+
+                if (Archive.IsDuplicating() && Position == Objects.end()) {
+                    continue;
+                }
+
+                auto* Parent{Position != Objects.end() ? CoreUObject::Cast<Engine::USceneComponent>(Position->second) : nullptr};
+
+                if (Parent == nullptr || !Component->SetAttachParent(Parent)) {
+                    Archive.SetError("Invalid attachment parent reference");
+
+                    return;
+                }
+            }
+        }
+
         /**
          * @brief 장면의 모든 객체를 만든 뒤 객체 참조 프로퍼티에 핸들을 연결합니다.
          * @param[in] Objects 이 장면에서 읽은 객체의 대응표입니다.
@@ -158,7 +201,7 @@ namespace Engine {
          * @param[in,out] Actor 컴포넌트를 저장하거나 불러온 컴포넌트를 추가할 액터입니다.
          * @param[in,out] Objects 이 장면에서 읽거나 저장한 객체의 비소유 대응표입니다.
          */
-        void SerializeComponents(Core::FArchive& Archive, Engine::AActor* Actor, Core::TMap<Core::FGuid, CoreUObject::UObject*, Core::FGuidHash>* Objects) {
+        void SerializeComponents(Core::FArchive& Archive, Engine::AActor* Actor, Core::TMap<Core::FGuid, CoreUObject::UObject*, Core::FGuidHash>* Objects, FAttachmentList& Attachments) {
             Uint32 Count{static_cast<Uint32>(Actor->GetComponents().size())};
 
             if (!Archive.BeginArray("Components", Count)) {
@@ -174,6 +217,7 @@ namespace Engine {
                     auto Object{CreateSerializedObject(Archive, Objects, Engine::UActorComponent::StaticClass())};
 
                     if (Object != nullptr && !Archive.HasError()) {
+                        SerializeAttachment(Archive, CoreUObject::Cast<Engine::USceneComponent>(Object.get()), Attachments);
                         std::unique_ptr<Engine::UActorComponent> Component{static_cast<Engine::UActorComponent*>(Object.release())};
 
                         if (!Actor->AddComponent(std::move(Component))) {
@@ -181,7 +225,10 @@ namespace Engine {
                         }
                     }
                 } else {
-                    SerializeHeader(Archive, Actor->GetComponents()[Index].get(), Objects);
+                    Engine::UActorComponent* Component{Actor->GetComponents()[Index].get()};
+
+                    SerializeHeader(Archive, Component, Objects);
+                    SerializeAttachment(Archive, CoreUObject::Cast<Engine::USceneComponent>(Component), Attachments);
                 }
 
                 Archive.EndObject();
@@ -231,6 +278,8 @@ namespace Engine {
                 return;
             }
 
+            FAttachmentList Attachments{};
+
             for (Index_t Index{}; Index < Count && !Archive.HasError(); ++Index) {
                 if (!Archive.BeginObject(std::to_string(Index))) {
                     break;
@@ -242,20 +291,24 @@ namespace Engine {
                     if (Object != nullptr && !Archive.HasError()) {
                         std::unique_ptr<Engine::AActor> Actor{static_cast<Engine::AActor*>(Object.release())};
 
-                        SerializeComponents(Archive, Actor.get(), Objects);
+                        SerializeComponents(Archive, Actor.get(), Objects, Attachments);
                         Actors.push_back(std::move(Actor));
                     }
                 } else {
                     Engine::AActor* Actor{Sources[Index]};
 
                     SerializeHeader(Archive, Actor, Objects);
-                    SerializeComponents(Archive, Actor, Objects);
+                    SerializeComponents(Archive, Actor, Objects, Attachments);
                 }
 
                 Archive.EndObject();
             }
 
             Archive.EndArray();
+
+            if (Archive.IsLoading() && !Archive.HasError()) {
+                RestoreAttachments(Archive, *Objects, Attachments);
+            }
         }
     }
 

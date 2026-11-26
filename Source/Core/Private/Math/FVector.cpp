@@ -6,12 +6,16 @@
 
 #include "Core/Math/FVector.h"
 #include "Math/SimdMath.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FQuat.h"
 #include "Core/Math/FRotator.h"
 #include "Core/Math/MathUtility.h"
+#include "Core/Types.h"
 
 #include <algorithm>
 #include <cmath>
+
+using namespace Core::Literals;
 
 /**
  * @brief FVector의 초기 상태와 전달받은 의존성을 구성합니다.
@@ -280,7 +284,7 @@ FVector operator*(float Value, const FVector& Vector) {
 /**
  * @brief 유효한 성분을 원래 순서의 일반 배열로 반환합니다.
  */
-std::array<float, 3> FVector::ToArray() const {
+Core::TStaticArray<float, 3> FVector::ToArray() const {
     return {x, y, z};
 }
 
@@ -320,5 +324,5 @@ FVector FVector::RotatedAngleAxis(float Degrees, const FVector& Axis) const {
  * @brief 벡터 방향을 향하는 도 단위 Pitch와 Yaw 회전을 구합니다.
  */
 FRotator FVector::Rotation() const {
-    return {Core::Math::ToDegrees(std::atan2(z, std::hypot(x, y))), Core::Math::ToDegrees(std::atan2(y, x)), 0.0f};
+    return {Core::Math::Atan2(z, std::hypot(x, y)), Core::Math::Atan2(y, x), 0_deg};
 }

@@ -22,6 +22,9 @@ namespace Asset {
         GENERATED_BODY()
 
     public:
+        ULevelSequence();
+
+    public:
         /**
          * @brief 키와 재생 구간이 사용하는 초당 틱 수입니다.
          */
@@ -135,7 +138,7 @@ namespace Asset {
         /**
          * @brief 편집 화면에 표시할 초당 프레임 수입니다.
          */
-        Int32 mDisplayRate{30};
+        Int32 mDisplayRate{};
 
         /**
          * @brief 틱 단위 재생 시작 시간입니다.
@@ -145,7 +148,7 @@ namespace Asset {
         /**
          * @brief 틱 단위 재생 끝 시간입니다.
          */
-        Int32 mEndTick{5 * TicksPerSecond};
+        Int32 mEndTick{};
 
         /**
          * @brief 시퀀스가 소유한 바인딩 목록입니다.

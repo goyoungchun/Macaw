@@ -206,7 +206,7 @@ namespace CoreUObject {
         /**
          * @brief 장면 저장과 파일 내부 참조 복원에 사용하는 영속 식별자입니다.
          */
-        UPROPERTY(Serialize, ReadOnly, Name = "Id", Getter = GetGuid, Setter = RestoreGuid)
+        UPROPERTY(Serialize, ReadOnly, Category = "General", Name = "Id", Getter = GetGuid, Setter = RestoreGuid)
         Core::FGuid mGuid{};
 
         /**
@@ -217,7 +217,7 @@ namespace CoreUObject {
         /**
          * @brief 객체 이름입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetName, Setter = SetName)
+        UPROPERTY(Edit, Serialize, Category = "General", Getter = GetName, Setter = SetName)
         Core::FName mName{"Object"};
 
         /**

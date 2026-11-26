@@ -1,6 +1,6 @@
 /**
  * @file UShapeComponent.cpp
- * @brief 충돌 형상·접촉 이벤트와 에디터 보조 선을 제공하는 기본 컴포넌트입니다.
+ * @brief 렌더 프록시 없이 단순 충돌 형상을 제공하고 에디터 보조 선으로 표시하는 프리미티브 컴포넌트입니다.
  * @ingroup Engine
  */
 
@@ -10,106 +10,21 @@
 #include "Engine/FPrimitiveDrawInterface.h"
 #include "Engine/EPrimitiveType.h"
 #include "Core/Math/FBox.h"
-#include "Core/Literals.h"
+#include "PhysicsRuntime/UBodySetup.h"
+#include "CoreUObject/Reflection/NewObject.h"
 
 #include <algorithm>
 #include <cmath>
-#include <iostream>
-
-using namespace Core::Literals;
 
 namespace Engine {
 
     /**
-     * @brief 충돌 도형의 접촉 검사와 디버그 형상 생성 보조 함수입니다.
-     */
-    namespace {
-        /**
-         * @brief 두 AABB의 모든 축 구간이 겹치는지 검사합니다.
-         * @param[in] A 첫 번째 검사 대상입니다.
-         * @param[in] B 두 번째 검사 대상입니다.
-         * @return 두 형상이 겹치면 true입니다.
-         */
-        bool BoundsOverlap(const FBox& A, const FBox& B) {
-            return A.mMinimum.x <= B.mMaximum.x && A.mMaximum.x >= B.mMinimum.x && A.mMinimum.y <= B.mMaximum.y && A.mMaximum.y >= B.mMinimum.y && A.mMinimum.z <= B.mMaximum.z && A.mMaximum.z >= B.mMinimum.z;
-        }
-
-        /**
-         * @brief 충돌 도형 원호를 분할할 선분 개수입니다.
-         */
-        constexpr Int32 CircleSegment{32};
-
-        /**
-         * @brief 두 기저 방향의 평면에서 원호를 선분으로 수집합니다.
-         * @param[in] DrawInterface 보조 선분을 추가할 프레임 수집기입니다.
-         * @param[in] C 원호의 중심입니다.
-         * @param[in] U 원호 평면의 첫 기저입니다.
-         * @param[in] V 원호 평면의 둘째 기저입니다.
-         * @param[in] R 원호의 반지름입니다.
-         * @param[in] StartAngle 시작 각도입니다.
-         * @param[in] EndAngle 끝 각도입니다.
-         * @param[in] Color 적용할 색상입니다.
-         */
-        void AddArc(Engine::FPrimitiveDrawInterface& DrawInterface, const FVector& C, const FVector& U, const FVector& V, float R, Core::FAngle StartAngle, Core::FAngle EndAngle, const FVector& Color) {
-            const Int32 Segments{std::max(1, static_cast<Int32>(CircleSegment * ((EndAngle - StartAngle) / 1_turn)))};
-            const Core::FAngle Step{(EndAngle - StartAngle) / Segments};
-
-            FVector Prev{C + U * (Core::Math::Cos(StartAngle) * R) + V * (Core::Math::Sin(StartAngle) * R)};
-
-            for (Index_t Index{1}; Index <= Segments; ++Index) {
-                const Core::FAngle Angle{StartAngle + Step * Index};
-                const FVector Point{C + U * (Core::Math::Cos(Angle) * R) + V * (Core::Math::Sin(Angle) * R)};
-
-                DrawInterface.DrawLine(Prev, Point, Color, true);
-
-                Prev = Point;
-            }
-        }
-    }
-
-    /**
-     * @brief 전달된 설정과 기본값으로 UShapeComponent 객체를 생성합니다.
+     * @brief 겹침만 감지하는 OverlapAll 프리셋과 겹침 이벤트를 켠 기본 상태로 구성합니다.
      */
     Engine::UShapeComponent::UShapeComponent() {
-        mOnComponentBeginOverlap.Add([](Engine::UPrimitiveComponent*, Engine::AActor*, Engine::UPrimitiveComponent*) {
-            std::clog << "BeginOverlap\n";
-        });
-
-        mOnComponentEndOverlap.Add([](Engine::UPrimitiveComponent*, Engine::AActor*, Engine::UPrimitiveComponent*) {
-            std::clog << "EndOverlap\n";
-        });
-    }
-
-    /**
-     * @brief 겹침 시작 델리게이트를 호출합니다.
-     */
-    void Engine::UShapeComponent::OnBeginOverlap(Engine::UShapeComponent* Other) {
-        auto* OtherActor{Other != nullptr ? Other->GetOwner() : nullptr};
-        mOnComponentBeginOverlap.Broadcast(this, OtherActor, Other);
-        if (auto* Owner{GetOwner()}; Owner != nullptr && !Owner->IsPendingDestroy()) {
-            Owner->GetOnComponentCollision().Broadcast(Engine::AActor::EComponentCollision::BeginOverlap, this, OtherActor, Other, nullptr);
-        }
-    }
-
-    /**
-     * @brief 겹침 종료 델리게이트를 호출합니다.
-     */
-    void Engine::UShapeComponent::OnEndOverlap(Engine::UShapeComponent* Other) {
-        auto* OtherActor{Other != nullptr ? Other->GetOwner() : nullptr};
-        mOnComponentEndOverlap.Broadcast(this, OtherActor, Other);
-        if (auto* Owner{GetOwner()}; Owner != nullptr && !Owner->IsPendingDestroy()) {
-            Owner->GetOnComponentCollision().Broadcast(Engine::AActor::EComponentCollision::EndOverlap, this, OtherActor, Other, nullptr);
-        }
-    }
-
-    /**
-     * @brief 적중 액터·컴포넌트와 충돌 정보를 델리게이트로 전달합니다.
-     */
-    void Engine::UShapeComponent::OnHit(Engine::AActor* OtherActor, Engine::UPrimitiveComponent* OtherComp, const Engine::FHitResult& Hit) {
-        mOnComponentHit.Broadcast(this, OtherActor, OtherComp, Hit);
-        if (auto* Owner{GetOwner()}; Owner != nullptr && !Owner->IsPendingDestroy()) {
-            Owner->GetOnComponentCollision().Broadcast(Engine::AActor::EComponentCollision::Hit, this, OtherActor, OtherComp, &Hit);
-        }
+        // 언리얼의 셰이프 컴포넌트처럼 막지 않고 겹침만 감지하는 것이 기본입니다.
+        SetCollisionPreset(PhysicsRuntime::ECollisionPreset::OverlapAll);
+        SetGenerateOverlapEvents(true);
     }
 
     /**
@@ -120,94 +35,34 @@ namespace Engine {
     }
 
     /**
-     * @brief 충돌 형상을 선택 강조 색상 또는 기본 색상의 선으로 수집합니다.
+     * @brief 충돌 형상을 지정된 색상의 선으로 수집합니다.
      */
-    void Engine::UShapeComponent::DrawDebug(Engine::FPrimitiveDrawInterface& DrawInterface, bool Highlight) const {
-        Engine::FCollisionShape Shape{GetCollisionShape()};
-        FVector Pos{GetTransform().mLocation};
-        FQuat Rot{GetTransform().mRotation};
-        FVector Color{Highlight ? FVector{1.0f, 0.0f, 0.0f} : FVector{mShapeColor.x, mShapeColor.y, mShapeColor.z}};
+    void Engine::UShapeComponent::DrawDebug(Engine::FPrimitiveDrawInterface& DrawInterface) const {
+        const FVector Color{mShapeColor.x, mShapeColor.y, mShapeColor.z};
 
-        if (Shape.IsBox()) {
-            Engine::FOrientedBox Box{Engine::Collision::ToOrientedBox(Shape, Pos, Rot)};
-
-            FVector V0{Box.GetCenter() + Box.GetAxis()[0] * Box.GetExtent().x + Box.GetAxis()[1] * Box.GetExtent().y + Box.GetAxis()[2] * Box.GetExtent().z};
-            FVector V1{Box.GetCenter() + Box.GetAxis()[0] * Box.GetExtent().x - Box.GetAxis()[1] * Box.GetExtent().y + Box.GetAxis()[2] * Box.GetExtent().z};
-            FVector V2{Box.GetCenter() + Box.GetAxis()[0] * Box.GetExtent().x - Box.GetAxis()[1] * Box.GetExtent().y - Box.GetAxis()[2] * Box.GetExtent().z};
-            FVector V3{Box.GetCenter() + Box.GetAxis()[0] * Box.GetExtent().x + Box.GetAxis()[1] * Box.GetExtent().y - Box.GetAxis()[2] * Box.GetExtent().z};
-            FVector V4{Box.GetCenter() - Box.GetAxis()[0] * Box.GetExtent().x + Box.GetAxis()[1] * Box.GetExtent().y + Box.GetAxis()[2] * Box.GetExtent().z};
-            FVector V5{Box.GetCenter() - Box.GetAxis()[0] * Box.GetExtent().x - Box.GetAxis()[1] * Box.GetExtent().y + Box.GetAxis()[2] * Box.GetExtent().z};
-            FVector V6{Box.GetCenter() - Box.GetAxis()[0] * Box.GetExtent().x - Box.GetAxis()[1] * Box.GetExtent().y - Box.GetAxis()[2] * Box.GetExtent().z};
-            FVector V7{Box.GetCenter() - Box.GetAxis()[0] * Box.GetExtent().x + Box.GetAxis()[1] * Box.GetExtent().y - Box.GetAxis()[2] * Box.GetExtent().z};
-
-            DrawInterface.DrawLine(V0, V1, Color, true);
-            DrawInterface.DrawLine(V1, V2, Color, true);
-            DrawInterface.DrawLine(V2, V3, Color, true);
-            DrawInterface.DrawLine(V3, V0, Color, true);
-            DrawInterface.DrawLine(V4, V5, Color, true);
-            DrawInterface.DrawLine(V5, V6, Color, true);
-            DrawInterface.DrawLine(V6, V7, Color, true);
-            DrawInterface.DrawLine(V7, V4, Color, true);
-            DrawInterface.DrawLine(V0, V4, Color, true);
-            DrawInterface.DrawLine(V1, V5, Color, true);
-            DrawInterface.DrawLine(V2, V6, Color, true);
-            DrawInterface.DrawLine(V3, V7, Color, true);
-        }
-        else if (Shape.IsSphere()) {
-            Engine::FCapsuleSegment Sphere{Engine::Collision::ToCapsuleSegment(Shape, Pos, Rot)};
-
-            const FVector F{Rot.ForwardVector()};
-            const FVector Rt{Rot.RightVector()};
-            const FVector Up{Rot.UpVector()};
-            const float R{Sphere.GetRadius()};
-
-            AddArc(DrawInterface, Sphere.GetA(), F, Rt, R, 0_rad, 1_turn, Color);
-            AddArc(DrawInterface, Sphere.GetA(), F, Up, R, 0_rad, 1_turn, Color);
-            AddArc(DrawInterface, Sphere.GetA(), Rt, Up, R, 0_rad, 1_turn, Color);
-        }
-        else if (Shape.IsCapsule()) {
-            Engine::FCapsuleSegment Capsule{Engine::Collision::ToCapsuleSegment(Shape, Pos, Rot)};
-
-            const FVector F{Rot.ForwardVector()};
-            const FVector Rt{Rot.RightVector()};
-            const FVector Up{Rot.UpVector()};
-            const float R{Capsule.GetRadius()};
-
-            AddArc(DrawInterface, Capsule.GetA(), F, Rt, R, 0_rad, 1_turn, Color);
-            AddArc(DrawInterface, Capsule.GetB(), F, Rt, R, 0_rad, 1_turn, Color);
-
-            DrawInterface.DrawLine(Capsule.GetA() + F * R, Capsule.GetB() + F * R, Color, true);
-            DrawInterface.DrawLine(Capsule.GetA() - F * R, Capsule.GetB() - F * R, Color, true);
-            DrawInterface.DrawLine(Capsule.GetA() + Rt * R, Capsule.GetB() + Rt * R, Color, true);
-            DrawInterface.DrawLine(Capsule.GetA() - Rt * R, Capsule.GetB() - Rt * R, Color, true);
-
-            AddArc(DrawInterface, Capsule.GetB(), F, Up, R, 0_rad, 0.5_turn, Color);
-            AddArc(DrawInterface, Capsule.GetB(), Rt, Up, R, 0_rad, 0.5_turn, Color);
-            AddArc(DrawInterface, Capsule.GetA(), F, -Up, R, 0_rad, 0.5_turn, Color);
-            AddArc(DrawInterface, Capsule.GetA(), Rt, -Up, R, 0_rad, 0.5_turn, Color);
-        }
+        DrawShape(DrawInterface, Color, mShapeColor.w);
     }
 
     /**
-     * @brief 두 컴포넌트의 월드 충돌 형상이 겹치는지 검사합니다.
+     * @brief 컴포넌트의 형상 크기로 만든 충돌 형상을 반환합니다.
      */
-    bool Engine::UShapeComponent::IsOverlapping(const Engine::UShapeComponent& Other) const {
-        if (&Other == this || !BoundsOverlap(CalcBounds(), Other.CalcBounds())) {
-            return false;
+    const PhysicsRuntime::UBodySetup* Engine::UShapeComponent::GetBodySetup() const {
+        if (mShapeBodySetup == nullptr) {
+            std::shared_ptr<PhysicsRuntime::UBodySetup> Setup{CoreUObject::NewObject<PhysicsRuntime::UBodySetup>()};
+            Setup->SetName(GetName() + "BodySetup");
+            UpdateBodySetup(Setup->GetAggGeom());
+            mShapeBodySetup = std::move(Setup);
         }
 
-        return Engine::Collision::Overlap(GetCollisionShape(), GetTransform().mLocation, GetTransform().mRotation, Other.GetCollisionShape(), Other.GetTransform().mLocation, Other.GetTransform().mRotation);
+        return mShapeBodySetup.get();
     }
 
     /**
-     * @brief 두 형상의 월드 접촉 법선·깊이·위치를 계산합니다.
+     * @brief 형상 크기가 바뀌었을 때 바디 셋업을 버리고 물리 바디를 다시 만듭니다.
      */
-    bool Engine::UShapeComponent::ComputeContact(const Engine::UShapeComponent& Other, Engine::FCollisionContact& OutContact) const {
-        if (&Other == this || !BoundsOverlap(CalcBounds(), Other.CalcBounds())) {
-            return false;
-        }
-
-        return Engine::Collision::Overlap(GetCollisionShape(), GetTransform().mLocation, GetTransform().mRotation, Other.GetCollisionShape(), Other.GetTransform().mLocation, Other.GetTransform().mRotation, &OutContact);
+    void Engine::UShapeComponent::MarkBodySetupDirty() {
+        mShapeBodySetup.reset();
+        RecreatePhysicsState();
     }
 
     /**
@@ -224,35 +79,6 @@ namespace Engine {
         FVector Scale{GetTransform().mScale};
 
         return std::min({ std::abs(Scale.x), std::abs(Scale.y), std::abs(Scale.z) });
-    }
-
-    /**
-     * @brief 컴포넌트 겹침 시작 이벤트를 반환합니다.
-     */
-    Engine::UShapeComponent::FOverlapDelegate& Engine::UShapeComponent::GetOnComponentBeginOverlap() {
-        return mOnComponentBeginOverlap;
-    }
-
-    /**
-     * @brief 컴포넌트 겹침 종료 이벤트를 반환합니다.
-     */
-    Engine::UShapeComponent::FOverlapDelegate& Engine::UShapeComponent::GetOnComponentEndOverlap() {
-        return mOnComponentEndOverlap;
-    }
-
-    /**
-     * @brief 컴포넌트 충돌 이벤트를 반환합니다.
-     */
-    Engine::UShapeComponent::FHitDelegate& Engine::UShapeComponent::GetOnComponentHit() {
-        return mOnComponentHit;
-    }
-
-    bool Engine::UShapeComponent::BlocksMovement() const {
-        return mBlocksMovement;
-    }
-
-    void Engine::UShapeComponent::SetBlocksMovement(bool Blocks) {
-        mBlocksMovement = Blocks;
     }
 
     /**

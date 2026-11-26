@@ -23,7 +23,7 @@ namespace Core {
 
         Core::ErrorHandler::ReportHRESULT(CoCreateGuid(&Native), "UUID", "UUID creation failed", Core::ErrorHandler::EErrorLevel::Critical);
 
-        mBytes = std::bit_cast<std::array<Uint8, 16>>(Native);
+        mBytes = std::bit_cast<Core::TStaticArray<Uint8, 16>>(Native);
     }
 
     /**
@@ -44,7 +44,7 @@ namespace Core {
             return false;
         }
 
-        std::array<Uint8, 16> Bytes{};
+        Core::TStaticArray<Uint8, 16> Bytes{};
         Index_t ByteIndex{};
         Int32 High{-1};
 

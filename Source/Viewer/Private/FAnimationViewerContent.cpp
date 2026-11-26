@@ -224,17 +224,8 @@ void FAnimationViewerContent::SynchronizeScene() {
         return;
     }
 
-    const FBox& BindBounds{Component->GetSkeletalMesh()->GetBounds()};
     const FMatrix World{Component->GetWorldMatrix()};
-
-    mBounds = BindBounds.Transformed(World);
-
-    for (const FMatrix& Skin : Component->GetPose().GetSkinMatrices()) {
-        const FBox Bounds{BindBounds.Transformed(Skin * World)};
-
-        mBounds.mMinimum = mBounds.mMinimum.Min(Bounds.mMinimum);
-        mBounds.mMaximum = mBounds.mMaximum.Max(Bounds.mMaximum);
-    }
+    mBounds = Component->GetSkeletalMesh()->CalcSkinnedWorldBounds(Component->GetPose().GetSkinMatrices(), World);
 
     PreviewWorld->SendAllEndOfFrameUpdates();
 

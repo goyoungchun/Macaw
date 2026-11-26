@@ -5,6 +5,7 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Asset/Sequence/ULevelSequence.h"
 #include "Core/Archive.h"
 
@@ -13,7 +14,14 @@
 #include <iterator>
 #include <string>
 
+using namespace Core::Literals;
+
 namespace Asset {
+
+    Asset::ULevelSequence::ULevelSequence()
+		: mDisplayRate{static_cast<Int32>((30_Hz).GetBase())},
+		  mEndTick{static_cast<Int32>((5_s).GetBase()) * TicksPerSecond} {
+    }
 
     /**
      * @brief 이 파일에서 사용하는 내부 보조 기능과 상태를 묶습니다.

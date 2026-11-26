@@ -90,7 +90,13 @@ bool FEditorUI::Initialize(RenderCore::IRendererModule* Renderer, Platform::FWin
 
     Platform->SetMessageHandler([this](HWND Window, UINT Message, WPARAM WParam, LPARAM LParam) {
         if (Message == WM_CLOSE) {
-            return !mToolkit->CanClose();
+            if (mPlatform->IsMinimized()) {
+                mPlatform->Restore();
+            }
+
+            mToolkit->RequestClose();
+
+            return true;
         }
 
         if (Message == WM_DROPFILES) {

@@ -2,7 +2,7 @@
 #include "Editor/Panel/Stats/StatWindow.h"
 #include "Core/Stat/Stat.h"
 #include "ImGui/imgui.h"
-#include <array>
+#include "Core/Types.h"
 #include <cfloat>
 #include <cmath>
 #include <cstdarg>
@@ -15,12 +15,12 @@ namespace {
 
     struct FStatOverlayRow {
         const char* mLabel{};
-        std::array<char, 96> mValue{};
+        Core::TStaticArray<char, 96> mValue{};
         ImU32 mColor{TextColor};
         int mDetailLevel{};
     };
 
-    using FStatOverlayRows = std::array<FStatOverlayRow, 64>;
+    using FStatOverlayRows = Core::TStaticArray<FStatOverlayRow, 64>;
 
     void AddRow(FStatOverlayRows& Rows, std::size_t& Count, const char* Label, int DetailLevel, ImU32 Color, const char* Format, ...) {
         if (Count >= Rows.size()) {
@@ -223,7 +223,7 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
     }
 
     const int Capacity{static_cast<int>(AvailableHeight / LineHeight)};
-    std::array<int, 3> LevelCounts{};
+    Core::TStaticArray<int, 3> LevelCounts{};
 
     for (std::size_t Index{}; Index < RowCount; ++Index) {
         for (int Level{Rows[Index].mDetailLevel}; Level < static_cast<int>(LevelCounts.size()); ++Level) {

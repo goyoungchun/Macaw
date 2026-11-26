@@ -201,25 +201,25 @@ namespace Asset {
         /**
          * @brief 시퀀스에서 루트 모션 추출을 허용하는지 여부입니다.
          */
-        UPROPERTY(Edit, Name = "EnableRootMotion", Getter = IsRootMotionEnabled, Setter = SetRootMotionEnabled)
+        UPROPERTY(Edit, Category = "Settings", Name = "EnableRootMotion", Getter = IsRootMotionEnabled, Setter = SetRootMotionEnabled)
         bool mEnableRootMotion{};
 
         /**
          * @brief 추출 시 루트 본을 고정할 기준입니다.
          */
-        UPROPERTY(Edit, Name = "RootMotionRootLock", Getter = GetRootMotionRootLock, Setter = SetRootMotionRootLock)
+        UPROPERTY(Edit, Category = "Settings", Name = "RootMotionRootLock", Getter = GetRootMotionRootLock, Setter = SetRootMotionRootLock)
         Asset::ERootMotionRootLock mRootMotionRootLock{Asset::ERootMotionRootLock::AnimFirstFrame};
 
         /**
          * @brief 추출하지 않는 경우에도 루트 본 고정을 적용하는지 여부입니다.
          */
-        UPROPERTY(Edit, Name = "ForceRootLock", Getter = IsRootLockForced, Setter = SetForceRootLock)
+        UPROPERTY(Edit, Category = "Settings", Name = "ForceRootLock", Getter = IsRootLockForced, Setter = SetForceRootLock)
         bool mForceRootLock{};
 
         /**
          * @brief 루트 모션을 추출할 본 이름이며 빈 값은 기본 루트를 사용합니다.
          */
-        UPROPERTY(Edit, Name = "RootMotionBone", Getter = GetRootMotionBone, Setter = SetRootMotionBone)
+        UPROPERTY(Edit, Category = "Settings", Name = "RootMotionBone", Getter = GetRootMotionBone, Setter = SetRootMotionBone)
         Core::FString mRootMotionBone{};
 
         /**

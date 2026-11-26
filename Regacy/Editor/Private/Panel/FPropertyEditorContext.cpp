@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Asset/FAssetRegistry.h"
 #include "Editor/Panel/FPropertyEditorContext.h"
+#include "Core/Types.h"
 
 #include "ImGui/imgui.h"
 #include "CoreUObject/Asset/IAssetRegistry.h"
@@ -11,7 +12,6 @@
 #include "Asset/UMaterial.h"
 #include "Editor/View/FAssetThumbnailRenderer.h"
 
-#include <array>
 #include <algorithm>
 #include <cstring>
 #include <vector>
@@ -112,7 +112,7 @@ void FPropertyEditorContext::DrawColor(const char* Label, const FVector4& Value,
 }
 
 void FPropertyEditorContext::DrawText(const char* Label, const FString& Value, const std::function<void(const FString&)>& Setter) const {
-    std::array<char, 2048> TextBuffer{};
+    Core::TStaticArray<char, 2048> TextBuffer{};
     const std::size_t CopyLength{std::min(Value.size(), TextBuffer.size() - 1)};
 
     std::memcpy(TextBuffer.data(), Value.data(), CopyLength);

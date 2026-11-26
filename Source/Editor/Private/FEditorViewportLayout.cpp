@@ -10,6 +10,7 @@
 #include "Editor/FEditorViewport.h"
 #include "Editor/FPlayInEditorSession.h"
 #include "RenderCore/IRendererModule.h"
+#include "Core/Types.h"
 
 #include <imgui_internal.h>
 #include <algorithm>
@@ -36,7 +37,7 @@ const FEditorViewportLayout::FPresetDefinition& FEditorViewportLayout::GetDefini
     const auto Split{[](bool Columns, Index_t Ratio, Int32 First, Int32 Second) {
         return FLayoutNode{First, Second, 0, Ratio, Columns};
     }};
-    static const std::array<FPresetDefinition, 12> Definitions{{{"단일 뷰포트", 1, {Leaf(0)}, {0.5f, 0.5f, 0.5f}},
+    static const Core::TStaticArray<FPresetDefinition, 12> Definitions{{{"단일 뷰포트", 1, {Leaf(0)}, {0.5f, 0.5f, 0.5f}},
         {"좌우 2분할", 2, {Split(true, 0, 1, 2), Leaf(0), Leaf(1)}, {0.5f, 0.5f, 0.5f}},
         {"상하 2분할", 2, {Split(false, 1, 1, 2), Leaf(0), Leaf(1)}, {0.5f, 0.5f, 0.5f}},
         {"왼쪽 큰 3분할", 3, {Split(true, 0, 1, 2), Leaf(0), Split(false, 1, 3, 4), Leaf(1), Leaf(2)}, {0.66f, 0.5f, 0.5f}},
@@ -61,7 +62,7 @@ bool FEditorViewportLayout::Initialize(RenderCore::IRendererModule* Renderer) {
         return false;
     }
 
-    const std::array<EEditorViewportType, 3> Types{EEditorViewportType::Top, EEditorViewportType::Front, EEditorViewportType::Right};
+    const Core::TStaticArray<EEditorViewportType, 3> Types{EEditorViewportType::Top, EEditorViewportType::Front, EEditorViewportType::Right};
     for (Index_t Index{}; Index < mOrthographicViewports.size(); ++Index) {
         mOrthographicViewports[Index] = std::make_unique<FEditorViewport>(mContext, "Orthographic" + std::to_string(Index));
         mOrthographicViewports[Index]->GetClient()->SetViewType(Types[Index]);
@@ -111,11 +112,13 @@ FEditorViewport* FEditorViewportLayout::GetViewport(Index_t Index) const {
 }
 
 FEditorViewport* FEditorViewportLayout::GetActiveViewport() const {
-    return mPlaySession->IsActive() ? mViewport : GetViewport(mActiveViewport);
+    return mPlaySession->IsActive() && !mPlaySession->IsSimulating() ? mViewport : GetViewport(mActiveViewport);
 }
 
 void FEditorViewportLayout::UpdateViewportContexts() {
     FEditorContext* Context{mPlaySession->IsActive() ? mPlaySession->GetInspectionContext() : mContext};
+    mViewport->GetClient()->SetEditorContext(mPlaySession->IsSimulating() ? Context : mContext);
+
     for (const auto& Viewport : mOrthographicViewports) {
         if (Viewport != nullptr) {
             Viewport->GetClient()->SetEditorContext(Context);
@@ -124,7 +127,7 @@ void FEditorViewportLayout::UpdateViewportContexts() {
 }
 
 bool FEditorViewportLayout::CanChangeLayout() const {
-    if (mPlaySession->IsActive()) {
+    if (mPlaySession->IsActive() && !mPlaySession->IsSimulating()) {
         return false;
     }
 
@@ -329,7 +332,8 @@ void FEditorViewportLayout::DrawViewport(Index_t Index, const Core::FInput& Inpu
 void FEditorViewportLayout::DrawLayoutNode(const FPresetDefinition& Definition, Index_t NodeIndex, const FVector4& Bounds, const Core::FInput& Input, float DeltaTime, FEditorViewport*& CapturedViewport) {
     const FLayoutNode& Node{Definition.mNodes[NodeIndex]};
     if (Node.mFirst < 0) {
-        const Index_t Slot{Definition.mCount == 1 ? (mPlaySession->IsActive() ? 0 : mSingleViewport) : Node.mSlot};
+        const Index_t SingleViewport{mPlaySession->IsActive() && !mPlaySession->IsSimulating() ? 0 : mSingleViewport};
+        const Index_t Slot{Definition.mCount == 1 ? SingleViewport : Node.mSlot};
         ImGui::SetCursorScreenPos({Bounds.x, Bounds.y});
         ImGui::PushID(static_cast<int>(Slot));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{});

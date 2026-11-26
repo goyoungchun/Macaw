@@ -6,8 +6,11 @@
 
 #pragma once
 
+#include "Core/Literals/QuantityTypes.h"
+
 #include "Core/Math/FTransform.h"
 #include "CoreUObject/TObjectRef.h"
+#include "CoreUObject/Reflection/FPropertyValue.h"
 #include "Engine/Sequence/ESequencePlayState.h"
 #include "Engine/Sequence/FSequenceBindingTarget.h"
 
@@ -43,7 +46,7 @@ namespace Engine {
             /**
              * @brief 값을 처음 쓰기 전의 프로퍼티 값입니다.
              */
-            float mValue{};
+            CoreUObject::FPropertyValue mValue{};
         };
 
         /**
@@ -112,7 +115,7 @@ namespace Engine {
          * @brief 재생 중이면 시간을 진행하고 값을 적용합니다.
          * @param[in] DeltaTime 진행할 시간이며 초 단위입니다.
          */
-        void Advance(float DeltaTime);
+        void Advance(Core::FTime DeltaTime);
 
         /**
          * @brief 재생 구간 안의 시간으로 이동하여 값을 적용합니다.

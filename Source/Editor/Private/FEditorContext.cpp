@@ -5,6 +5,7 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Editor/FEditorContext.h"
 #include "Editor/FEditorViewport.h"
 #include "Core/FilePath.h"
@@ -16,6 +17,13 @@
 #include "Engine/Component/UBillboardTextComponent.h"
 #include "Engine/Component/UBillboardComponent.h"
 #include "Engine/Engine.h"
+#include "Engine/FPrimitiveDrawInterface.h"
+#include "Asset/FClothingAssetFactory.h"
+#include "Asset/USkeletalMesh.h"
+#include "Asset/USkeleton.h"
+#include "ClothEditing.h"
+#include "PhysicsRuntime/FClothingSimulationNv.h"
+#include "PhysicsRuntime/UClothingAssetCommon.h"
 #include "RenderCore/IRendererModule.h"
 #include "Engine/UWorld.h"
 #include "Engine/ULevel.h"
@@ -34,6 +42,7 @@
 #include "Engine/FWorldSerializer.h"
 #include "Serialization/MemoryArchive.h"
 #include <algorithm>
+#include <limits>
 #include "CoreUObject/FObjectRegistry.h"
 #include "CoreUObject/FPropertyChangedEvent.h"
 #include "CoreUObject/Reflection/Cast.h"
@@ -46,6 +55,8 @@
 
 #include <Windows.h>
 #include <utility>
+
+using namespace Core::Literals;
 
 namespace Editor {
 
@@ -118,6 +129,11 @@ namespace Editor {
      * @brief UI와 월드 사이의 비소유 편집 연결을 해제합니다.
      */
     void Editor::FEditorContext::Reset() {
+        // 엔진이 천 팩토리를 해제하기 전에 테스트 천을 먼저 정리합니다.
+        SetClothGridTest(false);
+        ClearClothAssetTest();
+        ClearClothSimTest();
+
         if (mPlayLocked || IsChangingState()) {
             return;
         }
@@ -767,6 +783,47 @@ namespace Editor {
         return Added;
     }
 
+    bool Editor::FEditorContext::CanAttachComponent(const Engine::USceneComponent* Component, const Engine::USceneComponent* Parent) const {
+        return CanModifyScene() && GetWorld()->ContainsObject(Component) && (Parent == nullptr || GetWorld()->ContainsObject(Parent)) && Component->CanSetAttachParent(Parent);
+    }
+
+    bool Editor::FEditorContext::AttachComponent(Engine::USceneComponent* Component, Engine::USceneComponent* Parent) {
+        if (!CanAttachComponent(Component, Parent)) {
+            return false;
+        }
+
+        FSceneEditScope Edit{*this};
+
+        if (!Component->SetAttachParent(Parent)) {
+            return false;
+        }
+
+        NoteSceneEdit();
+
+        return true;
+    }
+
+    bool Editor::FEditorContext::CanPromoteRootComponent(const Engine::USceneComponent* Component) const {
+        return CanModifyScene() && GetWorld()->ContainsObject(Component) && Component->GetOwner()->CanPromoteRootComponent(Component);
+    }
+
+    bool Editor::FEditorContext::PromoteRootComponent(Engine::USceneComponent* Component) {
+        if (!CanPromoteRootComponent(Component)) {
+            return false;
+        }
+
+        FSceneEditScope Edit{*this};
+
+        if (!Component->GetOwner()->PromoteRootComponent(Component)) {
+            return false;
+        }
+
+        ++mSelectionRevision;
+        NoteSceneEdit();
+
+        return true;
+    }
+
     /**
      * @brief 현재 선택에서 사용할 수 있는 카메라 컴포넌트를 조회합니다.
      */
@@ -863,6 +920,42 @@ namespace Editor {
         return Removed;
     }
 
+    bool Editor::FEditorContext::DestroySelectedComponent() {
+        if (!CanModifyScene() || IsSceneEditActive()) {
+            return false;
+        }
+
+        auto* Component{CoreUObject::Cast<Engine::UActorComponent>(GetSelectedObject())};
+
+        if (Component == nullptr) {
+            return false;
+        }
+
+        FSceneEditScope Edit{*this};
+        FOperationScope Scope{&mChangingState};
+        Engine::AActor* Actor{Component->GetOwner()};
+        const CoreUObject::TObjectRef<Engine::AActor> ActorHandle{CoreUObject::MakeObjectRef(Actor)};
+        const Core::FString Name{Component->GetName()};
+
+        if (!Actor->RemoveComponent(Component)) {
+            return false;
+        }
+
+        AssignSelection({ActorHandle}, ActorHandle);
+        NoteSceneEdit();
+        AddLog("Deleted " + Name);
+
+        return true;
+    }
+
+    bool Editor::FEditorContext::DestroySelection() {
+        if (CoreUObject::Cast<Engine::UActorComponent>(GetSelectedObject()) != nullptr) {
+            return DestroySelectedComponent();
+        }
+
+        return DestroySelectedActor();
+    }
+
     /**
      * @brief 편집 월드, 객체, 프로퍼티 소속과 편집 권한을 함께 검사합니다.
      */
@@ -935,7 +1028,7 @@ namespace Editor {
         FOperationScope Scope{&mChangingState};
         Core::FString Error{};
         Engine::FProject* Project{GetProject()};
-        const std::filesystem::path ScenePath{Project != nullptr ? Project->GetAssets()->ResolvePath(Path, Error) : std::filesystem::path{}};
+        const std::filesystem::path ScenePath{Project != nullptr ? Project->GetAssets()->ResolveWritablePath(Path, Error) : std::filesystem::path{}};
 
         if (ScenePath.empty()) {
             AddLog(Error.empty() ? "Open a project before saving a scene" : Error);
@@ -1160,6 +1253,10 @@ namespace Editor {
             return false;
         }
 
+        if (!Project->GetAssets()->MigrateAsset(ScenePath, Error)) {
+            AddLog("Cannot migrate '" + Core::FilePath::ToUtf8(ScenePath) + "': " + Error);
+        }
+
         AddLog("Loaded " + Core::FilePath::ToUtf8(ScenePath));
 
         return true;
@@ -1362,6 +1459,613 @@ namespace Editor {
     }
 
     /**
+     * @brief 격자 천 테스트를 켜거나 끕니다.
+     */
+    void Editor::FEditorContext::SetClothGridTest(bool Enable) {
+        if (!Enable) {
+            mClothGridTest.reset();
+
+            return;
+        }
+
+        if (mClothGridTest != nullptr || mEngine == nullptr) {
+            return;
+        }
+
+        // 1m 정사각형 천을 2m 높이에 눕히고 Y=0 쪽 변을 고정합니다.
+        constexpr Uint32 GridSize{20};
+        constexpr float Spacing{1.0f / static_cast<float>(GridSize - 1)};
+        auto Simulation{std::make_unique<PhysicsRuntime::FClothingSimulationNv>()};
+
+        if (!Simulation->Initialize(mEngine->GetClothingSystem()) || !Simulation->CreateGridActor({-0.5f, 0.0f, 2.0f}, GridSize, GridSize, Spacing)) {
+            AddLog("Cannot create the cloth grid. See the Console for details.");
+
+            return;
+        }
+
+        mClothGridTest = std::move(Simulation);
+    }
+
+    /**
+     * @brief 격자 천 테스트가 켜져 있으면 천을 한 프레임 진행합니다.
+     */
+    void Editor::FEditorContext::TickClothGridTest(float DeltaTime) {
+        if (mClothGridTest != nullptr) {
+            mClothGridTest->Simulate(DeltaTime);
+        }
+    }
+
+    /**
+     * @brief 격자 천 테스트의 입자 사이를 선분으로 그립니다.
+     */
+    void Editor::FEditorContext::DrawClothGridTest(Engine::FPrimitiveDrawInterface& DrawInterface, float Thickness) const {
+        if (mClothGridTest == nullptr) {
+            return;
+        }
+
+        Core::TArray<FVector> Positions{};
+        const Uint32 Width{mClothGridTest->GetGridWidth()};
+        const Uint32 Height{mClothGridTest->GetGridHeight()};
+
+        if (!mClothGridTest->GetParticles(0, Positions) || Positions.size() != static_cast<Index_t>(Width) * Height) {
+            return;
+        }
+
+        const FVector Color{0.95f, 0.45f, 0.75f};
+
+        for (Uint32 Row{}; Row < Height; ++Row) {
+            for (Uint32 Column{}; Column < Width; ++Column) {
+                const Index_t Index{static_cast<Index_t>(Row) * Width + Column};
+
+                if (Column + 1 < Width) {
+                    DrawInterface.DrawLine(Positions[Index], Positions[Index + 1], Color, true, Thickness);
+                }
+
+                if (Row + 1 < Height) {
+                    DrawInterface.DrawLine(Positions[Index], Positions[Index + Width], Color, true, Thickness);
+                }
+            }
+        }
+    }
+
+    /**
+     * @brief 선택한 컴포넌트가 스켈레탈 메시 컴포넌트이면 그것을, 액터이면 그 액터의 첫 스켈레탈 메시 컴포넌트를 찾습니다.
+     */
+    Engine::USkeletalMeshComponent* Editor::FEditorContext::FindSelectedSkeletalMeshComponent() {
+        if (auto* Component{CoreUObject::Cast<Engine::USkeletalMeshComponent>(GetSelectedObject())}) {
+            return Component;
+        }
+
+        for (const CoreUObject::TObjectRef<Engine::AActor>& Actor : GetSelectedActors()) {
+            if (Actor.Get() == nullptr) {
+                continue;
+            }
+
+            for (const auto& ActorComponent : Actor->GetComponents()) {
+                if (auto* Component{CoreUObject::Cast<Engine::USkeletalMeshComponent>(ActorComponent.get())}) {
+                    return Component;
+                }
+            }
+        }
+
+        return nullptr;
+    }
+
+    /**
+     * @brief 선택한 스켈레탈 메시를 천 데이터와 함께 메시 파일에 저장합니다.
+     */
+    bool Editor::FEditorContext::SaveClothMesh() {
+        Engine::USkeletalMeshComponent* Component{FindSelectedSkeletalMeshComponent()};
+        Asset::USkeletalMesh* Mesh{Component != nullptr ? Component->GetSkeletalMesh() : nullptr};
+        Engine::FProject* Project{GetProject()};
+
+        if (Mesh == nullptr || Project == nullptr || Component->GetMeshPath().empty()) {
+            AddLog("Select a skeletal mesh actor or component first.");
+
+            return false;
+        }
+
+        const std::filesystem::path MeshPath{Core::FilePath::FromUtf8(Component->GetMeshPath())};
+
+        // 뼈를 파일 안에 넣은 예전 메시는 새 형식으로 저장하면 뼈가 사라지므로 막습니다.
+        if (Project->GetAssets()->FindLegacySkeleton(MeshPath) != nullptr) {
+            AddLog("This mesh uses an embedded skeleton, so its file cannot be saved safely. Reimport it with a separate skeleton first.");
+
+            return false;
+        }
+
+        Core::FString Error{};
+
+        if (!Project->GetAssets()->SaveSkeletalMesh(MeshPath, *Mesh, Error)) {
+            AddLog("Cannot save the skeletal mesh. " + Error);
+
+            return false;
+        }
+
+        AddLog("Saved " + Component->GetMeshPath() + " with " + std::to_string(Mesh->GetMeshClothingAssets().size()) + " clothing assets.");
+
+        return true;
+    }
+
+    /**
+     * @brief 선택한 스켈레탈 메시의 섹션에서 천을 빼고, 이 메시를 쓰는 월드의 컴포넌트 천을 다시 만듭니다.
+     */
+    bool Editor::FEditorContext::RemoveClothTest(Index_t SubMeshIndex) {
+        Engine::USkeletalMeshComponent* Component{FindSelectedSkeletalMeshComponent()};
+        Asset::USkeletalMesh* Mesh{Component != nullptr ? Component->GetSkeletalMesh() : nullptr};
+        const Asset::FClothingSectionData* SectionData{Mesh != nullptr ? Mesh->GetSectionClothingData(SubMeshIndex) : nullptr};
+
+        if (SectionData == nullptr || !SectionData->IsValid()) {
+            AddLog("The selected mesh has no cloth on section " + std::to_string(SubMeshIndex) + ".");
+
+            return false;
+        }
+
+        // 이 메시로 천을 만든 컴포넌트는 지울 에셋을 가리키므로, 에셋을 빼기 전에 천을 해제합니다.
+        Core::TArray<Engine::USkeletalMeshComponent*> Users{};
+        Engine::UWorld* World{GetWorld()};
+
+        if (World != nullptr && World->GetPersistentLevel() != nullptr) {
+            for (const auto& Actor : World->GetPersistentLevel()->GetActors()) {
+                for (const auto& ActorComponent : Actor->GetComponents()) {
+                    if (auto* User{CoreUObject::Cast<Engine::USkeletalMeshComponent>(ActorComponent.get())}; User != nullptr && User->GetSkeletalMesh() == Mesh) {
+                        User->ReleaseAllClothingResources();
+                        Users.push_back(User);
+                    }
+                }
+            }
+        }
+
+        if (mClothAssetTestComponent.Get() != nullptr && mClothAssetTestComponent->GetSkeletalMesh() == Mesh) {
+            ClearClothAssetTest();
+        }
+
+        if (mClothSimTestComponent.Get() != nullptr && mClothSimTestComponent->GetSkeletalMesh() == Mesh) {
+            ClearClothSimTest();
+        }
+
+        Mesh->RemoveClothingAsset(SectionData->mAssetGuid);
+
+        for (Engine::USkeletalMeshComponent* User : Users) {
+            User->RecreateClothingActors();
+        }
+
+        AddLog("Removed the cloth from section " + std::to_string(SubMeshIndex) + ". Run cloth.save to keep the change.");
+
+        return true;
+    }
+
+    /**
+     * @brief 선택한 스켈레탈 메시의 천 에셋들의 설정 하나를 바꾸고 천을 다시 만듭니다.
+     */
+    bool Editor::FEditorContext::SetClothConfigTest(const Core::FString& Name, const Core::TArray<float>& Values) {
+        Engine::USkeletalMeshComponent* Component{FindSelectedSkeletalMeshComponent()};
+        Asset::USkeletalMesh* Mesh{Component != nullptr ? Component->GetSkeletalMesh() : nullptr};
+
+        if (Mesh == nullptr || Mesh->GetMeshClothingAssets().empty()) {
+            AddLog("Select a skeletal mesh with a clothing asset first. Run cloth.asset to create one.");
+
+            return false;
+        }
+
+        // 설정 이름과 값의 위치를 한곳에 모아 보여 주기와 바꾸기에 함께 씁니다.
+        const auto& Fields{Editor::ClothEditing::GetConfigFields()};
+        const auto GetVectors{[](PhysicsRuntime::UClothConfigNv& Config) {
+            return Editor::ClothEditing::GetConfigVectors(Config);
+        }};
+
+        // 이름이 없으면 첫 천 에셋의 설정 값을 보여 줍니다.
+        if (Name.empty()) {
+            PhysicsRuntime::UClothConfigNv* Config{Mesh->GetMeshClothingAssets().front()->GetClothConfig()};
+
+            if (Config == nullptr) {
+                return false;
+            }
+
+            for (const auto& Field : Fields) {
+                if (Field.HasScalarValue()) {
+                    AddLog(Core::FString{Field.mKey} + " = " + std::to_string(Field.GetScalarValue(*Config)));
+                }
+            }
+
+            for (const auto& [EntryName, Value] : GetVectors(*Config)) {
+                AddLog(EntryName + " = " + std::to_string(Value->x) + " " + std::to_string(Value->y) + " " + std::to_string(Value->z));
+            }
+
+            AddLog(Core::FString{"usegravityoverride = "} + (Config->mUseGravityOverride ? "1" : "0"));
+            AddLog(Core::FString{"windmethod = "} + (Config->mClothingWindMethod == PhysicsRuntime::EClothingWindMethodNv::Accurate ? "1 (accurate)" : "0 (legacy)"));
+
+            return true;
+        }
+
+        if (Values.empty()) {
+            AddLog("Give a value for " + Name + ".");
+
+            return false;
+        }
+
+        bool Found{};
+
+        for (const std::unique_ptr<PhysicsRuntime::UClothingAssetCommon>& ClothingAsset : Mesh->GetMeshClothingAssets()) {
+            PhysicsRuntime::UClothConfigNv* Config{ClothingAsset->GetClothConfig()};
+
+            if (Config == nullptr) {
+                continue;
+            }
+
+            for (const auto& Field : Fields) {
+                if (Field.HasScalarValue() && Name == Field.mKey) {
+                    Field.SetScalarValue(*Config, Values[0]);
+                    Found = true;
+                }
+            }
+
+            for (const auto& [EntryName, Value] : GetVectors(*Config)) {
+                if (EntryName == Name) {
+                    *Value = Values.size() >= 3 ? FVector{Values[0], Values[1], Values[2]} : FVector{Values[0], Values[0], Values[0]};
+                    Found = true;
+                }
+            }
+
+            if (Name == "usegravityoverride") {
+                Config->mUseGravityOverride = Values[0] != 0.0f;
+                Found = true;
+            }
+
+            if (Name == "windmethod") {
+                Config->mClothingWindMethod = Values[0] != 0.0f ? PhysicsRuntime::EClothingWindMethodNv::Accurate : PhysicsRuntime::EClothingWindMethodNv::Legacy;
+                Found = true;
+            }
+
+            // 천끼리 충돌 거리가 바뀌었을 수 있으므로 부딪힐 입자를 다시 고릅니다.
+            ClothingAsset->BuildSelfCollisionData();
+        }
+
+        if (!Found) {
+            AddLog("Unknown cloth config '" + Name + "'. Run cloth.config without arguments to see the names.");
+
+            return false;
+        }
+
+        // 설정은 천을 만들 때 들어가므로 천을 다시 만듭니다.
+        Component->RecreateClothingActors();
+        AddLog("Cloth config " + Name + " set.");
+
+        return true;
+    }
+
+    /**
+     * @brief 선택한 스켈레탈 메시의 천 에셋들이 부딪힐 물리 에셋을 바꾸고 천을 다시 만듭니다.
+     */
+    bool Editor::FEditorContext::SetClothPhysicsAssetTest(const Core::FString& Path) {
+        Engine::USkeletalMeshComponent* Component{FindSelectedSkeletalMeshComponent()};
+
+        if (Component == nullptr) {
+            AddLog("Select a skeletal mesh actor or component first.");
+
+            return false;
+        }
+
+        Asset::USkeletalMesh* Mesh{Component->GetSkeletalMesh()};
+        const Asset::USkeleton* Skeleton{Component->GetSkeleton()};
+
+        if (Mesh == nullptr || Skeleton == nullptr) {
+            AddLog("The selected component has no skeletal mesh or skeleton.");
+
+            return false;
+        }
+
+        if (Mesh->GetMeshClothingAssets().empty()) {
+            AddLog("The selected mesh has no clothing asset. Run cloth.asset first.");
+
+            return false;
+        }
+
+        PhysicsRuntime::UPhysicsAsset* PhysicsAsset{};
+
+        Core::FString PhysicsAssetPath{Path};
+
+        if (Path == "mesh") {
+            PhysicsAsset = Component->GetPhysicsAsset();
+            PhysicsAssetPath = !Component->GetPhysicsAssetOverride().empty() ? Component->GetPhysicsAssetOverride() : Mesh->GetPhysicsAssetPath();
+        } else if (Path == "none") {
+            PhysicsAssetPath.clear();
+            // 물리 에셋을 비우면 천이 몸과 부딪히지 않습니다.
+            PhysicsAsset = nullptr;
+        } else {
+            Engine::FProject* Project{GetProject()};
+            Core::FString Error{};
+            PhysicsAsset = Project != nullptr ? Project->GetAssets()->LoadPhysicsAsset(Core::FilePath::FromUtf8(Path), Error) : nullptr;
+
+            if (PhysicsAsset == nullptr) {
+                AddLog("Cannot load the physics asset '" + Path + "'. " + Error);
+
+                return false;
+            }
+        }
+
+        Core::TArray<Core::FString> SkeletonBoneNames{};
+        SkeletonBoneNames.reserve(Skeleton->GetBones().size());
+
+        for (const Asset::FMeshImportBone& Bone : Skeleton->GetBones()) {
+            SkeletonBoneNames.push_back(Bone.GetName());
+        }
+
+        Index_t NumShapes{};
+
+        if (PhysicsAsset != nullptr) {
+            for (const auto& BodySetup : PhysicsAsset->mSkeletalBodySetups) {
+                if (BodySetup != nullptr) {
+                    NumShapes += BodySetup->GetAggGeom().mSphereElems.size() + BodySetup->GetAggGeom().mSphylElems.size() * 2;
+                }
+            }
+        }
+
+        for (const std::unique_ptr<PhysicsRuntime::UClothingAssetCommon>& ClothingAsset : Mesh->GetMeshClothingAssets()) {
+            ClothingAsset->SetPhysicsAsset(PhysicsAsset, SkeletonBoneNames);
+            ClothingAsset->mPhysicsAssetPath = PhysicsAssetPath;
+        }
+
+        // 이미 만든 천은 예전 충돌체를 가지고 있으므로 다시 만듭니다.
+        Component->RecreateClothingActors();
+        AddLog("Cloth physics asset set to " + (PhysicsAsset != nullptr ? Path : Core::FString{"none"}) + " with " + std::to_string(NumShapes) + " collision spheres. NvCloth uses up to 32.");
+
+        return true;
+    }
+
+    /**
+     * @brief 선택한 스켈레탈 메시의 섹션 하나로 천 에셋을 만들어 연결하고 그리기 대상으로 정합니다.
+     */
+    bool Editor::FEditorContext::SetClothAssetTest(Index_t SubMeshIndex) {
+        Engine::USkeletalMeshComponent* Component{FindSelectedSkeletalMeshComponent()};
+
+        if (Component == nullptr) {
+            AddLog("Select a skeletal mesh actor or component first.");
+
+            return false;
+        }
+
+        Asset::USkeletalMesh* Mesh{Component->GetSkeletalMesh()};
+        const Asset::USkeleton* Skeleton{Component->GetSkeleton()};
+
+        if (Mesh == nullptr || Skeleton == nullptr) {
+            AddLog("The selected component has no skeletal mesh or skeleton.");
+
+            return false;
+        }
+
+        const Index_t NumSubMeshes{Mesh->GetMeshData().GetSubMeshes().size()};
+
+        if (SubMeshIndex >= NumSubMeshes) {
+            AddLog("Section " + std::to_string(SubMeshIndex) + " does not exist. The mesh has " + std::to_string(NumSubMeshes) + " sections.");
+
+            return false;
+        }
+
+        const Asset::FClothingSectionData* SectionData{Mesh->GetSectionClothingData(SubMeshIndex)};
+
+        if (SectionData == nullptr || !SectionData->IsValid()) {
+            // 따로 정하기 전까지는 컴포넌트가 쓰는 물리 에셋과 부딪히게 합니다. 저장한 물리 에셋이면 경로도 남깁니다.
+            const Core::FString PhysicsAssetPath{!Component->GetPhysicsAssetOverride().empty() ? Component->GetPhysicsAssetOverride() : Mesh->GetPhysicsAssetPath()};
+            Core::FString CreateError{};
+
+            if (Editor::ClothEditing::CreateClothFromSection(*Mesh, *Skeleton, SubMeshIndex, Component->GetPhysicsAsset(), PhysicsAssetPath, CreateError) == nullptr) {
+                AddLog(CreateError);
+
+                return false;
+            }
+
+            SectionData = Mesh->GetSectionClothingData(SubMeshIndex);
+        }
+
+        const PhysicsRuntime::UClothingAssetCommon* ClothingAsset{Mesh->GetClothingAsset(SectionData->mAssetGuid)};
+
+        if (ClothingAsset == nullptr || !ClothingAsset->IsValidLod(SectionData->mAssetLodIndex)) {
+            AddLog("The clothing data of section " + std::to_string(SubMeshIndex) + " is broken.");
+
+            return false;
+        }
+
+        const PhysicsRuntime::FClothPhysicalMeshData& PhysMesh{ClothingAsset->mLodData[SectionData->mAssetLodIndex].mPhysicalMeshData};
+        const auto NumSkinnedOnly{std::count_if(SectionData->mClothMappingData.begin(), SectionData->mClothMappingData.end(), [](const PhysicsRuntime::FMeshToMeshVertData& VertData) {
+            return VertData.mSourceMeshVertIndices[3] == PhysicsRuntime::FMeshToMeshVertData::NoSimulationFlag;
+        })};
+
+        AddLog("Cloth section " + std::to_string(SubMeshIndex) + ": " + std::to_string(SectionData->mClothMappingData.size()) + " render verts (" + std::to_string(NumSkinnedOnly) + " skinned only) -> "
+            + std::to_string(PhysMesh.mVertices.size()) + " particles, " + std::to_string(PhysMesh.mIndices.size() / 3) + " triangles, " + std::to_string(PhysMesh.mNumFixedVerts) + " fixed, "
+            + std::to_string(ClothingAsset->mUsedBoneNames.size()) + " bones.");
+
+        mClothAssetTestComponent = CoreUObject::MakeObjectRef(Component);
+        mClothAssetTestSubMesh = SubMeshIndex;
+
+        return true;
+    }
+
+    /**
+     * @brief 천 에셋 테스트의 그리기 대상을 비웁니다.
+     */
+    void Editor::FEditorContext::ClearClothAssetTest() {
+        mClothAssetTestComponent.Reset();
+        mClothAssetTestSubMesh = InvalidIndex;
+    }
+
+    /**
+     * @brief 천 에셋 테스트 대상의 천 메시를 바인드 포즈로 그립니다.
+     */
+    void Editor::FEditorContext::DrawClothAssetTest(Engine::FPrimitiveDrawInterface& DrawInterface, float Thickness) const {
+        const Engine::USkeletalMeshComponent* Component{mClothAssetTestComponent.Get()};
+
+        if (Component == nullptr || Component->GetSkeletalMesh() == nullptr) {
+            return;
+        }
+
+        const Asset::USkeletalMesh& Mesh{*Component->GetSkeletalMesh()};
+        const Asset::FClothingSectionData* SectionData{Mesh.GetSectionClothingData(mClothAssetTestSubMesh)};
+
+        if (SectionData == nullptr || !SectionData->IsValid()) {
+            return;
+        }
+
+        const PhysicsRuntime::UClothingAssetCommon* ClothingAsset{Mesh.GetClothingAsset(SectionData->mAssetGuid)};
+
+        if (ClothingAsset == nullptr || !ClothingAsset->IsValidLod(SectionData->mAssetLodIndex)) {
+            return;
+        }
+
+        const PhysicsRuntime::FClothPhysicalMeshData& PhysMesh{ClothingAsset->mLodData[SectionData->mAssetLodIndex].mPhysicalMeshData};
+        const FMatrix WorldMatrix{Component->GetWorldMatrix()};
+        const FVector FixedColor{0.95f, 0.2f, 0.2f};
+        const FVector MovableColor{0.3f, 0.9f, 0.3f};
+
+        for (Index_t TriangleBaseIndex{}; TriangleBaseIndex + 2 < PhysMesh.mIndices.size(); TriangleBaseIndex += 3) {
+            for (Index_t Corner{}; Corner < 3; ++Corner) {
+                const Uint32 Start{PhysMesh.mIndices[TriangleBaseIndex + Corner]};
+                const Uint32 End{PhysMesh.mIndices[TriangleBaseIndex + (Corner + 1) % 3]};
+                const bool Fixed{PhysMesh.mInverseMasses[Start] == 0.0f && PhysMesh.mInverseMasses[End] == 0.0f};
+
+                DrawInterface.DrawLine(WorldMatrix.TransformPosition(PhysMesh.mVertices[Start]), WorldMatrix.TransformPosition(PhysMesh.mVertices[End]), Fixed ? FixedColor : MovableColor, true, Thickness);
+            }
+        }
+    }
+
+    /**
+     * @brief 선택한 스켈레탈 메시의 섹션 하나를 천으로 시뮬레이션합니다.
+     */
+    bool Editor::FEditorContext::SetClothSimTest(Index_t SubMeshIndex) {
+        ClearClothSimTest();
+
+        if (mEngine == nullptr) {
+            return false;
+        }
+
+        // 천 에셋이 없으면 만들고 연결합니다. 실패하면 그 함수가 이유를 기록합니다.
+        if (!SetClothAssetTest(SubMeshIndex)) {
+            return false;
+        }
+
+        Engine::USkeletalMeshComponent* Component{mClothAssetTestComponent.Get()};
+        ClearClothAssetTest();
+
+        if (Component == nullptr || Component->GetSkeletalMesh() == nullptr) {
+            return false;
+        }
+
+        const Asset::USkeletalMesh& Mesh{*Component->GetSkeletalMesh()};
+        const Asset::FClothingSectionData* SectionData{Mesh.GetSectionClothingData(SubMeshIndex)};
+        const PhysicsRuntime::UClothingAssetCommon* ClothingAsset{SectionData != nullptr ? Mesh.GetClothingAsset(SectionData->mAssetGuid) : nullptr};
+
+        if (ClothingAsset == nullptr) {
+            return false;
+        }
+
+        // 컴포넌트 좌표 뼈 행렬과 스키닝 행렬이 있어야 입자를 현재 자세로 놓을 수 있습니다.
+        const Engine::FSkeletalMeshPose& Pose{Component->GetPose()};
+
+        if (Pose.GetGlobalTransforms().empty() || Pose.GetSkinMatrices().empty()) {
+            AddLog("The selected component has no evaluated pose yet.");
+
+            return false;
+        }
+
+        auto Simulation{std::make_unique<PhysicsRuntime::FClothingSimulationNv>()};
+
+        if (!Simulation->Initialize(mEngine->GetClothingSystem()) || !Simulation->CreateActor(*ClothingAsset, SectionData->mCorrespondClothAssetIndex, Component->GetWorldMatrix(), Pose.GetGlobalTransforms(), Pose.GetSkinMatrices())) {
+            AddLog("Cannot create the cloth actor. See the Console for details.");
+
+            return false;
+        }
+
+        mClothSimTest = std::move(Simulation);
+        mClothSimTestComponent = CoreUObject::MakeObjectRef(Component);
+        mClothSimTestSubMesh = SubMeshIndex;
+        AddLog("Cloth sim on for section " + std::to_string(SubMeshIndex) + ". Use stat cloth for timing.");
+
+        return true;
+    }
+
+    /**
+     * @brief 천 시뮬레이션 테스트를 끄고 천과 솔버를 해제합니다.
+     */
+    void Editor::FEditorContext::ClearClothSimTest() {
+        mClothSimTest.reset();
+        mClothSimTestComponent.Reset();
+        mClothSimTestSubMesh = InvalidIndex;
+    }
+
+    /**
+     * @brief 천 시뮬레이션 테스트가 켜져 있으면 천을 한 프레임 진행합니다.
+     */
+    void Editor::FEditorContext::TickClothSimTest(float DeltaTime) {
+        if (mClothSimTest != nullptr) {
+            mClothSimTest->Simulate(DeltaTime);
+        }
+    }
+
+    /**
+     * @brief 천 시뮬레이션 테스트의 입자 사이를 선분으로 그립니다.
+     */
+    void Editor::FEditorContext::DrawClothSimTest(Engine::FPrimitiveDrawInterface& DrawInterface, float Thickness) const {
+        const Engine::USkeletalMeshComponent* Component{mClothSimTestComponent.Get()};
+
+        if (mClothSimTest == nullptr || Component == nullptr || Component->GetSkeletalMesh() == nullptr) {
+            return;
+        }
+
+        const Asset::USkeletalMesh& Mesh{*Component->GetSkeletalMesh()};
+        const Asset::FClothingSectionData* SectionData{Mesh.GetSectionClothingData(mClothSimTestSubMesh)};
+        const PhysicsRuntime::UClothingAssetCommon* ClothingAsset{SectionData != nullptr && SectionData->IsValid() ? Mesh.GetClothingAsset(SectionData->mAssetGuid) : nullptr};
+
+        if (ClothingAsset == nullptr || !ClothingAsset->IsValidLod(SectionData->mAssetLodIndex)) {
+            return;
+        }
+
+        Core::TArray<FVector> Particles{};
+        const PhysicsRuntime::FClothPhysicalMeshData& PhysMesh{ClothingAsset->mLodData[SectionData->mAssetLodIndex].mPhysicalMeshData};
+
+        if (!mClothSimTest->GetParticles(0, Particles) || Particles.size() != PhysMesh.mVertices.size()) {
+            return;
+        }
+
+        // 입자는 기준 뼈 좌표이므로 기준 뼈의 월드 변환으로 월드 위치를 구합니다.
+        const Core::TArray<FMatrix>& GlobalTransforms{Component->GetPose().GetGlobalTransforms()};
+        const Index_t ReferenceBoneIndex{ClothingAsset->mReferenceBoneIndex};
+        const FMatrix WorldMatrix{Component->GetWorldMatrix()};
+        const FMatrix SimRootMatrix{ReferenceBoneIndex < GlobalTransforms.size() ? GlobalTransforms[ReferenceBoneIndex] * WorldMatrix : WorldMatrix};
+        FTransform SimRootTransform{};
+
+        if (!SimRootMatrix.TryGetTransform(SimRootTransform)) {
+            return;
+        }
+
+        const FVector FixedColor{0.95f, 0.2f, 0.2f};
+        const FVector MovableColor{0.3f, 0.9f, 0.3f};
+
+        for (Index_t TriangleBaseIndex{}; TriangleBaseIndex + 2 < PhysMesh.mIndices.size(); TriangleBaseIndex += 3) {
+            for (Index_t Corner{}; Corner < 3; ++Corner) {
+                const Uint32 Start{PhysMesh.mIndices[TriangleBaseIndex + Corner]};
+                const Uint32 End{PhysMesh.mIndices[TriangleBaseIndex + (Corner + 1) % 3]};
+                const bool Fixed{PhysMesh.mInverseMasses[Start] == 0.0f && PhysMesh.mInverseMasses[End] == 0.0f};
+
+                DrawInterface.DrawLine(SimRootTransform.TransformPositionNoScale(Particles[Start]), SimRootTransform.TransformPositionNoScale(Particles[End]), Fixed ? FixedColor : MovableColor, true, Thickness);
+            }
+        }
+    }
+
+    /**
+     * @brief 컴포넌트 천 시뮬레이션 결과를 뷰포트에 그릴지 반환합니다.
+     */
+    bool Editor::FEditorContext::IsClothDebugDrawEnabled() const {
+        return mClothDebugDrawEnabled;
+    }
+
+    /**
+     * @brief 컴포넌트 천 시뮬레이션 결과를 뷰포트에 그릴지 설정합니다.
+     */
+    void Editor::FEditorContext::SetClothDebugDrawEnabled(bool Enable) {
+        mClothDebugDrawEnabled = Enable;
+    }
+
+    /**
      * @brief 새 액터 배치 변환 제공자를 저장합니다.
      */
     void Editor::FEditorContext::SetPlacementProvider(std::function<FTransform()> Provider) {
@@ -1470,7 +2174,7 @@ namespace Editor {
         FTransform Placement{mPlacementProvider ? mPlacementProvider() : FTransform{}};
 
         if (Preset.find("DirectionalLight") != Core::FString::npos || Preset.find("SpotLight") != Core::FString::npos) {
-            Placement.mRotation = FRotator{-45.0f, 0.0f, 0.0f}.Quaternion();
+            Placement.mRotation = FRotator{-45_deg, 0_deg, 0_deg}.Quaternion();
         }
 
         return SpawnActorPreset(Preset, Placement);
@@ -1512,7 +2216,7 @@ namespace Editor {
         }
 
         if (auto* Sprite{CoreUObject::Cast<Engine::UBillboardComponent>(Actor->GetRootComponent())}) {
-            Sprite->SetTexturePath("Editor/Icon/Pawn_64x.png");
+            Sprite->SetTexturePath("/Engine/Editor/Icon/Pawn_64x.png");
         }
 
         CompleteActorSpawn(Actor, "Placed ");

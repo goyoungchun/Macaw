@@ -80,25 +80,25 @@ namespace Engine {
         /**
          * @brief 재생할 시퀀스 에셋의 Content 상대 경로입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "Sequence")
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "Sequence")
         Core::FString mSequencePath{};
 
         /**
          * @brief 게임 시작 시 자동으로 재생할지 나타냅니다.
          */
-        UPROPERTY(Edit, Serialize)
+        UPROPERTY(Edit, Serialize, Category = "Settings")
         bool mAutoPlay{true};
 
         /**
          * @brief 끝에 도달했을 때 처음부터 반복할지 나타냅니다.
          */
-        UPROPERTY(Edit, Serialize)
+        UPROPERTY(Edit, Serialize, Category = "Settings")
         bool mLoop{};
 
         /**
          * @brief 재생이 끝났을 때 대상의 변환을 원래대로 복원할지 나타냅니다.
          */
-        UPROPERTY(Edit, Serialize)
+        UPROPERTY(Edit, Serialize, Category = "Settings")
         bool mRestoreOnFinish{};
 
         /**

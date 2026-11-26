@@ -8,8 +8,8 @@
 
 #include "Core/Math/FMatrix.h"
 #include "RenderCore/TConstantBuffer.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <span>
 #include <wrl/client.h>
 
@@ -43,7 +43,7 @@ namespace Renderer {
             /**
              * @brief 출력 너비·높이의 역수입니다.
              */
-            std::array<float, 2> mInverseSize{};
+            Core::TStaticArray<float, 2> mInverseSize{};
 
             /**
              * @brief 이 뷰어의 셰이딩·버퍼 시각화 모드입니다.

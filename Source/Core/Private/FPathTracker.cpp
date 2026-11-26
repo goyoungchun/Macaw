@@ -2,6 +2,8 @@
 
 #include <chrono>
 
+using namespace std::chrono_literals;
+
 using namespace Core;
 
 FPathTracker::FPathTracker()
@@ -55,7 +57,7 @@ std::optional<FPathTracker::FStamp> FPathTracker::ReadStamp(const std::filesyste
 void FPathTracker::Poll(std::stop_token Stop) {
     std::unique_lock Lock{mMutex};
     while (!Stop.stop_requested()) {
-        mWake.wait_for(Lock, Stop, std::chrono::milliseconds{250}, [] {
+        mWake.wait_for(Lock, Stop, 250ms, [] {
             return false;
         });
         if (Stop.stop_requested()) {

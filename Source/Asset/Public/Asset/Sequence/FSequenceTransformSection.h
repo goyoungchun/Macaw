@@ -10,7 +10,6 @@
 #include "Asset/Sequence/FSequenceChannel.h"
 #include "Core/Math/FTransform.h"
 
-#include <array>
 #include "FSequenceTransformSection.generated.h"
 
 namespace Asset {
@@ -126,7 +125,7 @@ namespace Asset {
         /**
          * @brief ESequenceTransformChannel 순서의 채널입니다.
          */
-        std::array<Asset::FSequenceChannel, ChannelCount> mChannels{};
+        Core::TStaticArray<Asset::FSequenceChannel, ChannelCount> mChannels{};
     };
 
 }

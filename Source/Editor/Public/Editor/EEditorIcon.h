@@ -192,7 +192,10 @@ namespace Editor {
         /**
          * @brief 뷰포트 카메라 이동 속도 아이콘입니다.
          */
-        CameraSpeed
+        CameraSpeed,
+        Reset,
+        ParticleSystem,
+        SkyDome
     };
 
 }

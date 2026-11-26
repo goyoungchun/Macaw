@@ -172,25 +172,25 @@ namespace Engine {
         /**
          * @brief Content 기준 텍스처 에셋 경로이며 빈 경로는 기본 아틀라스입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "Sprite", Getter = GetTexturePath, Setter = SetTexturePath)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "Sprite", Meta = (AssetType = "Texture", EmptyLabel = "Default atlas"), Getter = GetTexturePath, Setter = SetTexturePath)
         Core::FString mTexturePath{};
 
         /**
          * @brief 로컬 쿼드의 가로·세로 월드 크기입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetSize, Setter = SetSize)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetSize, Setter = SetSize)
         FVector2 mSize{2.0f, 2.0f};
 
         /**
          * @brief 표시할 RGBA 색상입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetColor, Setter = SetColor)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetColor, Setter = SetColor)
         FVector4 mColor{1.0f, 1.0f, 1.0f, 1.0f};
 
         /**
          * @brief 카메라의 오른쪽·위쪽 축에 쿼드를 맞출지 여부입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = IsScreenAligned, Setter = SetScreenAligned)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = IsScreenAligned, Setter = SetScreenAligned)
         bool mScreenAligned{true};
 
         /**

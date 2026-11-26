@@ -46,7 +46,7 @@ namespace Renderer {
         mConstants.Bind(Context, RenderCore::EShaderStage::Pixel, 0);
 
         constexpr UINT ResourceSlot{11};
-        std::array<ID3D11ShaderResourceView*, Renderer::GBuffer::AttachmentCount + 2> Resources{};
+        Core::TStaticArray<ID3D11ShaderResourceView*, Renderer::GBuffer::AttachmentCount + 2> Resources{};
 
         for (Index_t Index{}; Index < Target.GetGBuffer().size(); ++Index) {
             Resources[Index] = Target.GetGBuffer()[Index]->GetShaderResourceView();

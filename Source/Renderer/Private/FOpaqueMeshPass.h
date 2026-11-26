@@ -56,7 +56,7 @@ namespace Renderer {
          * @param[in] Family 파이프라인 변형을 고를 표시 모드를 가진 현재 뷰 요청입니다.
          * @param[in,out] Commands 드로 명령을 추가할 목록입니다.
          */
-        void AddCommands(const Renderer::FScenePrimitive& Primitive, Asset::UStaticMesh& Mesh, const Engine::FSceneViewFamily& Family, Core::TArray<Renderer::FMeshDrawCommand>& Commands) override;
+        void AddCommands(const Renderer::FScenePrimitive& Primitive, Asset::UStaticMesh& Mesh, const Engine::FSceneViewFamily& Family, Core::TArray<Renderer::FMeshDrawCommand>& Commands, const Engine::FParticleMeshBatch* ParticleBatch) override;
 
     private:
         /**

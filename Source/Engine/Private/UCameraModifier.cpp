@@ -22,15 +22,15 @@ namespace Engine {
         return true;
     }
 
-    bool Engine::UCameraModifier::ModifyCamera(float, Engine::FMinimalViewInfo&) {
+    bool Engine::UCameraModifier::ModifyCamera(Core::FTime, Engine::FMinimalViewInfo&) {
         return false;
     }
 
-    void Engine::UCameraModifier::UpdateAlpha(float DeltaTime) {
+    void Engine::UCameraModifier::UpdateAlpha(Core::FTime DeltaTime) {
         const float Target{mPendingDisable ? 0.0f : 1.0f};
-        const float BlendTime{mPendingDisable ? mAlphaOutTime : mAlphaInTime};
+        const Core::FTime BlendTime{mPendingDisable ? mAlphaOutTime : mAlphaInTime};
 
-        if (BlendTime <= 0.0f || !std::isfinite(DeltaTime)) {
+        if (BlendTime <= Core::FTime{} || !DeltaTime.IsFinite()) {
             mAlpha = Target;
         } else if (mAlpha < Target) {
             mAlpha = std::min(mAlpha + DeltaTime / BlendTime, Target);
@@ -56,20 +56,20 @@ namespace Engine {
         mPriority = std::clamp<Int32>(Priority, 0, 255);
     }
 
-    float Engine::UCameraModifier::GetAlphaInTime() const {
+    Core::FTime Engine::UCameraModifier::GetAlphaInTime() const {
         return mAlphaInTime;
     }
 
-    void Engine::UCameraModifier::SetAlphaInTime(float Time) {
-        mAlphaInTime = std::isfinite(Time) ? std::max(Time, 0.0f) : 0.0f;
+    void Engine::UCameraModifier::SetAlphaInTime(Core::FTime Time) {
+        mAlphaInTime = Time.IsFinite() ? std::max(Time, Core::FTime{}) : Core::FTime{};
     }
 
-    float Engine::UCameraModifier::GetAlphaOutTime() const {
+    Core::FTime Engine::UCameraModifier::GetAlphaOutTime() const {
         return mAlphaOutTime;
     }
 
-    void Engine::UCameraModifier::SetAlphaOutTime(float Time) {
-        mAlphaOutTime = std::isfinite(Time) ? std::max(Time, 0.0f) : 0.0f;
+    void Engine::UCameraModifier::SetAlphaOutTime(Core::FTime Time) {
+        mAlphaOutTime = Time.IsFinite() ? std::max(Time, Core::FTime{}) : Core::FTime{};
     }
 
     float Engine::UCameraModifier::GetAlpha() const {

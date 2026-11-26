@@ -10,7 +10,6 @@
 
 namespace Engine {
 
-    class FParticleSystemAssetManager;
 
     /**
      * @brief 프로젝트 설정 파일, 시작 장면과 에셋 관리를 담당합니다.
@@ -76,6 +75,9 @@ namespace Engine {
          */
         bool SetStartupScene(const std::filesystem::path& Path, Core::FString& Error);
 
+        bool UsesForwardShading() const;
+        bool SetForwardShading(bool ForwardShading, Core::FString& Error);
+
         /**
          * @brief 마지막으로 연 프로젝트 설정의 버전을 반환합니다.
          * @return 프로젝트 파일에서 읽은 버전이며 열기 전에는 0입니다.
@@ -118,12 +120,6 @@ namespace Engine {
          */
         Asset::FAssetManager* GetAssets() const;
 
-        /**
-         * @brief 프로젝트의 파티클 시스템 에셋 관리자를 조회합니다.
-         * @return 관리자의 비소유 주소입니다.
-         */
-        Engine::FParticleSystemAssetManager* GetParticleSystems() const;
-
     private:
         /**
          * @brief 마지막으로 연 프로젝트 파일의 저장 형식 버전이며 초기값은 0입니다.
@@ -139,6 +135,7 @@ namespace Engine {
          * @brief 콘텐츠 폴더 기준으로 저장하는 시작 장면의 상대 경로입니다.
          */
         Core::FString mStartupScene{"Maps/Main.masset"};
+        bool mForwardShading{};
 
         /**
          * @brief 현재 프로젝트 설정 파일의 절대 경로입니다.
@@ -149,11 +146,6 @@ namespace Engine {
          * @brief 프로젝트 콘텐츠를 읽고 캐시하는 소유 에셋 관리자입니다.
          */
         std::unique_ptr<Asset::FAssetManager> mAssets{};
-
-        /**
-         * @brief 프로젝트가 소유하는 파티클 시스템 에셋 관리자입니다.
-         */
-        std::unique_ptr<Engine::FParticleSystemAssetManager> mParticleSystems{};
     };
 
 }

@@ -5,8 +5,12 @@
  */
 
 #include "Viewer/FViewerTypes.h"
+#include "Core/Literals/UnitLiterals.h"
 
 using namespace Viewer;
+using namespace Core::Literals;
+
+constinit const float Viewer::FViewerCaptureState::mDefaultFixedStep{(1.0f / 60_Hz).GetBase()};
 
 FViewerCaptureState::FViewerCaptureState(double Time, Uint32 Seed, float FixedStep)
 	: mTime{Time},

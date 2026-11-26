@@ -15,9 +15,9 @@
 #include "Core/Console/Console.h"
 #include "Asset/FMeshAssetSerializer.h"
 #include "Asset/FMaterialAssetSerializer.h"
+#include "Core/Types.h"
 
 #include <algorithm>
-#include <array>
 #include <cctype>
 #include <fstream>
 
@@ -104,7 +104,7 @@ bool FAssetRegistry::Initialize(const FProgressCallback& ProgressCallback) {
     }))};
 
     std::size_t LoadedAssetCount{};
-    const std::array AssetTypes{EAssetType::Texture, EAssetType::Font, EAssetType::Pipeline, EAssetType::Material, EAssetType::Mesh};
+    const Core::TStaticArray<EAssetType, 5> AssetTypes{EAssetType::Texture, EAssetType::Font, EAssetType::Pipeline, EAssetType::Material, EAssetType::Mesh};
     bool LoadedAllAssets{true};
 
     for (const EAssetType AssetType : AssetTypes) {
@@ -832,7 +832,7 @@ bool FAssetRegistry::EnsureSystemAssets() {
         const char* mAssetPath{};
     };
 
-    constexpr std::array SystemMeshes{FSystemMeshDefinition{"/Game/System/Mesh/Capsule.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Cone.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Cube.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Cylinder.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/GizmoTorus.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Plane.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Pyramid.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/SkyDome.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Sphere.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Torus.bin"}};
+    constexpr Core::TStaticArray<FSystemMeshDefinition, 10> SystemMeshes{FSystemMeshDefinition{"/Game/System/Mesh/Capsule.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Cone.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Cube.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Cylinder.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/GizmoTorus.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Plane.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Pyramid.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/SkyDome.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Sphere.bin"}, FSystemMeshDefinition{"/Game/System/Mesh/Torus.bin"}};
 
     for (const FSystemMeshDefinition& Definition : SystemMeshes) {
         const FAssetHandle Handle{FindAsset(FAssetPath{Definition.mAssetPath})};
@@ -846,7 +846,7 @@ bool FAssetRegistry::EnsureSystemAssets() {
         const char* mAssetPath{};
     };
 
-    constexpr std::array SystemGizmoMaterials{FSystemAssetDefinition{"/Game/System/Material/Red.mtl.materials/M_Red.material"}, FSystemAssetDefinition{"/Game/System/Material/Green.mtl.materials/M_Green.material"}, FSystemAssetDefinition{"/Game/System/Material/Blue.mtl.materials/M_Blue.material"}};
+    constexpr Core::TStaticArray<FSystemAssetDefinition, 3> SystemGizmoMaterials{FSystemAssetDefinition{"/Game/System/Material/Red.mtl.materials/M_Red.material"}, FSystemAssetDefinition{"/Game/System/Material/Green.mtl.materials/M_Green.material"}, FSystemAssetDefinition{"/Game/System/Material/Blue.mtl.materials/M_Blue.material"}};
 
     for (const FSystemAssetDefinition& Definition : SystemGizmoMaterials) {
         const FAssetHandle Handle{FindAsset(FAssetPath{Definition.mAssetPath})};

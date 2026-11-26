@@ -7,6 +7,7 @@
 #pragma once
 
 #include "CoreUObject/TObjectRef.h"
+#include "Core/Literals/QuantityTypes.h"
 
 #include "Editor/FEditorContext.h"
 #include "Engine/FGameViewportClient.h"
@@ -59,6 +60,11 @@ namespace Editor {
              * @brief PIE를 일시 정지 상태로 시작할지 나타냅니다.
              */
             bool mStartPaused{};
+        };
+
+        enum class EMode {
+            Play,
+            Simulate
         };
 
     public:
@@ -114,14 +120,14 @@ namespace Editor {
          * @brief 편집 월드와 뷰포트 상태가 PIE 시작 조건을 만족하는지 검사합니다.
          * @return 검사 조건을 만족하면 true, 그렇지 않으면 false입니다.
          */
-        bool CanStart() const;
+        bool CanStart(EMode Mode = EMode::Play) const;
 
         /**
          * @brief 편집 월드를 복제하여 PIE를 시작하고 뷰포트 입력과 조회 대상을 연결합니다.
          * @return 요청한 처리를 완료하면 true, 실패하면 false입니다.
          * @param[in] Input 키·마우스 상태를 조회할 공통 입력입니다.
          */
-        bool Start(Core::FInput* Input = nullptr);
+        bool Start(Core::FInput* Input = nullptr, EMode Mode = EMode::Play);
 
         /**
          * @brief PIE 실행을 종료하고 복제 월드와 객체 대응표를 정리한 뒤 편집 상태를 복원합니다.
@@ -141,7 +147,7 @@ namespace Editor {
          * @param[in] DeltaTime 이전 갱신 이후의 경과 시간이며 초 단위입니다.
          * @return 요청한 처리를 완료하면 true, 실패하면 false입니다.
          */
-        bool Step(float DeltaTime = 1.0f / 60.0f);
+        bool Step(Core::FTime DeltaTime = mDefaultStep);
 
         /**
          * @brief PIE 월드의 유효성을 검사하고 지연된 종료 요청을 처리합니다.
@@ -160,6 +166,8 @@ namespace Editor {
          * @return 검사 조건을 만족하면 true, 그렇지 않으면 false입니다.
          */
         bool IsActive() const;
+
+        bool IsSimulating() const;
 
         /**
          * @brief PIE 실행 월드의 일시정지 여부를 반환합니다.
@@ -200,10 +208,14 @@ namespace Editor {
         CoreUObject::TObjectRef<CoreUObject::UObject> FindEditorObject(CoreUObject::TObjectRef<CoreUObject::UObject> Duplicate) const;
 
     private:
+        static const Core::FTime mDefaultStep;
+
         /**
          * @brief 다음 PIE 실행에 사용할 세션 옵션입니다.
          */
         FOptions mOptions{};
+
+        EMode mMode{EMode::Play};
 
         /**
          * @brief 별도 PIE 실행 창의 소유 객체입니다.

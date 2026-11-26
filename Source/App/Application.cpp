@@ -16,8 +16,12 @@
 #include "Editor/FProjectBrowser.h"
 #include "Editor/FPlayInEditorSession.h"
 #include "Platform/SplashWindow.h"
+#include "RenderCore/Shader/UShader.h"
+#include "Core/Types.h"
 
-#include <array>
+#include <chrono>
+
+using namespace std::chrono_literals;
 
 namespace App {
 
@@ -47,7 +51,7 @@ namespace App {
 
         MACAW_LOG(LogApplication, Log, "Editor window created ({}x{}).", mPlatform.GetWidth(), mPlatform.GetHeight());
 
-        std::array<wchar_t, 32768> Executable{};
+        Core::TStaticArray<wchar_t, 32768> Executable{};
         const DWORD Length{GetModuleFileNameW(nullptr, Executable.data(), static_cast<DWORD>(Executable.size()))};
 
         if (Length == 0 || Length >= Executable.size()) {
@@ -66,7 +70,7 @@ namespace App {
 
         while (mPlatform.PumpMessages() && !mEngine.WantsExit()) {
             if (mPlatform.IsMinimized() && !mEngine.GetPlaySession()->IsPlayingInNewWindow()) {
-                mPlatform.WaitForMessages(16);
+                mPlatform.WaitForMessages(static_cast<Uint32>((16ms).count()));
 
                 continue;
             }
@@ -114,6 +118,7 @@ namespace App {
         mRenderer.Shutdown();
         mEngine.SetProject(nullptr);
         mProject.reset();
+        RenderCore::UShader::ReleaseBuiltins();
         mPlatform.Shutdown();
     }
 
@@ -214,7 +219,7 @@ namespace App {
         mRenderer.Shutdown();
         mProject = std::move(Project);
         mEngine.SetProject(mProject.get());
-        mRenderer.SetProjectPaths(mProject->GetAssets()->GetContentRoot(), mProject->GetShaderCachePath());
+        mRenderer.SetProjectPaths(*mProject->GetAssets(), mProject->GetShaderCachePath(), mProject->UsesForwardShading());
 
         const bool RendererReady{mRenderer.Initialize(mPlatform.GetWindowHandle(), mPlatform.GetWidth(), mPlatform.GetHeight())};
 

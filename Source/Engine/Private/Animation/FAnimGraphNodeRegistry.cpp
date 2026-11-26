@@ -8,6 +8,7 @@
 #include "Asset/Animation/UAnimSequence.h"
 #include "Asset/Animation/UAnimGraph.h"
 #include "Engine/Animation/FAnimNode_BlendSpacePlayer.h"
+#include "Engine/Animation/FAnimNode_RigidBody.h"
 #include "Engine/Animation/FAnimNode_SequencePlayer.h"
 #include "Engine/Animation/FAnimNode_TwoWayBlend.h"
 #include "Engine/Animation/FAnimNode_StateMachine.h"
@@ -49,9 +50,10 @@ namespace Engine {
             Core::TArray<Engine::FAnimGraphNodeType> Types{};
 
             const Engine::FAnimGraphParameterInfo PlayRate{"PlayRate", Engine::EAnimGraphParameterType::Float, "1", false, -3.0f, 3.0f};
+            const Engine::FAnimGraphParameterInfo SequencePlayRate{"PlayRate", Engine::EAnimGraphParameterType::Float, "1", true, -3.0f, 3.0f};
             const Engine::FAnimGraphParameterInfo Loop{"Loop", Engine::EAnimGraphParameterType::Bool, "true"};
 
-            Types.push_back({"SequencePlayer", "Sequence Player", {}, {{"Sequence", Engine::EAnimGraphParameterType::AnimSequence}, PlayRate, Loop}, [](const Engine::FAnimGraphNodeBuildContext& Context) {
+            Types.push_back({"SequencePlayer", "Sequence Player", {}, {{"Sequence", Engine::EAnimGraphParameterType::AnimSequence}, SequencePlayRate, Loop}, [](const Engine::FAnimGraphNodeBuildContext& Context) {
                 auto Node{std::make_unique<Engine::FAnimNode_SequencePlayer>()};
 
                 Node->mSequence = Context.mLoadSequence ? Context.mLoadSequence(Context.GetString("Sequence")) : nullptr;
@@ -82,6 +84,15 @@ namespace Engine {
 
             Types.push_back({"StateMachine", "State Machine", {}, {}, [](const Engine::FAnimGraphNodeBuildContext&) {
                 return std::make_unique<Engine::FAnimNode_StateMachine>();
+            }});
+
+            // 입력 포즈에서 피직스 에셋의 바디가 붙은 뼈(머리카락, 장신구 등)를 독립 시뮬레이션한다.
+            Types.push_back({"RigidBody", "Rigid Body", {"Pose"}, {{"PhysicsAsset", Engine::EAnimGraphParameterType::PhysicsAsset}}, [](const Engine::FAnimGraphNodeBuildContext& Context) {
+                auto Node{std::make_unique<Engine::FAnimNode_RigidBody>()};
+
+                Node->mPhysicsAssetPath = Context.GetString("PhysicsAsset");
+
+                return std::unique_ptr<Engine::FAnimNode_Base>{std::move(Node)};
             }});
 
             return Types;

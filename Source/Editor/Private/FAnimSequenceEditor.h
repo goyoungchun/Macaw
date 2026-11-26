@@ -6,15 +6,14 @@
 
 #pragma once
 
-#include "CoreUObject/TObjectRef.h"
-
-#include "Core/Types.h"
 #include "FAnimSequenceTimeline.h"
+#include "FMessageBox.h"
+#include "Core/Types.h"
+#include "CoreUObject/TObjectRef.h"
 #include "Editor/FAssetPicker.h"
-
-#include <array>
 #include <filesystem>
 #include <memory>
+#include <optional>
 
 namespace Asset {
     class FAssetManager;
@@ -51,7 +50,7 @@ namespace Editor {
          * @param Catalog 외부에서 소유하는 에셋 목록입니다.
          * @param Thumbnails UI에 사용할 썸네일 캐시입니다.
          */
-        FAnimSequenceEditor(RenderCore::IRendererModule* Renderer, Asset::FAssetManager* Assets, Editor::FEditorAssetCatalog* Catalog, Editor::FAssetThumbnailCache* Thumbnails);
+        FAnimSequenceEditor(RenderCore::IRendererModule* Renderer, Asset::FAssetManager* Assets, Editor::FEditorAssetCatalog* Catalog, Editor::FAssetThumbnailCache* Thumbnails, Editor::FMessageBox& Messages);
 
         /**
          * @brief 객체의 수명을 끝내고 소유한 리소스를 정리합니다.
@@ -96,10 +95,9 @@ namespace Editor {
         void HandleCommands(bool CanSave);
 
         /**
-         * @brief 저장하지 않은 편집 내용의 처리 여부를 확인하고 닫기를 요청합니다.
-         * @return 사용자가 닫기를 허용하면 true입니다.
+         * @brief 저장하지 않은 애니메이션 설정을 확인할 항목을 반환합니다.
          */
-        bool RequestClose();
+        std::optional<Editor::FMessageBox::FSavePrompt> GetClosePrompt();
 
         /**
          * @brief 열린 에셋이 제거·교체된 경로에 해당하면 편집기를 정리합니다.
@@ -169,10 +167,9 @@ namespace Editor {
         void DrawAssetBrowser();
 
         /**
-         * @brief 저장하지 않은 변경의 저장·폐기·취소 확인창을 표시합니다.
-         * @param CanSave 현재 상태에서 에셋 저장을 허용하는지 여부입니다.
+         * @brief 저장하지 않은 설정을 확인할 항목을 구성합니다.
          */
-        void DrawClosePrompt(bool CanSave);
+        Editor::FMessageBox::FSavePrompt MakeSavePrompt();
 
         /**
          * @brief 창 포커스와 저장 가능 상태에 따라 키보드 단축키를 처리합니다.
@@ -207,6 +204,8 @@ namespace Editor {
          * @brief 외부에서 소유하는 썸네일 캐시입니다.
          */
         Editor::FAssetThumbnailCache* mThumbnails{};
+
+        Editor::FMessageBox& mMessages;
 
         /**
          * @brief 에셋 선택 위젯의 상태입니다.
@@ -259,11 +258,6 @@ namespace Editor {
         bool mToolkitCanSave{};
 
         /**
-         * @brief 변경 처리 확인 후 열 에셋 경로입니다.
-         */
-        std::filesystem::path mPendingPath{};
-
-        /**
          * @brief 미리보기에 사용할 메시 에셋 경로입니다.
          */
         Core::FString mMeshPath{};
@@ -281,12 +275,12 @@ namespace Editor {
         /**
          * @brief 루트 모션 본 이름의 UTF-8 편집 버퍼입니다.
          */
-        std::array<char, 1024> mRootBone{};
+        Core::TStaticArray<char, 1024> mRootBone{};
 
         /**
          * @brief 애니메이션 목록의 UTF-8 검색 입력 버퍼입니다.
          */
-        std::array<char, 256> mAnimationSearch{};
+        Core::TStaticArray<char, 256> mAnimationSearch{};
 
         /**
          * @brief 에디터 창이 열려 있는지 여부입니다.
@@ -302,11 +296,6 @@ namespace Editor {
          * @brief 외부 변경으로 원본 시퀀스가 교체되거나 설정이 달라져 다시 열어야 하는지 여부입니다.
          */
         bool mSourceChanged{};
-
-        /**
-         * @brief 저장하지 않은 변경의 처리 확인창을 열지 여부입니다.
-         */
-        bool mConfirmClose{};
 
         /**
          * @brief 본 오버레이 표시 여부입니다.

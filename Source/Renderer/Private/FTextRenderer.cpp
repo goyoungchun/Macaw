@@ -56,7 +56,7 @@ namespace Renderer {
         Microsoft::WRL::ComPtr<ID3D11VertexShader> Vertex{};
         Microsoft::WRL::ComPtr<ID3D11PixelShader> Pixel{};
         Microsoft::WRL::ComPtr<ID3D11InputLayout> Layout{};
-        const std::array<D3D11_INPUT_ELEMENT_DESC, 2> Elements{{{"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, offsetof(Renderer::FTextVertex, mPosition), D3D11_INPUT_PER_VERTEX_DATA, 0}, {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, offsetof(Renderer::FTextVertex, mUV), D3D11_INPUT_PER_VERTEX_DATA, 0}}};
+        const Core::TStaticArray<D3D11_INPUT_ELEMENT_DESC, 2> Elements{{{"POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0, offsetof(Renderer::FTextVertex, mPosition), D3D11_INPUT_PER_VERTEX_DATA, 0}, {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, offsetof(Renderer::FTextVertex, mUV), D3D11_INPUT_PER_VERTEX_DATA, 0}}};
 
         if (FAILED(Device->CreateVertexShader(VertexCode.data(), VertexCode.size(), nullptr, Vertex.GetAddressOf())) || FAILED(Device->CreatePixelShader(PixelCode.data(), PixelCode.size(), nullptr, Pixel.GetAddressOf())) || FAILED(Device->CreateInputLayout(Elements.data(), static_cast<UINT>(Elements.size()), VertexCode.data(), VertexCode.size(), Layout.GetAddressOf()))) {
             return false;

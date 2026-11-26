@@ -5,6 +5,7 @@
  */
 
 #include "FAnimSequenceViewportClient.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include "Viewer/FAnimationViewerContent.h"
 #include "Viewer/FBonePreview.h"
@@ -15,6 +16,8 @@
 #include <algorithm>
 #include <cmath>
 #include <imgui.h>
+
+using namespace Core::Literals;
 
 using namespace Editor;
 
@@ -27,7 +30,7 @@ FAnimSequenceViewportClient::FAnimSequenceViewportClient(RenderCore::IRendererMo
 FAnimSequenceViewportClient::~FAnimSequenceViewportClient() = default;
 
 void FAnimSequenceViewportClient::FrameMesh() {
-    mViewer.GetCamera().SetRotation({-20.0f, 45.0f, 0.0f});
+    mViewer.GetCamera().SetRotation({-20_deg, 45_deg, 0_deg});
     mViewer.Fit();
     mNeedsFit = true;
 }
@@ -59,14 +62,37 @@ void FAnimSequenceViewportClient::DrawUI(const FVector2& Size) {
     const bool Active{ImGui::IsItemActive()};
     const ImGuiIO& Input{ImGui::GetIO()};
 
-    if (Active && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f)) {
+    // 오른쪽 버튼을 누른 동안은 비행(제자리 시선 회전 + WASD/QE 이동, 휠은 속도 조절), 왼쪽은 궤도 회전, 가운데는 이동이다.
+    const bool Flying{Active && ImGui::IsMouseDown(ImGuiMouseButton_Right) && !ImGui::IsMouseDown(ImGuiMouseButton_Middle)};
+
+    if (Flying) {
+        Viewer::FFlyInput Fly{};
+
+        Fly.mMouseDelta = {Input.MouseDelta.x, Input.MouseDelta.y};
+        Fly.mWheel = Input.MouseWheel;
+        Fly.mDeltaTime = Input.DeltaTime;
+        Fly.mFast = Input.KeyShift;
+
+        if (!Input.WantTextInput) {
+            Fly.mForward = ImGui::IsKeyDown(ImGuiKey_W);
+            Fly.mBackward = ImGui::IsKeyDown(ImGuiKey_S);
+            Fly.mRight = ImGui::IsKeyDown(ImGuiKey_D);
+            Fly.mLeft = ImGui::IsKeyDown(ImGuiKey_A);
+            Fly.mUp = ImGui::IsKeyDown(ImGuiKey_E);
+            Fly.mDown = ImGui::IsKeyDown(ImGuiKey_Q);
+        }
+
+        mFlyCamera.Update(mViewer.GetCamera(), Fly);
+    } else if (Active && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f)) {
         mViewer.GetCamera().Pan({Input.MouseDelta.x, Input.MouseDelta.y}, Size.y);
-    } else if (Active && (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f) || ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f))) {
+    } else if (Active && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
         mViewer.GetCamera().Orbit({Input.MouseDelta.x, Input.MouseDelta.y});
     }
 
     if (Hovered) {
-        mViewer.GetCamera().Zoom(Input.MouseWheel);
+        if (!Flying) {
+            mViewer.GetCamera().Zoom(Input.MouseWheel);
+        }
 
         if (!Input.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F)) {
             FrameMesh();
@@ -77,7 +103,7 @@ void FAnimSequenceViewportClient::DrawUI(const FVector2& Size) {
     const ImVec2 End{ImGui::GetItemRectMax()};
 
     ImGui::GetWindowDrawList()->AddImage(ImTextureRef{static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(mViewer.GetNativeTexture()))}, Origin, End);
-    ImGui::GetWindowDrawList()->AddText({Origin.x + 12.0f, End.y - ImGui::GetTextLineHeight() - 10.0f}, IM_COL32(220, 225, 235, 255), "Drag: orbit | Middle: pan | Wheel: zoom | F: frame");
+    ImGui::GetWindowDrawList()->AddText({Origin.x + 12.0f, End.y - ImGui::GetTextLineHeight() - 10.0f}, IM_COL32(220, 225, 235, 255), "LMB: orbit | MMB: pan | Wheel: zoom | RMB + WASD/QE: fly | RMB + Wheel: speed | Shift: fast | F: frame");
 }
 
 void FAnimSequenceViewportClient::Render() {
@@ -97,6 +123,6 @@ void FAnimSequenceViewportClient::Render() {
     }
 
     mViewer.SetViewMode(mWireframe ? Engine::EViewMode::Wireframe : Engine::EViewMode::Lit);
-    mViewer.SetGridSpacing(mShowGrid ? std::max(std::pow(10.0f, std::floor(std::log10(Radius)) - 1.0f), 0.001f) : 0.0f);
+    mViewer.SetGridSpacing(mShowGrid ? std::max(std::pow(10.0f, std::floor(std::log10(Radius)) - 1.0f), (0.001_m).GetBase()) : 0.0f);
     mViewer.Render(nullptr, mShowBones ? &Bones : nullptr);
 }

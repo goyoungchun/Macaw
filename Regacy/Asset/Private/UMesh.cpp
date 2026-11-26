@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Asset/UMesh.h"
+#include "Core/Types.h"
 #include <ranges>
 #include <map>
 #include <tuple>
@@ -969,7 +970,7 @@ bool UMesh::MakeLODCandidate(Uint64 Key, const FLODGeometry& Geometry, const FLO
         }};
 
         if (!Collapse.mFixedTarget) {
-            std::array<double, 3> UVQuadric{};
+            Core::TStaticArray<double, 3> UVQuadric{};
 
             if (!EvaluateLODUVError(Collapse, Geometry, UVError, &UVQuadric)) {
                 return false;
@@ -1092,7 +1093,7 @@ bool UMesh::PrepareLODCollapse(const FLODCandidate& Candidate, const FLODGeometr
     return Collapse.mMergeCount != 0;
 }
 
-bool UMesh::EvaluateLODUVError(const FLODCollapse& Collapse, const FLODGeometry& Geometry, double& Error, std::array<double, 3>* UVQuadric) {
+bool UMesh::EvaluateLODUVError(const FLODCollapse& Collapse, const FLODGeometry& Geometry, double& Error, Core::TStaticArray<double, 3>* UVQuadric) {
     constexpr double MaximumStretch{2.0};
     constexpr double MaximumDensityChange{4.0};
     constexpr double ConstantUVToleranceSquared{1e-12};
@@ -1114,10 +1115,10 @@ bool UMesh::EvaluateLODUVError(const FLODCollapse& Collapse, const FLODGeometry&
                 continue;
             }
 
-            std::array<FVector3, 3> SourcePositions{};
-            std::array<FVector3, 3> Positions{};
-            std::array<FVector2D, 3> SourceUVs{};
-            std::array<FVector2D, 3> UVs{};
+            Core::TStaticArray<FVector3, 3> SourcePositions{};
+            Core::TStaticArray<FVector3, 3> Positions{};
+            Core::TStaticArray<FVector2D, 3> SourceUVs{};
+            Core::TStaticArray<FVector2D, 3> UVs{};
 
             for (Uint32 Offset{}; Offset < 3; ++Offset) {
                 const Uint32 RenderVertex{Geometry.mRenderIndices[First + Offset]};
@@ -1173,7 +1174,7 @@ bool UMesh::EvaluateLODUVError(const FLODCollapse& Collapse, const FLODGeometry&
                 continue;
             }
 
-            std::array<FVector2D, 3> ExpectedUVs{};
+            Core::TStaticArray<FVector2D, 3> ExpectedUVs{};
 
             for (Uint32 Offset{}; Offset < 3; ++Offset) {
                 const FVector3 Displacement{Positions[Offset] - SourcePositions[0]};

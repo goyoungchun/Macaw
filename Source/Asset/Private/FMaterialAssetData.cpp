@@ -94,7 +94,7 @@ namespace Asset {
             Archive.Serialize("BlendMode", BlendMode);
 
             if (Archive.IsLoading()) {
-                if (BlendMode > static_cast<Uint32>(Asset::EBlendMode::Translucent)) {
+                if (BlendMode > static_cast<Uint32>(Asset::EBlendMode::Additive)) {
                     Archive.SetError("Invalid material blend mode");
 
                     return;

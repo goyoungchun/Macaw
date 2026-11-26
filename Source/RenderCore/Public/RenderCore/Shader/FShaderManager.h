@@ -100,6 +100,7 @@ namespace RenderCore {
          * @return 요청한 처리를 완료하면 true, 실패하면 false입니다.
          */
         bool ReloadChanged(Core::TArray<CoreUObject::TObjectRef<RenderCore::UShader>>& ChangedShaders, Core::FString& Diagnostics);
+        bool ReloadAll(Core::TArray<CoreUObject::TObjectRef<RenderCore::UShader>>& ChangedShaders, Core::FString& Diagnostics);
 
         /**
          * @brief 관리 중인 셰이더 참조와 소유한 셰이더 객체를 정리합니다.
@@ -113,6 +114,8 @@ namespace RenderCore {
         void SetCacheDirectory(std::filesystem::path Directory);
 
     private:
+        bool Reload(Core::TArray<CoreUObject::TObjectRef<RenderCore::UShader>>& ChangedShaders, Core::FString& Diagnostics, bool ForceCompile);
+
         /**
          * @brief 유효한 캐시를 먼저 조회하고 사용할 수 없으면 셰이더를 컴파일합니다.
          * @param[in] Description 소스 경로·진입점·프로필·매크로 등의 컴파일 설정입니다.
@@ -121,7 +124,7 @@ namespace RenderCore {
          * @param[out] Diagnostics 실패 원인과 컴파일 메시지를 받을 문자열입니다.
          * @return 요청한 처리를 완료하면 true, 실패하면 false입니다.
          */
-        bool LoadCompilation(const RenderCore::FShaderDescription& Description, RenderCore::FShaderCompilation& Compilation, bool& LoadedFromCache, Core::FString& Diagnostics) const;
+        bool LoadCompilation(const RenderCore::FShaderDescription& Description, RenderCore::FShaderCompilation& Compilation, bool& LoadedFromCache, Core::FString& Diagnostics, bool ForceCompile = false) const;
 
     private:
         /**

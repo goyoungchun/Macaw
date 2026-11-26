@@ -5,6 +5,7 @@
  */
 
 #include "CoreUObject/Reflection/UScriptStruct.h"
+#include "CoreUObject/Reflection/FStructOps.h"
 #include "CoreUObject/Reflection/UStruct.h"
 #include "Core/Base/ErrorHandler.h"
 
@@ -15,9 +16,10 @@ namespace CoreUObject {
     /**
      * @brief UScriptStruct의 초기 상태와 전달받은 의존성을 구성합니다.
      */
-    CoreUObject::UScriptStruct::UScriptStruct(Core::FString Name, std::size_t Size, const CoreUObject::UScriptStruct* Parent)
+    CoreUObject::UScriptStruct::UScriptStruct(Core::FString Name, std::size_t Size, const CoreUObject::UScriptStruct* Parent, const CoreUObject::FStructOps* Ops)
 		: CoreUObject::UStruct{std::move(Name), Size},
-		  mParent{Parent} {
+		  mParent{Parent},
+		  mOps{Ops} {
     }
 
     /**
@@ -43,6 +45,24 @@ namespace CoreUObject {
         }
 
         return false;
+    }
+
+    /**
+     * @brief 네이티브 값을 복제·파괴하는 함수 테이블을 반환합니다.
+     */
+    const CoreUObject::FStructOps* CoreUObject::UScriptStruct::GetStructOps() const {
+        return mOps;
+    }
+
+    /**
+     * @brief 이 구조체 타입의 값을 복사 생성한 작업용 사본을 만듭니다.
+     */
+    CoreUObject::UScriptStruct::FValuePtr CoreUObject::UScriptStruct::CloneValue(const void* Source) const {
+        if (mOps == nullptr || Source == nullptr) {
+            return FValuePtr{nullptr, [](void*) {}};
+        }
+
+        return FValuePtr{mOps->mClone(Source), mOps->mDestroy};
     }
 
 }

@@ -5,7 +5,6 @@
  */
 
 #include "Engine/Component/UActorComponent.h"
-#include "Engine/EngineStats.h"
 #include "Engine/AActor.h"
 #include "Engine/UWorld.h"
 
@@ -58,7 +57,8 @@ namespace Engine {
     }
 
     /**
-     * @brief 컴포넌트를 월드에 연결하고 필요한 렌더 상태를 등록합니다.
+     * @brief 컴포넌트를 월드에 연결하고 등록 콜백 이후 Tick 함수를 등록합니다.
+     * @details 콜백 이후에도 월드 연결과 소유자가 유효한 경우에 Tick 등록을 진행합니다.
      */
     void Engine::UActorComponent::RegisterComponent(Engine::UWorld* World) {
         Engine::UWorld::FDispatchScope Scope{World};
@@ -77,18 +77,31 @@ namespace Engine {
 
         OnRegister();
 
-        if (mOwner != nullptr && mOwner->HasBegunPlay() && World->CanBeginActor()) {
-            DispatchBeginPlay();
+        if (mWorld == World) {
+            CreatePhysicsState();
+        }
+
+        if (mWorld == World && mOwner != nullptr) {
+            RegisterComponentTickFunctions(true);
+
+            if (mOwner->HasBegunPlay() && World->CanBeginActor()) {
+                DispatchBeginPlay();
+            }
         }
     }
 
     /**
-     * @brief 등록된 렌더 상태와 월드 연결을 해제합니다.
+     * @brief Tick 등록을 해제한 뒤 종료 콜백을 전달하고 월드 연결과 렌더 상태를 정리합니다.
      */
     void Engine::UActorComponent::UnregisterComponent() {
         Engine::UWorld::FDispatchScope Scope{mWorld};
 
+        if (mWorld != nullptr) {
+            RegisterComponentTickFunctions(false);
+        }
+
         DispatchEndPlay();
+        DestroyPhysicsState();
 
         mWorld = nullptr;
     }
@@ -101,9 +114,69 @@ namespace Engine {
     }
 
     /**
+     * @brief 등록된 월드에 물리 장면이 있고 물리 상태가 필요하면 물리 상태를 만듭니다.
+     */
+    void Engine::UActorComponent::CreatePhysicsState() {
+        if (mPhysicsStateCreated || mWorld == nullptr || mWorld->GetPhysicsScene() == nullptr || !ShouldCreatePhysicsState()) {
+            return;
+        }
+
+        mPhysicsStateCreated = true;
+
+        OnCreatePhysicsState();
+    }
+
+    /**
+     * @brief 만든 물리 상태를 해제합니다.
+     */
+    void Engine::UActorComponent::DestroyPhysicsState() {
+        if (!mPhysicsStateCreated) {
+            return;
+        }
+
+        mPhysicsStateCreated = false;
+
+        OnDestroyPhysicsState();
+    }
+
+    /**
+     * @brief 물리 상태를 해제한 뒤 조건이 맞으면 다시 만듭니다.
+     */
+    void Engine::UActorComponent::RecreatePhysicsState() {
+        DestroyPhysicsState();
+        CreatePhysicsState();
+    }
+
+    /**
+     * @brief 물리 상태를 만들었는지 반환합니다.
+     */
+    bool Engine::UActorComponent::IsPhysicsStateCreated() const {
+        return mPhysicsStateCreated;
+    }
+
+    /**
+     * @brief 이 컴포넌트가 물리 상태를 필요로 하는지 반환하는 확장 지점입니다.
+     */
+    bool Engine::UActorComponent::ShouldCreatePhysicsState() const {
+        return false;
+    }
+
+    /**
      * @brief 월드에 등록된 컴포넌트가 참조하는 에셋과 렌더 상태를 준비합니다.
      */
     void Engine::UActorComponent::OnRegister() {
+    }
+
+    /**
+     * @brief 물리 장면에 이 컴포넌트의 물리 상태를 만드는 확장 지점입니다.
+     */
+    void Engine::UActorComponent::OnCreatePhysicsState() {
+    }
+
+    /**
+     * @brief 이 컴포넌트의 물리 상태를 물리 장면에서 해제하는 확장 지점입니다.
+     */
+    void Engine::UActorComponent::OnDestroyPhysicsState() {
     }
 
     /**
@@ -113,9 +186,9 @@ namespace Engine {
     }
 
     /**
-     * @brief 컴포넌트의 실행 또는 허용된 편집 갱신 시 호출되는 확장 지점입니다.
+     * @brief 기본 컴포넌트 Tick 함수가 실행 차례에 호출하는 갱신 확장 지점입니다.
      */
-    void Engine::UActorComponent::Tick(float DeltaTime) {
+    void Engine::UActorComponent::Tick(float) {
     }
 
     /**
@@ -146,6 +219,41 @@ namespace Engine {
     }
 
     /**
+     * @brief 컴포넌트가 직접 소유한 기본 Tick 함수를 반환합니다.
+     */
+    Engine::FActorComponentTickFunction& Engine::UActorComponent::GetPrimaryComponentTick() {
+        return mPrimaryComponentTick;
+    }
+
+    /**
+     * @brief 기본 컴포넌트 Tick에 지정한 그룹을 조회합니다.
+     */
+    Engine::ETickingGroup Engine::UActorComponent::GetTickGroup() const {
+        return mPrimaryComponentTick.GetTickGroup();
+    }
+
+    /**
+     * @brief 검증과 그룹 설정을 기본 컴포넌트 Tick에 전달합니다.
+     */
+    bool Engine::UActorComponent::SetTickGroup(Engine::ETickingGroup Group) {
+        return mPrimaryComponentTick.SetTickGroup(Group);
+    }
+
+    /**
+     * @brief 등록을 요청하면 소유 액터의 레벨을 사용하고, 해제 시에는 기존 등록을 끊습니다.
+     */
+    void Engine::UActorComponent::RegisterComponentTickFunctions(bool Register) {
+        if (!Register) {
+            mPrimaryComponentTick.UnregisterTickFunction();
+            return;
+        }
+
+        if (Engine::ULevel* Level{mOwner != nullptr ? mOwner->GetLevel() : nullptr}) {
+            mPrimaryComponentTick.RegisterTickFunction(*Level);
+        }
+    }
+
+    /**
      * @brief 시작 상태를 설정하고 중복되지 않도록 시작 콜백을 전달합니다.
      */
     void Engine::UActorComponent::DispatchBeginPlay() {
@@ -153,16 +261,6 @@ namespace Engine {
             mHasBegunPlay = true;
 
             BeginPlay();
-        }
-    }
-
-    /**
-     * @brief 등록된 컴포넌트의 실행 상태 또는 편집 Tick 설정에 따라 갱신을 전달합니다.
-     */
-    void Engine::UActorComponent::DispatchTick(float DeltaTime, bool EditorTick) {
-        if (mWorld != nullptr && mOwner != nullptr && mOwner->GetWorld() == mWorld && !mOwner->IsPendingDestroy() && (EditorTick ? mEditorTickable : mHasBegunPlay)) {
-            Engine::EngineStats::ComponentTicks.Add();
-            Tick(DeltaTime);
         }
     }
 

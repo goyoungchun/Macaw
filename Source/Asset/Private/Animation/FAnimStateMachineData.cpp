@@ -6,6 +6,7 @@
 
 #include "Core/Types.h"
 #include "Asset/Animation/FAnimStateMachineData.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Asset/Animation/UAnimGraph.h"
 #include "Core/Archive.h"
 
@@ -14,7 +15,11 @@
 #include <limits>
 #include <utility>
 
+using namespace Core::Literals;
+
 namespace Asset {
+
+    constinit const Core::FTime Asset::FAnimTransitionData::mDefaultDuration{0.2_s};
 
     const Core::TArray<Asset::FAnimRuleNode>& FAnimTransitionGraph::GetNodes() const {
         return mNodes;
@@ -383,6 +388,10 @@ namespace Asset {
     }
 
     void FAnimStateMachineData::Serialize(Core::FArchive& Archive) {
+        Serialize(Archive, 0);
+    }
+
+    void FAnimStateMachineData::Serialize(Core::FArchive& Archive, Uint32 Depth) {
         Archive.Serialize("Entry", mEntryState);
         Uint32 Count{static_cast<Uint32>(mStates.size())};
 
@@ -416,7 +425,7 @@ namespace Asset {
             if (State.mGraph == nullptr) {
                 Archive.SetError("Missing state pose graph");
             } else if (Archive.BeginObject("Graph")) {
-                State.mGraph->Serialize(Archive);
+                State.mGraph->SerializeGraph(Archive, Depth);
                 Archive.EndObject();
             }
 
@@ -464,7 +473,7 @@ namespace Asset {
 
             Archive.EndObject();
 
-            if (Transition.mId < 0 || Transition.mId == std::numeric_limits<Int32>::max() || FindState(Transition.mFromState) == nullptr || FindState(Transition.mToState) == nullptr || !std::isfinite(Transition.mDuration) || Transition.mDuration < 0.0f || std::any_of(mTransitions.begin(), mTransitions.begin() + Index, [&Transition](const auto& Other) {
+            if (Transition.mId < 0 || Transition.mId == std::numeric_limits<Int32>::max() || FindState(Transition.mFromState) == nullptr || FindState(Transition.mToState) == nullptr || !Transition.mDuration.IsFinite() || Transition.mDuration < 0_s || std::any_of(mTransitions.begin(), mTransitions.begin() + Index, [&Transition](const auto& Other) {
                 return Other.mId == Transition.mId;
             })) {
                 Archive.SetError("Invalid animation transition");

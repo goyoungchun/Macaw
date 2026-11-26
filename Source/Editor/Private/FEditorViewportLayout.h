@@ -9,8 +9,8 @@
 #include "Core/Input.h"
 #include "Core/Math/FVector4.h"
 #include "Editor/EEditorViewportLayoutPreset.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <memory>
 
 struct ImGuiContext;
@@ -78,12 +78,12 @@ namespace Editor {
             /**
              * @brief 프리셋의 분할·뷰포트 배치 트리입니다.
              */
-            std::array<FLayoutNode, 7> mNodes{};
+            Core::TStaticArray<FLayoutNode, 7> mNodes{};
 
             /**
              * @brief 프리셋으로 전환할 때 복원할 초기 분할 비율입니다.
              */
-            std::array<float, 3> mRatios{0.5f, 0.5f, 0.5f};
+            Core::TStaticArray<float, 3> mRatios{0.5f, 0.5f, 0.5f};
         };
 
     public:
@@ -315,12 +315,12 @@ namespace Editor {
         /**
          * @brief 주 원근 뷰포트 외의 직교 뷰포트 소유 목록입니다.
          */
-        std::array<std::unique_ptr<Editor::FEditorViewport>, 3> mOrthographicViewports{};
+        Core::TStaticArray<std::unique_ptr<Editor::FEditorViewport>, 3> mOrthographicViewports{};
 
         /**
          * @brief 탭·위젯 또는 뷰포트 슬롯의 표시 여부입니다.
          */
-        std::array<bool, 4> mVisible{};
+        Core::TStaticArray<bool, 4> mVisible{};
 
         /**
          * @brief 현재 입력 대상으로 선택된 뷰포트 슬롯입니다.
@@ -340,7 +340,7 @@ namespace Editor {
         /**
          * @brief 현재 분할 트리에서 사용하는 노드별 분할 비율입니다.
          */
-        std::array<float, 3> mRatios{0.5f, 0.5f, 0.5f};
+        Core::TStaticArray<float, 3> mRatios{0.5f, 0.5f, 0.5f};
 
         /**
          * @brief 하나의 뷰포트만 확대 표시하는지 나타냅니다.

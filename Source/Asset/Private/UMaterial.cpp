@@ -32,13 +32,7 @@ namespace Asset {
 
             const std::filesystem::path File{Core::FilePath::FromUtf8(Path)};
 
-            if (File.is_absolute() || File.has_root_path()) {
-                return false;
-            }
-
-            return std::none_of(File.begin(), File.end(), [](const auto& Part) {
-                return Part == L"..";
-            });
+            return Core::FilePath::GetContentMount(File) != Core::FilePath::EContentMount::Invalid;
         }
     }
 
@@ -100,7 +94,7 @@ namespace Asset {
         const Asset::EBlendMode PreviousBlendMode{GetBlendMode()};
 
         if (mBaseColor != Color) {
-            if (mBaseColor.w != Color.w) {
+            if (mBaseColor.w != Color.w && mBlendMode != Asset::EBlendMode::Additive) {
                 mBlendMode = Color.w == 1.0f ? Asset::EBlendMode::Opaque : Asset::EBlendMode::Translucent;
             }
 
@@ -116,16 +110,16 @@ namespace Asset {
     }
 
     Asset::EBlendMode Asset::UMaterial::GetBlendMode() const {
-        return mBaseColor.w == 1.0f ? mBlendMode : Asset::EBlendMode::Translucent;
+        return mBlendMode == Asset::EBlendMode::Opaque && mBaseColor.w != 1.0f ? Asset::EBlendMode::Translucent : mBlendMode;
     }
 
     bool Asset::UMaterial::SetBlendMode(Asset::EBlendMode BlendMode) {
-        if (BlendMode != Asset::EBlendMode::Opaque && BlendMode != Asset::EBlendMode::Translucent) {
+        if (BlendMode != Asset::EBlendMode::Opaque && BlendMode != Asset::EBlendMode::Translucent && BlendMode != Asset::EBlendMode::Additive) {
             return false;
         }
 
         const Asset::EBlendMode PreviousBlendMode{GetBlendMode()};
-        mBlendMode = mBaseColor.w == 1.0f ? BlendMode : Asset::EBlendMode::Translucent;
+        mBlendMode = BlendMode == Asset::EBlendMode::Opaque && mBaseColor.w != 1.0f ? Asset::EBlendMode::Translucent : BlendMode;
 
         if (PreviousBlendMode != GetBlendMode()) {
             mBlendModeRevision = Core::FRevision::Next();
@@ -239,8 +233,8 @@ namespace Asset {
             return false;
         }
 
-        const std::array<Asset::UTexture2D*, 3> Textures{mSpecularTexture, mEmissiveTexture, mReflectionTexture};
-        const std::array<const Core::FString*, 3> Paths{&mSpecularTexturePath, &mEmissiveTexturePath, &mReflectionTexturePath};
+        const Core::TStaticArray<Asset::UTexture2D*, 3> Textures{mSpecularTexture, mEmissiveTexture, mReflectionTexture};
+        const Core::TStaticArray<const Core::FString*, 3> Paths{&mSpecularTexturePath, &mEmissiveTexturePath, &mReflectionTexturePath};
 
         for (Index_t Index{}; Index < Textures.size(); ++Index) {
             if ((!Paths[Index]->empty() && Textures[Index] == nullptr) || (Textures[Index] != nullptr && !Textures[Index]->CreateResources(Device))) {
@@ -248,7 +242,7 @@ namespace Asset {
             }
         }
 
-        const std::array<float, 28> Color{mBaseColor.x, mBaseColor.y, mBaseColor.z, mBaseColor.w, mSpecularStrength, mShininess, mNormalStrength, mReflectionStrength, mSpecularColor.x, mSpecularColor.y, mSpecularColor.z, mSpecularColor.w, mAmbientColor.x, mAmbientColor.y, mAmbientColor.z, mAmbientColor.w, mEmissiveColor.x, mEmissiveColor.y, mEmissiveColor.z, mEmissiveColor.w, mReflectionColor.x, mReflectionColor.y, mReflectionColor.z, mReflectionColor.w, mSpecularTexture != nullptr ? 1.0f : 0.0f, mEmissiveTexture != nullptr ? 1.0f : 0.0f, mReflectionTexture != nullptr ? 1.0f : 0.0f, 0.0f};
+        const Core::TStaticArray<float, 28> Color{mBaseColor.x, mBaseColor.y, mBaseColor.z, mBaseColor.w, mSpecularStrength, mShininess, mNormalStrength, mReflectionStrength, mSpecularColor.x, mSpecularColor.y, mSpecularColor.z, mSpecularColor.w, mAmbientColor.x, mAmbientColor.y, mAmbientColor.z, mAmbientColor.w, mEmissiveColor.x, mEmissiveColor.y, mEmissiveColor.z, mEmissiveColor.w, mReflectionColor.x, mReflectionColor.y, mReflectionColor.z, mReflectionColor.w, mSpecularTexture != nullptr ? 1.0f : 0.0f, mEmissiveTexture != nullptr ? 1.0f : 0.0f, mReflectionTexture != nullptr ? 1.0f : 0.0f, 0.0f};
 
         const bool Created{mConstantBuffer.IsCreated()};
         Core::FString Error{};

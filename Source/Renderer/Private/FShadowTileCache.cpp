@@ -17,7 +17,7 @@ namespace Renderer {
         std::size_t Hash{Core::FGuidHash{}(Key.mLight)};
 
         Hash ^= std::hash<Uint64>{}(Key.mScene.GetValue()) + 0x9E3779B97F4A7C15ull + (Hash << 6) + (Hash >> 2);
-        Hash ^= std::hash<Uint32>{}(Key.mFace) + 0x9E3779B97F4A7C15ull + (Hash << 6) + (Hash >> 2);
+        Hash ^= std::hash<Index_t>{}(Key.mFace) + 0x9E3779B97F4A7C15ull + (Hash << 6) + (Hash >> 2);
 
         return Hash;
     }

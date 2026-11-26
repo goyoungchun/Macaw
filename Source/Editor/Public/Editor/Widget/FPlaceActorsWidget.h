@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Editor/Widget/FEditorContextWidget.h"
+#include "Core/Types.h"
 
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -51,6 +52,13 @@ namespace Editor {
          * @brief 높이 안개 액터 아이콘입니다.
          */
         HeightFog,
+
+        EmptyActor,
+        Decal,
+        LevelSequence,
+        ParticleSystem,
+        Pawn,
+        SkyAtmosphere,
 
         /**
          * @brief 아이콘 캐시 크기에 사용할 종류 수입니다.
@@ -111,7 +119,7 @@ namespace Editor {
         /**
          * @brief 액터 프리셋의 검색 문자열 버퍼입니다.
          */
-        std::array<char, 128> mSearch{};
+        Core::TStaticArray<char, 128> mSearch{};
 
         /**
          * @brief 배치 패널에서 선택한 액터 분류 인덱스입니다.
@@ -121,7 +129,7 @@ namespace Editor {
         /**
          * @brief 배치 목록의 종류별 아이콘 텍스처 캐시입니다.
          */
-        std::array<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>, static_cast<std::size_t>(Editor::EPlaceActorIcon::Count)> mIcons{};
+        Core::TStaticArray<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>, static_cast<std::size_t>(Editor::EPlaceActorIcon::Count)> mIcons{};
 
         /**
          * @brief 배치 아이콘 캐시의 재생성 필요 여부입니다.

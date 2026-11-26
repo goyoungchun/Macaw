@@ -6,7 +6,6 @@
 
 #include "Core/FName.h"
 
-#include <mutex>
 #include <unordered_map>
 
 namespace Core {
@@ -19,7 +18,6 @@ namespace Core {
             return;
         }
 
-        static std::mutex Mutex{};
         static std::unordered_map<Core::FString, std::shared_ptr<const Core::FString>> Names{};
         Core::FString Key{Name};
 
@@ -29,7 +27,6 @@ namespace Core {
             }
         }
 
-        const std::lock_guard Lock{Mutex};
         const auto Existing{Names.find(Key)};
 
         if (Existing != Names.end()) {

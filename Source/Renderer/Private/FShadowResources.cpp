@@ -5,6 +5,7 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "FShadowResources.h"
 
 #include "FMeshPass.h"
@@ -17,6 +18,8 @@
 #include <bit>
 #include <cmath>
 #include <numeric>
+
+using namespace Core::Literals;
 
 namespace Renderer {
 
@@ -90,7 +93,8 @@ namespace Renderer {
         const float FarX{(View.mOrthographic ? 1.0f : FarDistance) / View.mProjection(0, 0)};
         const float FarY{(View.mOrthographic ? 1.0f : FarDistance) / View.mProjection(1, 1)};
         const float HalfDepth{(FarDistance - NearDistance) * 0.5f};
-        const float Radius{std::ceil(std::sqrt(FarX * FarX + FarY * FarY + HalfDepth * HalfDepth) * 16.0f) / 16.0f * static_cast<float>(Resolution) / static_cast<float>(Resolution - 2)};
+        constexpr float RadiusStep{(0.0625_m).GetBase()};
+        const float Radius{std::ceil(std::sqrt(FarX * FarX + FarY * FarY + HalfDepth * HalfDepth) / RadiusStep) * RadiusStep * static_cast<float>(Resolution) / static_cast<float>(Resolution - 2)};
         const FMatrix Rotation{FMatrix::LookTo({}, Direction, LightUp(Direction))};
         const FVector4 LightCenter{FVector4{Center, 1.0f} * Rotation};
         const float Texel{2.0f * Radius / static_cast<float>(Resolution)};
@@ -104,8 +108,8 @@ namespace Renderer {
                 const FVector Point{(Corner & 1) ? Bounds.mMaximum.x : Bounds.mMinimum.x, (Corner & 2) ? Bounds.mMaximum.y : Bounds.mMinimum.y, (Corner & 4) ? Bounds.mMaximum.z : Bounds.mMinimum.z};
                 const FVector4 LightPoint{FVector4{Point, 1.0f} * Rotation};
 
-                MinimumZ = std::min(MinimumZ, LightPoint.z - 0.1f);
-                MaximumZ = std::max(MaximumZ, LightPoint.z + 0.1f);
+                MinimumZ = std::min(MinimumZ, LightPoint.z - (0.1_m).GetBase());
+                MaximumZ = std::max(MaximumZ, LightPoint.z + (0.1_m).GetBase());
             }
         }
 
@@ -126,8 +130,8 @@ namespace Renderer {
         }
 
         const FVector& Center{Light.mPosition};
-        const float Radius{Light.mAttenuationRadius};
-        const FMatrix SpotMatrix{Light.mType == Engine::ELightType::Spot ? FMatrix::LookTo(Center, Light.mDirection, LightUp(Light.mDirection)) * FMatrix::Perspective(std::clamp(Light.mOuterConeAngle * 2.0f, 1.0f, 179.0f), 1.0f, std::min(0.05f, Radius * 0.01f), Radius) : FMatrix{}};
+        const Core::FLength Radius{Light.mAttenuationRadius};
+        const FMatrix SpotMatrix{Light.mType == Engine::ELightType::Spot ? FMatrix::LookTo(Center, Light.mDirection, LightUp(Light.mDirection)) * FMatrix::Perspective(std::clamp(Light.mOuterConeAngle * 2.0f, 1_deg, 179_deg), 1.0f, std::min(0.05_m, Radius * 0.01f), Radius) : FMatrix{}};
         const auto IsInRange{[&](const FBox& Bounds) {
             if (Light.mType == Engine::ELightType::Spot) {
                 return Renderer::FMeshPass::IsVisible(SpotMatrix, Bounds);
@@ -137,7 +141,7 @@ namespace Renderer {
             const float Y{std::clamp(Center.y, Bounds.mMinimum.y, Bounds.mMaximum.y) - Center.y};
             const float Z{std::clamp(Center.z, Bounds.mMinimum.z, Bounds.mMaximum.z) - Center.z};
 
-            return X * X + Y * Y + Z * Z <= Radius * Radius;
+            return Core::FArea::FromBase(X * X + Y * Y + Z * Z) <= Radius * Radius;
         }};
 
         return std::any_of(Receivers.begin(), Receivers.end(), IsInRange) && std::any_of(Casters.begin(), Casters.end(), IsInRange);
@@ -297,9 +301,9 @@ namespace Renderer {
 
             const Engine::FSceneView& View{Family.mView};
             const float ProjectionDepth{View.mProjection(2, 2)};
-            const float CameraNear{std::max(0.001f, -View.mProjection(3, 2) / ProjectionDepth)};
-            const float CameraFar{View.mOrthographic ? (1.0f - View.mProjection(3, 2)) / ProjectionDepth : ProjectionDepth > 1.0f ? -View.mProjection(3, 2) / (ProjectionDepth - 1.0f) : Light.mShadowDistance};
-            const float FarDistance{std::max(CameraNear + 0.01f, std::min(CameraFar, Light.mShadowDistance))};
+            const float CameraNear{std::max((0.001_m).GetBase(), -View.mProjection(3, 2) / ProjectionDepth)};
+            const float CameraFar{View.mOrthographic ? (1.0f - View.mProjection(3, 2)) / ProjectionDepth : ProjectionDepth > 1.0f ? -View.mProjection(3, 2) / (ProjectionDepth - 1.0f) : Light.mShadowDistance.GetBase()};
+            const float FarDistance{std::max(CameraNear + (0.01_m).GetBase(), std::min(CameraFar, Light.mShadowDistance.GetBase()))};
             float PreviousSplit{CameraNear};
             float PreviousBlend{CameraNear};
             const Engine::EShadowBiasPreset BiasPreset{ValidBiasPreset(Light.mShadowBiasPreset)};
@@ -328,17 +332,17 @@ namespace Renderer {
                     const float WidthScale{std::sqrt(Matrix(0, 0) * Matrix(0, 0) + Matrix(1, 0) * Matrix(1, 0) + Matrix(2, 0) * Matrix(2, 0))};
                     const float DepthScale{std::sqrt(Matrix(0, 2) * Matrix(0, 2) + Matrix(1, 2) * Matrix(1, 2) + Matrix(2, 2) * Matrix(2, 2))};
 
-                    Map.mSoftness = {std::tan(Light.mShadowSourceAngle * 3.14159265f / 180.0f), WidthScale * 0.5f, 0.0f, 1.0f / DepthScale};
+                    Map.mSoftness = {Core::Math::Tan(Light.mShadowSourceAngle), WidthScale * 0.5f, 0.0f, 1.0f / DepthScale};
                     PreviousBlend = BlendStart;
                     PreviousSplit = Split;
                 } else {
-                    const std::array<FVector, 6> Directions{{{1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}};
+                    const Core::TStaticArray<FVector, 6> Directions{{{1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}};
                     const FVector Direction{Light.mType == Engine::ELightType::Point ? Directions[Face] : Light.mDirection};
-                    const float NearPlane{std::min(0.05f, Light.mAttenuationRadius * 0.01f)};
-                    const float FieldOfView{Light.mType == Engine::ELightType::Point ? 90.0f : std::clamp(Light.mOuterConeAngle * 2.0f, 1.0f, 179.0f)};
+                    const Core::FLength NearPlane{std::min(0.05_m, Light.mAttenuationRadius * 0.01f)};
+                    const Core::FAngle FieldOfView{Light.mType == Engine::ELightType::Point ? 90_deg : std::clamp(Light.mOuterConeAngle * 2.0f, 1_deg, 179_deg)};
 
                     Map.mViewProjection = FMatrix::LookTo(Light.mPosition, Direction, LightUp(Direction)) * FMatrix::Perspective(FieldOfView, 1.0f, NearPlane, Light.mAttenuationRadius);
-                    Map.mSoftness = {Light.mShadowSourceRadius, 0.5f / std::tan(FieldOfView * 0.5f * 3.14159265f / 180.0f), NearPlane, Light.mAttenuationRadius};
+                    Map.mSoftness = {Light.mShadowSourceRadius.GetBase(), 0.5f / Core::Math::Tan(FieldOfView * 0.5f), NearPlane.GetBase(), Light.mAttenuationRadius.GetBase()};
                 }
 
                 mMaps.push_back(Map);
@@ -506,7 +510,7 @@ namespace Renderer {
 
         Context->OMSetRenderTargets(0, nullptr, nullptr);
 
-        const std::array<FVector4, 3> ViewData{{{Family.mView.mLocation, 0.0f}, {Family.mView.mForward, 0.0f}, {static_cast<float>(mSettings.mFilter), static_cast<float>(mSettings.mPCFSize / 2), mSettings.mPCSSMaxFilterTexels, 0.0f}}};
+        const Core::TStaticArray<FVector4, 3> ViewData{{{Family.mView.mLocation, 0.0f}, {Family.mView.mForward, 0.0f}, {static_cast<float>(mSettings.mFilter), static_cast<float>(mSettings.mPCFSize / 2), mSettings.mPCSSMaxFilterTexels, 0.0f}}};
 
         mViewBuffer.Update(Context, ViewData);
         mEnabled = true;
@@ -595,7 +599,7 @@ namespace Renderer {
     /**
      * @brief 원본 광원별 그림자 맵 구간을 반환합니다.
      */
-    const Core::TArray<std::array<Uint32, 2>>& Renderer::FShadowResources::GetLightRanges() const {
+    const Core::TArray<Core::TStaticArray<Uint32, 2>>& Renderer::FShadowResources::GetLightRanges() const {
         return mLightRanges;
     }
 

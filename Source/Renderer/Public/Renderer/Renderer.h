@@ -23,16 +23,21 @@
 #include "Asset/UTexture2D.h"
 #include "Asset/UMaterial.h"
 #include "Renderer/FLineVertex.h"
+#include "Core/Types.h"
 
 #include <d3d11.h>
-#include <array>
 #include <span>
 #include <wrl/client.h>
+
+namespace Asset {
+    class FAssetManager;
+}
 
 namespace Renderer {
 
     class FTextRenderer;
     class FSpriteRenderer;
+    class FParticleRenderer;
     class FMaterialPipeline;
     class FShaderInstance;
     class FLightingResources;
@@ -44,7 +49,7 @@ namespace Renderer {
     struct FPassTarget;
     struct FMeshPassParameters;
     struct FMeshDrawCommand;
-    struct FObjectConstants;
+    struct FMeshInstanceData;
     struct FEditorMeshConstants;
     class FMeshPass;
     class FShadowDepthPass;
@@ -147,7 +152,7 @@ namespace Renderer {
          * @param Error 실패 원인을 기록할 출력 문자열입니다.
          * @return 호출자가 소유하는 출력 텍스처이며 실패하면 nullptr이고 Error에 원인을 기록합니다.
          */
-        std::unique_ptr<Asset::UTexture2D> CaptureTexture(const Asset::UTexture2D& Texture, Uint32 Width, Uint32 Height, const FVector4& Region, Core::FString& Error) override;
+        std::unique_ptr<Asset::UTexture2D> CaptureTexture(const Asset::UTexture2D& Texture, Uint32 Width, Uint32 Height, const FVector4& Region, Core::FString& Error, bool CheckerboardBackground = false) override;
 
         /**
          * @brief 기존 오프스크린 렌더 타깃을 새 픽셀 크기로 변경합니다.
@@ -255,6 +260,7 @@ namespace Renderer {
          * @return 요청한 처리를 완료하면 true, 실패하면 false입니다.
          */
         bool ReloadChangedShaders() override;
+        bool ReloadAllShaders() override;
         Core::TArray<RenderCore::FShaderDescription> GetShaderValidationTargets(const std::filesystem::path& Path) const override;
 
         /**
@@ -273,15 +279,17 @@ namespace Renderer {
          * @param[in] Skinned 객체별 본 포즈를 적용하는 변형을 선택하려면 true입니다.
          * @return 대상의 비소유 주소이며, 없거나 유효하지 않으면 nullptr입니다.
          * @param[in] ReceiveShadows 그림자 수신 셰이더 변형의 사용 여부입니다.
+         * @param[in] Cloth 스키닝한 정점을 천 입자 위치로 옮기는 변형을 선택하려면 true이며 Skinned가 true일 때만 씁니다.
          */
-        Renderer::FMaterialPipeline* GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode = Engine::EViewMode::Lit_Phong, bool Skinned = false, bool ReceiveShadows = true);
+        Renderer::FMaterialPipeline* GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode = Engine::EViewMode::Lit_Phong, bool Skinned = false, bool ReceiveShadows = true, bool Cloth = false, bool ParticleMesh = false);
 
         /**
          * @brief 그림자 아틀라스 깊이 패스에 사용할 깊이 전용 파이프라인을 반환합니다.
          * @param[in] Skinned 베이스 패스와 같은 본 변형을 깊이에도 적용하려면 true입니다.
+         * @param[in] Cloth 스키닝한 정점을 천 입자 위치로 옮기는 변형을 선택하려면 true이며 Skinned가 true일 때만 씁니다.
          * @return 대상의 비소유 주소이며, 셰이더를 다시 컴파일하는 중이거나 실패하면 nullptr입니다.
          */
-        Renderer::FMaterialPipeline* GetDepthPipeline(bool Skinned = false);
+        Renderer::FMaterialPipeline* GetDepthPipeline(bool Skinned = false, bool Cloth = false);
 
         /**
          * @brief 머티리얼이 없는 메시가 사용할 기본 머티리얼을 반환합니다.
@@ -294,7 +302,8 @@ namespace Renderer {
          * @param[in] ContentRoot 프로젝트 에셋 경로의 기준 콘텐츠 폴더입니다.
          * @param[in] CacheDirectory 컴파일된 셰이더의 캐시 파일을 보관할 폴더입니다.
          */
-        void SetProjectPaths(const std::filesystem::path& ContentRoot, const std::filesystem::path& CacheDirectory);
+        void SetProjectPaths(const Asset::FAssetManager& Assets, const std::filesystem::path& CacheDirectory, bool ForwardShading = false);
+        bool UsesForwardShading() const override;
 
     private:
         /**
@@ -332,6 +341,7 @@ namespace Renderer {
          * @return 요청한 처리를 완료하면 true, 실패하면 false입니다.
          */
         bool CreateShaders();
+        bool ReloadShaders(bool ForceCompile);
 
         /**
          * @brief 고정 에디터 메시의 로컬 정점과 인덱스를 종류별 불변 GPU 버퍼에 업로드합니다.
@@ -347,7 +357,7 @@ namespace Renderer {
          * @param[out] Code 성공 시 컴파일된 셰이더를 받습니다.
          * @return 성공하면 true, 컴파일에 실패하면 false입니다.
          */
-        bool Compile(const char* Source, const char* Entry, const char* Target, CoreUObject::TObjectRef<RenderCore::UShader>& Code);
+        bool Compile(const std::filesystem::path& Source, const char* Entry, const char* Target, CoreUObject::TObjectRef<RenderCore::UShader>& Code);
 
         /**
          * @brief 월드 선은 깊이를 기록하고 편집 오버레이 선은 깊이 검사 없이 그립니다.
@@ -382,6 +392,7 @@ namespace Renderer {
          * @param[in] Color 색상 뷰를 지울 RGBA 값이며, nullptr이면 색상은 유지합니다.
          */
         void ClearTarget(const Renderer::FPassTarget& Target, const float* Color);
+        bool CopyCheckerboardBackground(Asset::UTexture2D& Target);
 
         /**
          * @brief 그림자 맵마다 캐시된 아틀라스 타일이 현재 상태와 다를 때만 타일을 지우고 깊이를 다시 그립니다.
@@ -411,6 +422,7 @@ namespace Renderer {
          * @return 제출한 드로 호출 수입니다.
          */
         Uint32 SubmitMeshCommands(ID3D11RasterizerState* Rasterizer, Renderer::EMeshPass Pass, std::span<const Renderer::FMeshDrawCommand> Commands, bool MarkDecalReceivers);
+        ID3D11BlendState* GetTranslucencyBlendState(const Asset::UMaterial* Material) const;
 
     private:
 
@@ -468,6 +480,7 @@ namespace Renderer {
          * @brief GBuffer 조명 합성 패스의 소유 포인터입니다.
          */
         std::unique_ptr<Renderer::FDeferredLightingPass> mDeferredLightingPass{};
+        bool mForwardShading{};
 
         /**
          * @brief 머티리얼이 없는 메시 드로에 사용할 기본 머티리얼의 소유 객체입니다.
@@ -478,6 +491,7 @@ namespace Renderer {
          * @brief 텍스처 없는 머티리얼의 흰색 기본 텍스처입니다.
          */
         std::unique_ptr<Asset::UTexture2D> mDefaultMaterialTexture{};
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> mCheckerboardBackground{};
 
         /**
          * @brief 머티리얼 텍스처용 반복 샘플러입니다.
@@ -505,14 +519,20 @@ namespace Renderer {
         std::unique_ptr<Renderer::FSpriteRenderer> mSpriteRenderer{};
 
         /**
+         * @brief 스프라이트 파티클 렌더러이며 프로젝트에 ParticleSprite.hlsl이 없으면 셰이더 없이 둡니다.
+         */
+        std::unique_ptr<Renderer::FParticleRenderer> mParticleRenderer{};
+
+        /**
          * @brief 셰이더 컴파일·캐시·재로드 관리자입니다.
          */
         RenderCore::FShaderManager mShaderManager{};
 
         /**
-         * @brief 현재 프로젝트의 HLSL 소스와 include 파일을 찾는 폴더입니다.
+         * @brief 엔진의 기본 HLSL 소스와 include 파일을 찾는 폴더입니다.
          */
         std::filesystem::path mShaderDirectory{};
+        const Asset::FAssetManager* mAssets{};
 
         /**
          * @brief 다음 렌더링에서 GPU 셰이더를 다시 준비할지 나타냅니다.
@@ -582,7 +602,7 @@ namespace Renderer {
         /**
          * @brief 메시 인스턴스의 객체 상수를 업로드하는 인스턴스 버퍼입니다.
          */
-        RenderCore::TInstanceBuffer<Renderer::FObjectConstants> mMeshInstanceBuffer{};
+        RenderCore::TInstanceBuffer<Renderer::FMeshInstanceData> mMeshInstanceBuffer{};
 
         /**
          * @brief 래스터라이저 상태입니다.
@@ -627,7 +647,7 @@ namespace Renderer {
         /**
          * @brief 프리미티브 종류별 GPU 메시입니다.
          */
-        std::array<std::unique_ptr<Asset::UStaticMesh>, 3> mMeshes{};
+        Core::TStaticArray<std::unique_ptr<Asset::UStaticMesh>, 3> mMeshes{};
 
         /**
          * @brief 업로드할 보조 선분 정점입니다.
@@ -678,11 +698,12 @@ namespace Renderer {
          * @brief 평면 핸들의 투명도를 표시하는 소스 알파 혼합 상태입니다.
          */
         Microsoft::WRL::ComPtr<ID3D11BlendState> mOverlayBlend{};
+        Microsoft::WRL::ComPtr<ID3D11BlendState> mAdditiveBlend{};
 
         /**
          * @brief 렌더러가 초기화 때 생성하고 종료 때 해제하는 enum별 불변 GPU 정점·인덱스 버퍼입니다.
          */
-        std::array<std::unique_ptr<Asset::UStaticMesh>, static_cast<std::size_t>(Engine::EEditorMesh::Count)> mEditorMeshes{};
+        Core::TStaticArray<std::unique_ptr<Asset::UStaticMesh>, static_cast<std::size_t>(Engine::EEditorMesh::Count)> mEditorMeshes{};
     };
 
 }

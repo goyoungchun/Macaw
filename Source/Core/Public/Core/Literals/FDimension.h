@@ -149,6 +149,27 @@ namespace Core {
         inline constexpr Core::FDimension Energy{Force + Length};
 
         /**
+         * @brief 회전각당 일에 해당하는 토크입니다.
+         * @details 각도를 독립 차원으로 취급합니다.
+         */
+        inline constexpr Core::FDimension Torque{Energy - Angle};
+
+        /**
+         * @brief 회전 관성(kg·m²)입니다.
+         */
+        inline constexpr Core::FDimension MomentOfInertia{Mass + Area};
+
+        /**
+         * @brief 힘을 변위로 나눈 스프링 강성(N/m)입니다.
+         */
+        inline constexpr Core::FDimension SpringStiffness{Force - Length};
+
+        /**
+         * @brief 힘을 선속도로 나눈 선형 감쇠 계수(N·s/m)입니다.
+         */
+        inline constexpr Core::FDimension LinearDampingCoefficient{Force - Speed};
+
+        /**
          * @brief 일률(W = J/s)입니다.
          */
         inline constexpr Core::FDimension Power{Energy - Time};

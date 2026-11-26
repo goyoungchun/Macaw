@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "Core/Literals/QuantityTypes.h"
+
 #include "Core/ReflectionMacros.h"
 
 #include <chrono>
@@ -28,7 +30,7 @@ namespace Core {
          * @brief 이전 호출 이후 경과한 시간을 초 단위로 반환하고 기준 시각을 갱신합니다.
          * @return 초 단위 경과 시간입니다.
          */
-        float Tick();
+        Core::FTime Tick();
 
     private:
         /**

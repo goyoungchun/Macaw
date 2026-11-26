@@ -66,7 +66,7 @@ namespace Asset {
          * @return 값을 읽었거나 요소가 없으면 true이며 지원하지 않는 모드이거나 인덱스가 범위를 벗어나면 false입니다.
          */
         template <typename TValue>
-        bool ReadElement(const fbxsdk::FbxLayerElementTemplate<TValue>* Element, Index_t ControlPoint, Index_t Polygon, Index_t PolygonVertex, TValue& Value) const;
+        bool ReadElement(const fbxsdk::FbxLayerElementTemplate<TValue>* Element, Int32 ControlPoint, Int32 Polygon, Int32 PolygonVertex, TValue& Value) const;
 
         /**
          * @brief FBX 재질의 색상·불투명도·양면 여부·조명 속성과 텍스처를 읽어 결과 재질 목록 끝에 추가합니다.

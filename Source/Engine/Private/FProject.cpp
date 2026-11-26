@@ -5,7 +5,7 @@
  */
 
 #include "Engine/FProject.h"
-#include "Engine/Cascade/FParticleSystemAssetManager.h"
+#include "Engine/Particles/ParticleAssets.h"
 #include "Core/FilePath.h"
 #include "Serialization/JsonArchive.h"
 
@@ -191,6 +191,7 @@ namespace Engine {
         Uint32 Version{};
         Core::FString Name{};
         Core::FString StartupScene{};
+        bool ForwardShading{};
 
         Archive.Serialize("Version", Version);
 
@@ -211,6 +212,10 @@ namespace Engine {
         Archive.Serialize("Name", Name);
         Archive.Serialize("StartupScene", StartupScene);
 
+        if (Archive.HasField("ForwardShading")) {
+            Archive.Serialize("ForwardShading", ForwardShading);
+        }
+
         if (Archive.HasError() || Name.empty() || Name.find('\0') != Core::FString::npos || StartupScene.empty() || StartupScene.find('\0') != Core::FString::npos) {
             Error = Archive.HasError() ? Archive.GetError() : "Unsupported or invalid project settings";
 
@@ -218,9 +223,12 @@ namespace Engine {
         }
 
         auto Assets{std::make_unique<Asset::FAssetManager>(File.parent_path() / "Content")};
+
+        Engine::RegisterParticleAssetTypes(*Assets);
+
         const std::filesystem::path RelativeScene{Core::FilePath::FromUtf8(StartupScene)};
 
-        if (RelativeScene.is_absolute() || RelativeScene.has_root_name()) {
+        if (Core::FilePath::GetContentMount(RelativeScene) != Core::FilePath::EContentMount::Game) {
             Error = "The startup scene must use a Content relative path";
 
             return false;
@@ -232,15 +240,12 @@ namespace Engine {
             return false;
         }
 
-        auto ParticleSystems{std::make_unique<Engine::FParticleSystemAssetManager>(*Assets)};
-
         mVersion = Version;
         mFilePath = File;
         mName = std::move(Name);
         mStartupScene = RelativePath;
-        mParticleSystems.reset();
+        mForwardShading = ForwardShading;
         mAssets = std::move(Assets);
-        mParticleSystems = std::move(ParticleSystems);
 
         return true;
     }
@@ -261,10 +266,12 @@ namespace Engine {
         Uint32 Version{mVersion};
         Core::FString Name{mName};
         Core::FString StartupScene{mStartupScene};
+        bool ForwardShading{mForwardShading};
 
         Archive.Serialize("Version", Version);
         Archive.Serialize("Name", Name);
         Archive.Serialize("StartupScene", StartupScene);
+        Archive.Serialize("ForwardShading", ForwardShading);
 
         const bool Saved{!Archive.HasError() && Archive.Save(mFilePath)};
 
@@ -283,7 +290,8 @@ namespace Engine {
             return false;
         }
 
-        const Core::FString Relative{mAssets->GetRelativePath(Path, Error)};
+        const auto WritablePath{mAssets->ResolveWritablePath(Path, Error)};
+        const Core::FString Relative{WritablePath.empty() ? Core::FString{} : mAssets->GetRelativePath(WritablePath, Error)};
 
         if (Relative.empty()) {
             return false;
@@ -295,6 +303,24 @@ namespace Engine {
 
         if (!Save(Error)) {
             mStartupScene = Previous;
+
+            return false;
+        }
+
+        return true;
+    }
+
+    bool Engine::FProject::UsesForwardShading() const {
+        return mForwardShading;
+    }
+
+    bool Engine::FProject::SetForwardShading(bool ForwardShading, Core::FString& Error) {
+        const bool Previous{mForwardShading};
+
+        mForwardShading = ForwardShading;
+
+        if (!Save(Error)) {
+            mForwardShading = Previous;
 
             return false;
         }
@@ -349,10 +375,6 @@ namespace Engine {
      */
     Asset::FAssetManager* Engine::FProject::GetAssets() const {
         return mAssets.get();
-    }
-
-    Engine::FParticleSystemAssetManager* Engine::FProject::GetParticleSystems() const {
-        return mParticleSystems.get();
     }
 
 }

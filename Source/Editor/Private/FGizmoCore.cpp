@@ -22,6 +22,9 @@ using namespace Core::Literals;
 
 namespace Editor {
 
+    constinit const Core::FLength Editor::FGizmoSettings::mDefaultTranslationStep{1_m};
+    constinit const Core::FAngle Editor::FGizmoSettings::mDefaultRotationStep{15_deg};
+
     /**
      * @brief 이 파일에서 사용하는 내부 보조 기능과 상태를 묶습니다.
      */
@@ -31,7 +34,7 @@ namespace Editor {
         /**
          * @brief X·Y·Z 기즈모 축의 색상입니다.
          */
-        const std::array<FVector, 3> AxisColors{{{1.0f, 0.28f, 0.22f}, {0.35f, 0.95f, 0.45f}, {0.32f, 0.58f, 1.0f}}};
+        const Core::TStaticArray<FVector, 3> AxisColors{{{1.0f, 0.28f, 0.22f}, {0.35f, 0.95f, 0.45f}, {0.32f, 0.58f, 1.0f}}};
 
         /**
          * @brief 입력 축에 수직인 정규화 방향을 계산합니다.
@@ -52,7 +55,7 @@ namespace Editor {
          */
         FMatrix Basis(const FVector& X, const FVector& Y, const FVector& Z, const FVector& Position) {
             FMatrix Result{FMatrix::Identity()};
-            const std::array<FVector, 4> Rows{X, Y, Z, Position};
+            const Core::TStaticArray<FVector, 4> Rows{X, Y, Z, Position};
 
             for (Int32 Index{}; Index < 4; ++Index) {
                 Result(Index, 0) = Rows[Index].x;
@@ -74,13 +77,18 @@ namespace Editor {
             return Enabled && std::isfinite(Step) && Step > 0.0f ? std::round(Value / Step) * Step : Value;
         }
 
+        template <Core::FDimension Dimension>
+        Core::TQuantity<Dimension, float> Snap(Core::TQuantity<Dimension, float> Value, Core::TQuantity<Dimension, float> Step, bool Enabled) {
+            return Enabled && Step.IsFinite() && Step > Core::TQuantity<Dimension, float>{} ? std::round(static_cast<float>(Value / Step)) * Step : Value;
+        }
+
     }
 
     /**
      * @brief 기즈모의 기본 X·Y·Z 단위 축을 반환합니다.
      */
-    const std::array<FVector, 3>& Editor::FGizmoCore::GetUnitAxes() {
-        static const std::array<FVector, 3> UnitAxes{{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
+    const Core::TStaticArray<FVector, 3>& Editor::FGizmoCore::GetUnitAxes() {
+        static const Core::TStaticArray<FVector, 3> UnitAxes{{{1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}}};
 
         return UnitAxes;
     }
@@ -88,6 +96,10 @@ namespace Editor {
     /**
      * @brief 기즈모 핸들이 주어진 로컬 축에 영향을 주는지 검사합니다.
      */
+    const Core::TStaticArray<FVector, 3>& Editor::FGizmoCore::GetAxisColors() {
+        return AxisColors;
+    }
+
     bool Editor::FGizmoCore::Affects(Int32 Handle, Int32 Axis) {
         return Handle == Axis || (Handle == 3 && Axis != 2) || (Handle == 4 && Axis != 1) || (Handle == 5 && Axis != 0);
     }
@@ -96,14 +108,14 @@ namespace Editor {
      * @brief 피벗 깊이와 시야각으로 화면 픽셀당 월드 거리를 구합니다.
      */
     float Editor::FGizmoCore::GetSize(const Engine::FSceneView& View, const FVector& Pivot) const {
-        const float Depth{(Pivot - View.mLocation).Dot(View.mForward)};
+        const Core::FLength Depth{Core::FLength::FromBase((Pivot - View.mLocation).Dot(View.mForward))};
         const float Size{std::isfinite(mSettings.mSize) ? std::clamp(mSettings.mSize, 0.5f, 2.0f) : 1.0f};
 
         if (View.mOrthographic) {
             return 2.0f / (View.mProjection(1, 1) * std::max(View.mSize.y, 1.0f)) * Size;
         }
 
-        return Depth > 0.05f ? 2.0f * Depth * Core::Math::Tan(View.mFieldOfView * 0.5_deg) / std::max(View.mSize.y, 1.0f) * Size : 0.0f;
+        return Depth > 0.05_m ? 2.0f * Depth.GetBase() * Core::Math::Tan(View.mFieldOfView * 0.5f) / std::max(View.mSize.y, 1.0f) * Size : 0.0f;
     }
 
     /**
@@ -156,8 +168,8 @@ namespace Editor {
         mDragMode = Placement.mMode;
         mDragAxes = Placement.mAxes;
         mTranslation = {};
-        mRawAngle = 0.0f;
-        mAppliedAngle = 0.0f;
+        mRawAngle = {};
+        mAppliedAngle = {};
         mScaleDelta = 0.0f;
 
         mAxis = Axis < 3 ? mDragAxes[Axis] : View.mForward;
@@ -259,7 +271,7 @@ namespace Editor {
 
         if (mDragMode == Editor::EGizmoMode::Rotate) {
             if (mScreenFallback) {
-                mRawAngle = ScreenMovement / (74.0f * std::clamp(mSettings.mSize, 0.5f, 2.0f));
+                mRawAngle = 1_rad * (ScreenMovement / (74.0f * std::clamp(mSettings.mSize, 0.5f, 2.0f)));
             } else {
                 FVector Intersection{};
 
@@ -273,11 +285,11 @@ namespace Editor {
                     return false;
                 }
 
-                mRawAngle += std::atan2(mPlaneNormal.Dot(mPreviousDirection.Cross(Direction)), std::clamp(mPreviousDirection.Dot(Direction), -1.0f, 1.0f));
+                mRawAngle += Core::Math::Atan2(mPlaneNormal.Dot(mPreviousDirection.Cross(Direction)), std::clamp(mPreviousDirection.Dot(Direction), -1.0f, 1.0f));
                 mPreviousDirection = Direction;
             }
 
-            mAppliedAngle = Snap(mRawAngle, mSettings.mRotationStep * 1_deg / 1_rad, mSettings.mRotationSnap);
+            mAppliedAngle = Snap(mRawAngle, mSettings.mRotationStep, mSettings.mRotationSnap);
 
             return true;
         }
@@ -307,7 +319,7 @@ namespace Editor {
             const FVector Axis{mActiveAxis == 6 ? GetUnitAxes()[Index] : mDragAxes[Index]};
 
             if (mActiveAxis == 6 || Affects(mActiveAxis, Index)) {
-                Delta += Axis * Snap(Movement.Dot(Axis), mSettings.mTranslationStep, mSettings.mTranslationSnap);
+                Delta += Axis * Snap(Core::FLength::FromBase(Movement.Dot(Axis)), mSettings.mTranslationStep, mSettings.mTranslationSnap).GetBase();
             }
         }
 
@@ -348,7 +360,7 @@ namespace Editor {
             return;
         }
 
-        const std::array<FVector, 3> Axes{IsDragging() ? mDragAxes : Placement.mAxes};
+        const Core::TStaticArray<FVector, 3> Axes{IsDragging() ? mDragAxes : Placement.mAxes};
         const Int32 Highlight{IsDragging() ? mActiveAxis : mHoveredAxis};
         const CoreUObject::TObjectRef<Engine::AActor> Owner{Placement.mOwner};
 
@@ -402,7 +414,7 @@ namespace Editor {
             }
         }
 
-        const std::array<std::array<Int32, 2>, 3> Pairs{{{0, 1}, {0, 2}, {1, 2}}};
+        const Core::TStaticArray<Core::TStaticArray<Int32, 2>, 3> Pairs{{{0, 1}, {0, 2}, {1, 2}}};
 
         for (Int32 Index{}; Index < 3; ++Index) {
             const FVector First{Axes[Pairs[Index][0]]};
@@ -438,7 +450,7 @@ namespace Editor {
         }
 
         if (mDragMode == Editor::EGizmoMode::Rotate) {
-            const float Angle{Core::Math::Clamp(mAppliedAngle * 1_rad, -1_turn, 1_turn) / 1_rad};
+            const Core::FAngle Angle{Core::Math::Clamp(mAppliedAngle, -1_turn, 1_turn)};
             const float Radius{mDragSize * 74.0f};
 
             DrawInterface.DrawLine(mStartPivot, mStartPivot + mStartDirection * Radius, {0.8f, 0.8f, 0.8f});
@@ -504,7 +516,7 @@ namespace Editor {
     /**
      * @brief 드래그 시작 시 고정한 세 기저 축을 반환합니다.
      */
-    const std::array<FVector, 3>& Editor::FGizmoCore::GetDragAxes() const {
+    const Core::TStaticArray<FVector, 3>& Editor::FGizmoCore::GetDragAxes() const {
         return mDragAxes;
     }
 

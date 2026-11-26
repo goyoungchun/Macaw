@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Editor/FEditorToolkit.h"
+#include "FMessageBox.h"
 #include "Editor/FEditorTabManager.h"
 #include "Editor/FImGuiUIScale.h"
 #include "Editor/Widget/FOutlinerWidget.h"
@@ -94,10 +95,9 @@ namespace Editor {
         void Draw(float DeltaTime) override;
 
         /**
-         * @brief 레벨의 변경 내용을 확인해 편집기를 닫아도 되는지 검사합니다.
-         * @return 레벨 전환 확인을 마쳤으면 true입니다.
+         * @brief 다음 UI 프레임에서 편집기 종료 요청을 처리하도록 예약합니다.
          */
-        bool CanClose() override;
+        void RequestClose();
 
         /**
          * @brief 레벨 뷰포트와 별도 PIE 창의 게임 렌더링을 처리합니다.
@@ -137,7 +137,6 @@ namespace Editor {
         /**
          * @brief 레벨 편집기 액터와 에셋 표시용 아이콘을 준비합니다.
          */
-        void InstallEditorIcons();
 
     private:
         /**
@@ -234,6 +233,9 @@ namespace Editor {
          * @brief 레벨·프로젝트·실행 명령을 처리하는 서비스입니다.
          */
         std::unique_ptr<Editor::FEditorCommands> mCommands{};
+
+        Editor::FMessageBox mMessages{};
+        bool mCloseRequested{};
 
         /**
          * @brief 열린 에셋 편집기를 관리하는 공유 서비스입니다.

@@ -41,6 +41,7 @@ namespace Engine {
          * @brief 선분의 픽셀 두께입니다.
          */
         float mThickness{1.0f};
+        float mOpacity{1.0f};
     };
 
 }

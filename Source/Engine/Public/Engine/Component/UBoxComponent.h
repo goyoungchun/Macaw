@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Engine/Component/UShapeComponent.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "UBoxComponent.generated.h"
 
 namespace Engine {
@@ -19,12 +20,9 @@ namespace Engine {
         GENERATED_BODY()
 
     public:
-        /**
-         * @brief 검사에 사용할 충돌 형상 값을 반환합니다.
-         * @return 계산하거나 조회한 값입니다.
-         */
-        Engine::FCollisionShape GetCollisionShape() const override;
+        UBoxComponent();
 
+    public:
         /**
          * @brief 충돌 형상의 로컬 축 정렬 경계를 계산합니다.
          * @return 계산하거나 조회한 값입니다.
@@ -49,12 +47,26 @@ namespace Engine {
          */
         const FVector& GetBoxExtent() const;
 
+    protected:
+        /**
+         * @brief 월드 트랜스폼을 적용한 형상의 윤곽선을 수집합니다.
+         * @param[in] DrawInterface 보조 선분을 추가할 프레임 수집기입니다.
+         * @param[in] Color 선 색상입니다.
+         */
+        void DrawShape(Engine::FPrimitiveDrawInterface& DrawInterface, const FVector& Color, float Opacity) const override;
+
+        /**
+         * @brief 상자 반길이로 상자 형상 하나를 채웁니다.
+         * @param[out] Geometry 비어 있는 상태로 전달되는 바디 셋업의 형상 목록입니다.
+         */
+        void UpdateBodySetup(PhysicsRuntime::FKAggregateGeom& Geometry) const override;
+
     private:
         /**
          * @brief 상자의 로컬 축별 반길이입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetBoxExtent, Setter = SetBoxExtent)
-        FVector mBoxExtent{0.5f, 0.5f, 0.5f};
+        UPROPERTY(Edit, Serialize, Category = "Shape", Getter = GetBoxExtent, Setter = SetBoxExtent)
+        FVector mBoxExtent{};
     };
 
 }

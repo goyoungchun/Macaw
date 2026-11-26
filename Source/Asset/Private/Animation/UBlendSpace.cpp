@@ -13,7 +13,6 @@
 #include "Core/FilePath.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <iterator>
 #include <string>
@@ -107,7 +106,7 @@ namespace Asset {
     }
 
     FVector UBlendSpace::ClampInput(const FVector& Input) const {
-        std::array<float, 3> Values{Input.ToArray()};
+        Core::TStaticArray<float, 3> Values{Input.ToArray()};
 
         for (Index_t AxisIndex{}; AxisIndex < Values.size(); ++AxisIndex) {
             const float Value{std::isfinite(Values[AxisIndex]) ? Values[AxisIndex] : 0.0f};

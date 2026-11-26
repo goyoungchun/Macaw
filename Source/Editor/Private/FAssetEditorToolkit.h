@@ -7,11 +7,13 @@
 #pragma once
 
 #include "Core/Types.h"
+#include "FMessageBox.h"
 #include "Asset/FAssetFile.h"
 #include "Editor/FEditorToolkit.h"
 #include "Editor/FEditorTab.h"
 #include <filesystem>
 #include <functional>
+#include <optional>
 
 namespace Editor {
     /**
@@ -50,6 +52,7 @@ namespace Editor {
          * @param[in] Absolute 폐기 또는 경로 작업 대상의 절대 경로입니다.
          */
         virtual void CloseRetired(const std::filesystem::path& Absolute);
+        virtual std::optional<Editor::FMessageBox::FSavePrompt> GetClosePrompt();
 
         /**
          * @brief 편집 중인 에셋의 경로를 반환합니다.

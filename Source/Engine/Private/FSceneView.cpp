@@ -5,12 +5,18 @@
  */
 
 #include "Engine/FSceneView.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Core/Math.h"
 #include "Core/Math/FRay.h"
 
 #include <cmath>
 
+using namespace Core::Literals;
+
 namespace Engine {
+
+    constinit const Core::FAngle Engine::FSceneView::mDefaultFieldOfView{60_deg};
+    constinit const float Engine::FSceneView::mDefaultOrthographicWidth{(20_m).GetBase()};
 
     /**
      * @brief 뷰포트 픽셀 좌표를 월드 공간의 정규화된 광선으로 역투영합니다.

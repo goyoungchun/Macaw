@@ -1,7 +1,7 @@
 #include "FLanguageServer.h"
+#include "Core/Types.h"
 
 #include <algorithm>
-#include <array>
 #include <charconv>
 #include <cstddef>
 #include <memory>
@@ -90,7 +90,7 @@ bool FLanguageServer::Start(const std::filesystem::path& Executable, const std::
         return false;
     }
 
-    std::array<HANDLE, 3> Handles{ChildInput.get(), ChildOutput.get(), ChildError.get()};
+    Core::TStaticArray<HANDLE, 3> Handles{ChildInput.get(), ChildOutput.get(), ChildError.get()};
     HANDLE JobHandle{Job.get()};
     STARTUPINFOEXW Startup{};
     Startup.StartupInfo.cb = sizeof(Startup);
@@ -172,7 +172,7 @@ std::vector<std::string> FLanguageServer::TakeMessages() {
 
 void FLanguageServer::Read() {
     constexpr std::string_view ContentLength{"Content-Length: "};
-    std::array<char, 8192> Bytes{};
+    Core::TStaticArray<char, 8192> Bytes{};
     std::string Buffer{};
     DWORD Count{};
     while (mRunning && ReadFile(mOutput, Bytes.data(), static_cast<DWORD>(Bytes.size()), &Count, nullptr) && Count != 0) {

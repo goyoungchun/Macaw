@@ -5,6 +5,7 @@
  */
 
 #include "Engine/APlayerCameraManager.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Engine/UWorld.h"
 #include "Engine/Component/UCameraComponent.h"
 #include "Engine/UCameraShakeModifier.h"
@@ -14,6 +15,8 @@
 #include "CoreUObject/Reflection/Cast.h"
 #include <algorithm>
 #include <cmath>
+
+using namespace Core::Literals;
 
 namespace Engine {
 
@@ -43,7 +46,9 @@ namespace Engine {
         }
     }
 
-    Engine::APlayerCameraManager::APlayerCameraManager() = default;
+    Engine::APlayerCameraManager::APlayerCameraManager()
+		: mDefaultFieldOfView{60_deg} {
+    }
 
     Engine::APlayerCameraManager::~APlayerCameraManager() = default;
 
@@ -63,8 +68,8 @@ namespace Engine {
         return true;
     }
 
-    bool Engine::APlayerCameraManager::SetViewTargetWithBlend(Engine::AActor* Target, float BlendTime, Engine::EViewTargetBlendFunction Function) {
-        if (Target == nullptr || !std::isfinite(BlendTime) || BlendTime <= 0.0f || !mHasCache) {
+    bool Engine::APlayerCameraManager::SetViewTargetWithBlend(Engine::AActor* Target, Core::FTime BlendTime, Engine::EViewTargetBlendFunction Function) {
+        if (Target == nullptr || !BlendTime.IsFinite() || BlendTime <= Core::FTime{} || !mHasCache) {
             return SetViewTarget(Target);
         }
 
@@ -84,7 +89,7 @@ namespace Engine {
         mBlendFrom = mBaseView;
         mPendingViewTarget = CoreUObject::MakeObjectRef(Target);
         mBlendTime = BlendTime;
-        mBlendElapsed = 0.0f;
+        mBlendElapsed = {};
         mBlendFunction = Function;
         mBlending = true;
 
@@ -103,13 +108,13 @@ namespace Engine {
         return mCache.mRotation;
     }
 
-    float Engine::APlayerCameraManager::GetFieldOfView() const {
+    Core::FAngle Engine::APlayerCameraManager::GetFieldOfView() const {
         return mCache.mFieldOfView;
     }
 
-    void Engine::APlayerCameraManager::UpdateCamera(float DeltaTime) {
-        if (!std::isfinite(DeltaTime) || DeltaTime < 0.0f) {
-            DeltaTime = 0.0f;
+    void Engine::APlayerCameraManager::UpdateCamera(Core::FTime DeltaTime) {
+        if (!DeltaTime.IsFinite() || DeltaTime < Core::FTime{}) {
+            DeltaTime = {};
         }
 
         if (mBlending) {
@@ -124,7 +129,7 @@ namespace Engine {
 
                 mBlendElapsed += DeltaTime;
 
-                const float Alpha{std::clamp(mBlendElapsed / mBlendTime, 0.0f, 1.0f)};
+                const float Alpha{std::clamp(static_cast<float>(mBlendElapsed / mBlendTime), 0.0f, 1.0f)};
 
                 mBaseView = mBlendFrom.Blend(To, EvaluateBlend(mBlendFunction, Alpha));
 
@@ -145,7 +150,7 @@ namespace Engine {
         FinishUpdate(DeltaTime, Target != nullptr && CalcViewTargetPOV(Target, mBaseView));
     }
 
-    void Engine::APlayerCameraManager::FinishUpdate(float DeltaTime, bool HasBaseView) {
+    void Engine::APlayerCameraManager::FinishUpdate(Core::FTime DeltaTime, bool HasBaseView) {
         mHasCache = HasBaseView;
 
         if (mHasCache) {
@@ -169,16 +174,28 @@ namespace Engine {
     }
 
     bool Engine::APlayerCameraManager::CalcViewTargetPOV(const Engine::AActor* Target, Engine::FMinimalViewInfo& ViewInfo) const {
-        for (const auto& Component : Target->GetComponents()) {
-            if (const auto* Camera{CoreUObject::Cast<Engine::UCameraComponent>(Component.get())}) {
-                if (!Camera->GetTransform().IsValid()) {
-                    return false;
+        const Engine::UCameraComponent* Camera{GetWorld()->GetActiveCamera()};
+
+        if (Camera == nullptr || Camera->GetOwner() != Target) {
+            Camera = nullptr;
+
+            for (const auto& Component : Target->GetComponents()) {
+                Camera = CoreUObject::Cast<Engine::UCameraComponent>(Component.get());
+
+                if (Camera != nullptr) {
+                    break;
                 }
-
-                ViewInfo = Camera->GetCameraViewInfo();
-
-                return true;
             }
+        }
+
+        if (Camera != nullptr) {
+            if (!Camera->GetTransform().IsValid()) {
+                return false;
+            }
+
+            ViewInfo = Camera->GetCameraViewInfo();
+
+            return true;
         }
 
         const FTransform Transform{Target->GetActorTransform()};
@@ -190,6 +207,7 @@ namespace Engine {
         ViewInfo.mLocation = Transform.mLocation;
         ViewInfo.mRotation = Transform.mRotation;
         ViewInfo.mFieldOfView = mDefaultFieldOfView;
+        ViewInfo.mDepthOfFieldSettings = {};
 
         return true;
     }
@@ -277,7 +295,7 @@ namespace Engine {
         return mCameraShake;
     }
 
-    void Engine::APlayerCameraManager::ApplyCameraModifiers(float DeltaTime, Engine::FMinimalViewInfo& ViewInfo) {
+    void Engine::APlayerCameraManager::ApplyCameraModifiers(Core::FTime DeltaTime, Engine::FMinimalViewInfo& ViewInfo) {
         std::stable_sort(mModifiers.begin(), mModifiers.end(), [](const auto& Left, const auto& Right) {
             return Left->GetPriority() < Right->GetPriority();
         });

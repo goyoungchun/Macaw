@@ -5,11 +5,22 @@
  */
 
 #include "Engine/FEditorCameraState.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Archive.h"
 
 #include <cmath>
 
+using namespace Core::Literals;
+
 namespace Engine {
+
+    Engine::FEditorCameraState::FEditorCameraState()
+		: mLocation{-(7_m).GetBase(), -(9_m).GetBase(), (6_m).GetBase()},
+		  mRotation{-26_deg, 50_deg, 0_deg},
+		  mFieldOfView{60_deg},
+		  mNearClip{0.05_m},
+		  mFarClip{10000_m} {
+    }
 
     /**
      * @brief 위치를 반환합니다.
@@ -28,21 +39,21 @@ namespace Engine {
     /**
      * @brief 시야각을 반환합니다.
      */
-    float Engine::FEditorCameraState::GetFieldOfView() const {
+    Core::FAngle Engine::FEditorCameraState::GetFieldOfView() const {
         return mFieldOfView;
     }
 
     /**
      * @brief 근평면 거리를 반환합니다.
      */
-    float Engine::FEditorCameraState::GetNearClip() const {
+    Core::FLength Engine::FEditorCameraState::GetNearClip() const {
         return mNearClip;
     }
 
     /**
      * @brief 원평면 거리를 반환합니다.
      */
-    float Engine::FEditorCameraState::GetFarClip() const {
+    Core::FLength Engine::FEditorCameraState::GetFarClip() const {
         return mFarClip;
     }
 
@@ -50,7 +61,7 @@ namespace Engine {
      * @brief 카메라의 유한성과 투영 범위를 검사합니다.
      */
     bool Engine::FEditorCameraState::IsValid() const {
-        return mLocation.IsFinite() && mRotation.IsFinite() && std::isfinite(mFieldOfView) && mFieldOfView >= 1.0f && mFieldOfView <= 179.0f && std::isfinite(mNearClip) && std::isfinite(mFarClip) && mNearClip > 0.0f && mFarClip > mNearClip;
+        return mLocation.IsFinite() && mRotation.IsFinite() && mFieldOfView.IsFinite() && mFieldOfView >= 1_deg && mFieldOfView <= 179_deg && mNearClip.IsFinite() && mFarClip.IsFinite() && mNearClip > 0_m && mFarClip > mNearClip;
     }
 
     /**
@@ -63,7 +74,7 @@ namespace Engine {
     /**
      * @brief 검증한 카메라 상태를 원자적으로 적용합니다.
      */
-    bool Engine::FEditorCameraState::Set(const FVector& Location, const FRotator& Rotation, float FieldOfView, float NearClip, float FarClip) {
+    bool Engine::FEditorCameraState::Set(const FVector& Location, const FRotator& Rotation, Core::FAngle FieldOfView, Core::FLength NearClip, Core::FLength FarClip) {
         Engine::FEditorCameraState Candidate{};
         Candidate.mLocation = Location;
         Candidate.mRotation = Rotation;
@@ -88,7 +99,7 @@ namespace Engine {
 
         Archive.Serialize("Location", Candidate.mLocation);
         Archive.Serialize("Rotation", Candidate.mRotation);
-        Archive.Serialize("FOV", Candidate.mFieldOfView);
+        Archive.Serialize("FOV", Candidate.mFieldOfView, Core::QuantityUnits::Degree);
         Archive.Serialize("NearClip", Candidate.mNearClip);
         Archive.Serialize("FarClip", Candidate.mFarClip);
 

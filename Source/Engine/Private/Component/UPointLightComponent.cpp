@@ -5,15 +5,20 @@
  */
 
 #include "Engine/Component/UPointLightComponent.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include <cmath>
+
+using namespace Core::Literals;
 
 namespace Engine {
 
     /**
      * @brief UPointLightComponent의 기본 상태를 초기화합니다.
      */
-    Engine::UPointLightComponent::UPointLightComponent() = default;
+    Engine::UPointLightComponent::UPointLightComponent()
+		: mAttenuationRadius{10_m} {
+    }
 
     /**
      * @brief UPointLightComponent 객체의 수명을 끝내고 소유 자원을 정리합니다.
@@ -35,15 +40,15 @@ namespace Engine {
     /**
      * @brief 점광원·스포트라이트의 영향 반경을 반환합니다.
      */
-    float Engine::UPointLightComponent::GetAttenuationRadius() const {
+    Core::FLength Engine::UPointLightComponent::GetAttenuationRadius() const {
         return mAttenuationRadius;
     }
 
     /**
      * @brief 점광원·스포트라이트의 영향 반경을 검증하고 변경합니다.
      */
-    bool Engine::UPointLightComponent::SetAttenuationRadius(float AttenuationRadius) {
-        if (!std::isfinite(AttenuationRadius) || AttenuationRadius <= 0.0f) {
+    bool Engine::UPointLightComponent::SetAttenuationRadius(Core::FLength AttenuationRadius) {
+        if (!AttenuationRadius.IsFinite() || AttenuationRadius <= Core::FLength{}) {
             return false;
         }
 

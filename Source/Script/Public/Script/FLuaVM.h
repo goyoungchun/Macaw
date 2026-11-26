@@ -1,9 +1,10 @@
 #pragma once
 
+#include "Core/Types.h"
+
 #include <lua.hpp>
 #include <sol/sol.hpp>
 
-#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <functional>
@@ -41,7 +42,7 @@ namespace Script {
         sol::environment mEnvironment{};
         sol::table mTasks{};
         sol::protected_function mAdvanceTasks{};
-        std::array<sol::protected_function, static_cast<std::size_t>(Script::ELuaCallback::Count)> mCallbacks{};
+        Core::TStaticArray<sol::protected_function, static_cast<std::size_t>(Script::ELuaCallback::Count)> mCallbacks{};
         Script::FLuaExecution::FErrorHandler mErrorHandler{};
     };
 

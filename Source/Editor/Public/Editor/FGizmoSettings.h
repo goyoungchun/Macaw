@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Core/ReflectionMacros.h"
+#include "Core/Literals/AngleFunctions.h"
 
 namespace Editor {
 
@@ -57,12 +58,12 @@ namespace Editor {
         /**
          * @brief 이동 스냅의 월드 거리 간격이며 유한한 양수일 때 적용합니다.
          */
-        float mTranslationStep{1.0f};
+        Core::FLength mTranslationStep{mDefaultTranslationStep};
 
         /**
          * @brief 회전 스냅의 도 단위 간격이며 유한한 양수일 때 적용합니다.
          */
-        float mRotationStep{15.0f};
+        Core::FAngle mRotationStep{mDefaultRotationStep};
 
         /**
          * @brief 스케일 스냅의 증가량 간격이며 유한한 양수일 때 적용합니다.
@@ -73,6 +74,10 @@ namespace Editor {
          * @brief 화면에서 유지할 기즈모 크기의 배율이며 0.5에서 2 사이를 사용합니다.
          */
         float mSize{1.0f};
+
+    private:
+        static const Core::FLength mDefaultTranslationStep;
+        static const Core::FAngle mDefaultRotationStep;
     };
 
 }

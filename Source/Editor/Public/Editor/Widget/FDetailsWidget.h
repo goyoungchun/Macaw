@@ -11,6 +11,7 @@
 #include "CoreUObject/Reflection/FPropertyValue.h"
 #include "CoreUObject/TObjectRef.h"
 #include "Editor/FAssetPicker.h"
+#include "Core/Types.h"
 
 #include <functional>
 #include <optional>
@@ -26,6 +27,7 @@ namespace Engine {
     class AActor;
     class ULightComponent;
     class UMeshComponent;
+    class USceneComponent;
     class USkeletalMeshComponent;
 }
 
@@ -71,6 +73,66 @@ namespace Editor {
              * @brief 고급 프로퍼티로 분류할지 여부입니다.
              */
             bool mAdvanced{};
+
+            /**
+             * @brief ShowOnlyInnerProperties 구조체에서 이 행이 그리는 멤버이며, 구조체 전체를 그리면 nullptr입니다.
+             */
+            const CoreUObject::FProperty* mInnerProperty{};
+        };
+
+        /**
+         * @brief 표시할 내용이 있는 카테고리 하나와 그 안에 그릴 특수 행입니다.
+         * @ingroup Editor
+         */
+        struct FDetailCategory {
+
+            /**
+             * @brief 카테고리 이름입니다.
+             */
+            Core::FString mName{};
+
+            /**
+             * @brief 이 카테고리에 속한 프로퍼티 행이 있는지 여부입니다.
+             */
+            bool mHasRows{};
+
+            /**
+             * @brief Animation 카테고리에 애님 그래프 행을 그릴지 여부입니다.
+             */
+            bool mGraphRow{};
+
+            /**
+             * @brief Materials 카테고리에 머티리얼 슬롯을 그릴 메시 컴포넌트이며, 그리지 않으면 nullptr입니다.
+             */
+            Engine::UMeshComponent* mMaterialMesh{};
+        };
+
+        /**
+         * @brief 한 프레임에 표시할 행과 카테고리를 그리기 전에 모은 결과입니다.
+         * @details 섹션 버튼이 같은 프레임의 대상을 기준으로 나오도록 툴바보다 먼저 만듭니다.
+         * @ingroup Editor
+         */
+        struct FDetailLayout {
+
+            /**
+             * @brief 검색·변경 필터를 통과한 프로퍼티 행입니다.
+             */
+            Core::TArray<FDetailRow> mRows{};
+
+            /**
+             * @brief 표시할 내용이 있는 카테고리를 표시 순서대로 담습니다.
+             */
+            Core::TArray<FDetailCategory> mCategories{};
+
+            /**
+             * @brief Shadow Depth Maps를 그릴 라이트이며, 그리지 않으면 nullptr입니다.
+             */
+            const Engine::ULightComponent* mShadowLight{};
+
+            /**
+             * @brief 섹션 버튼과 섹션 필터가 쓰는, 표시할 내용이 있는 카테고리 이름입니다.
+             */
+            Core::TArray<Core::FString> mAvailableCategories{};
         };
 
     public:
@@ -127,6 +189,19 @@ namespace Editor {
         void DrawToolbar(Core::TArray<CoreUObject::TObjectRef<CoreUObject::UObject>>& Targets);
 
         /**
+         * @brief 표시할 카테고리가 있는 섹션만 필터 버튼으로 표시하고 선택을 바꿉니다.
+         * @param AvailableCategories 이번 프레임에 표시할 내용이 있는 카테고리 목록이며, 비어 있으면 아무것도 그리지 않습니다.
+         */
+        void DrawSectionBar(const Core::TArray<Core::FString>& AvailableCategories);
+
+        /**
+         * @brief 선택한 섹션이 현재 대상에서 표시할 카테고리를 가지면 그 섹션을, 아니면 All을 반환합니다.
+         * @param AvailableCategories 표시할 내용이 있는 카테고리 목록입니다.
+         * @return 실제로 적용할 섹션 이름입니다.
+         */
+        std::string_view GetEffectiveSection(const Core::TArray<Core::FString>& AvailableCategories) const;
+
+        /**
          * @brief 프로퍼티 분류·표시 이름·내부 이름에 검색어가 일치하는지 확인합니다.
          * @param Category 검색하거나 표시할 프로퍼티 분류입니다.
          * @param Label UI 항목의 표시 이름입니다.
@@ -154,6 +229,14 @@ namespace Editor {
          * @param Row 공통 프로퍼티와 대상 객체들을 보관한 행입니다.
          */
         void DrawPropertyRow(const FDetailRow& Row);
+
+        /**
+         * @brief 구조체 프로퍼티를 펼쳐 하위 필드를 공통 편집합니다.
+         * @details 필드를 바꾸면 대상마다 현재 구조체의 사본에 필드를 쓴 뒤 구조체 전체를 프로퍼티 편집 경로로 적용합니다.
+         * @param Row 구조체 프로퍼티와 대상 객체들을 보관한 행입니다.
+         * @note 중첩 구조체와 배열 필드는 아직 편집하지 않습니다.
+         */
+        void DrawStructRow(const FDetailRow& Row);
 
         /**
          * @brief 여러 선택 객체의 위치·회전·크기를 공통 편집합니다.
@@ -229,10 +312,18 @@ namespace Editor {
         void DrawComponentTree(Engine::AActor* Actor, CoreUObject::TObjectRef<CoreUObject::UObject> Selected);
 
         /**
-         * @brief 객체 타입의 편집 가능한 리플렉션 프로퍼티를 순회하여 표시합니다.
+         * @brief 대상들이 공유하는 프로퍼티 행과 표시할 내용이 있는 카테고리를 모읍니다.
          * @param Targets 공통 프로퍼티를 표시하고 편집할 객체 핸들입니다.
+         * @return 검색·변경 필터를 반영한 행과 카테고리이며, 대상을 해석하지 못하면 빈 결과입니다.
          */
-        void DrawReflectedObjects(const Core::TArray<CoreUObject::TObjectRef<CoreUObject::UObject>>& Targets);
+        FDetailLayout BuildDetailLayout(const Core::TArray<CoreUObject::TObjectRef<CoreUObject::UObject>>& Targets);
+
+        /**
+         * @brief 모아 둔 행을 선택한 섹션에 속한 카테고리별로 표시합니다.
+         * @param Layout 이번 프레임에 BuildDetailLayout으로 모은 결과입니다.
+         * @param Targets 표시·편집할 객체 핸들 목록입니다.
+         */
+        void DrawDetailLayout(const FDetailLayout& Layout, const Core::TArray<CoreUObject::TObjectRef<CoreUObject::UObject>>& Targets);
 
         /**
          * @brief 프로퍼티 타입에 맞는 편집 위젯을 표시하고 변경한 값을 돌려줍니다.
@@ -274,7 +365,7 @@ namespace Editor {
         /**
          * @brief 프로퍼티 검색용 UTF-8 입력 버퍼입니다.
          */
-        std::array<char, 192> mPropertySearch{};
+        Core::TStaticArray<char, 192> mPropertySearch{};
 
         /**
          * @brief 모든 분류의 펼침 상태를 변경할 일회성 요청입니다.
@@ -292,6 +383,11 @@ namespace Editor {
         bool mShowAdvanced{};
 
         /**
+         * @brief 사용자가 고른 섹션 이름이며, 대상이 바뀌어도 유지합니다.
+         */
+        Core::FString mSelectedSection{"All"};
+
+        /**
          * @brief 브라우저의 현재 선택 경로를 얻는 콜백입니다.
          */
         std::function<std::filesystem::path()> mGetSelectedAsset{};
@@ -304,7 +400,9 @@ namespace Editor {
         /**
          * @brief Details 컴포넌트 검색 입력 버퍼입니다.
          */
-        std::array<char, 128> mComponentSearch{};
+        Core::TStaticArray<char, 128> mComponentSearch{};
+
+        CoreUObject::TObjectRef<Engine::USceneComponent> mRootDropComponent{};
 
         /**
          * @brief 브라우저와 동일한 에셋 목록입니다.

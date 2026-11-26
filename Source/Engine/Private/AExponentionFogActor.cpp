@@ -7,7 +7,6 @@
 #include "Engine/AExponentionFogActor.h"
 #include "Engine/Component/UHeightFogComponent.h"
 #include "CoreUObject/Reflection/NewObject.h"
-#include "CoreUObject/Reflection/Cast.h"
 
 namespace Engine {
 
@@ -39,7 +38,7 @@ namespace Engine {
      * @brief 안개 액터의 루트에 연결된 높이 안개 컴포넌트를 조회합니다.
      */
     Engine::UHeightFogComponent* Engine::AExponentionFogActor::GetFogComponent() const {
-        return CoreUObject::Cast<Engine::UHeightFogComponent>(GetRootComponent());
+        return static_cast<Engine::UHeightFogComponent*>(FindDefaultComponent(Engine::UHeightFogComponent::StaticClass(), Core::FName{"HeightFogComponent"}));
     }
 
 }

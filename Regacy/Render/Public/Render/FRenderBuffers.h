@@ -4,8 +4,8 @@
 #include "Render/FRenderView.h"
 #include "Render/Buffer/TGraphicsArray.h"
 #include "RenderCore/FUVTransform.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <map>
 
 class FRenderScene;
@@ -86,7 +86,7 @@ private:
     TGraphicsArray<FUVTransform> mUVTransforms{};
     TGraphicsArray<FMatrix> mLocalTransforms{};
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mSceneTransforms{};
-    std::array<FStreamBuffer, static_cast<std::size_t>(ERenderStream::Count)> mStreams{};
+    Core::TStaticArray<FStreamBuffer, static_cast<std::size_t>(ERenderStream::Count)> mStreams{};
     std::map<Uint64, FSceneBuffers> mScenes{};
     TArray<Uint32> mChangedObjects{};
     Uint64 mSceneId{};

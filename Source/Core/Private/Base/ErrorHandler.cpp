@@ -5,9 +5,9 @@
  */
 
 #include "Core/Base/ErrorHandler.h"
+#include "Core/Types.h"
 
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -38,12 +38,12 @@ namespace Core {
         /**
          * @brief 치명적 오류 재진입 대비 고정 크기 제목 버퍼입니다.
          */
-        thread_local std::array<char, 257> CriticalTitle{};
+        thread_local Core::TStaticArray<char, 257> CriticalTitle{};
 
         /**
          * @brief 치명적 오류 재진입 대비 고정 크기 메시지 버퍼입니다.
          */
-        thread_local std::array<char, 3501> CriticalMessage{};
+        thread_local Core::TStaticArray<char, 3501> CriticalMessage{};
 
         /**
          * @brief 고정 버퍼의 남은 공간에 문자열을 붙이고 널 종료를 유지합니다.
@@ -64,7 +64,7 @@ namespace Core {
          * @brief 오류 보고가 재진입한 경우 고정 버퍼로 최소 로그를 쓰고 즉시 종료합니다.
          */
         [[noreturn]] void ReportCriticalFallback() noexcept {
-            std::array<char, 4096> Buffer{};
+            Core::TStaticArray<char, 4096> Buffer{};
             std::size_t Length{};
 
             Append(Buffer, Length, "[CRITICAL] ");
@@ -130,7 +130,7 @@ namespace Core {
          * @return 현재 호출 스택의 주소를 사람이 읽을 수 있는 문자열로 구성합니다.입니다.
          */
         std::string GetDetailedStackTrace() {
-            std::array<void*, 32> Frames{};
+            Core::TStaticArray<void*, 32> Frames{};
             const USHORT Count{CaptureStackBackTrace(2, static_cast<DWORD>(Frames.size()), Frames.data(), nullptr)};
             std::string Trace{"\n=== STACK TRACE ===\n"};
 

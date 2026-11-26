@@ -5,6 +5,7 @@
 #include "Asset/UMaterial.h"
 #include "Asset/UMesh.h"
 #include "Asset/UTexture.h"
+#include "Core/Types.h"
 
 #include <tuple>
 
@@ -32,7 +33,7 @@ namespace {
             }
         }
 
-        constexpr std::array<EVertexAttribute, 4> Attributes{EVertexAttribute::Position, EVertexAttribute::Normal, EVertexAttribute::UV, EVertexAttribute::Color};
+        constexpr Core::TStaticArray<EVertexAttribute, 4> Attributes{EVertexAttribute::Position, EVertexAttribute::Normal, EVertexAttribute::UV, EVertexAttribute::Color};
 
         for (std::size_t Index{}; Index < Attributes.size(); ++Index) {
             Command.mVertexBuffers[Index] = MeshResource->GetVertexBuffer(Attributes[Index], Command.mState.mLODLevel);

@@ -5,8 +5,8 @@
 #include "RenderCore/FVertexAttribute.h"
 #include "Core/Spatial/FBVH8.h"
 #include "Core/Spatial/FBVH8TrianglePackets.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -116,7 +116,7 @@ private:
 
     // 대칭 4x4 Quadric의 상삼각 성분만 저장한다. 생성 중 원본 평면 오차를 누적한다.
     struct FLODQuadric {
-        std::array<double, 10> mValues{};
+        Core::TStaticArray<double, 10> mValues{};
 
         void AddPlane(double X, double Y, double Z, double D);
 
@@ -181,7 +181,7 @@ private:
         FEdge mEdge{};
 
         // 공유 면 두 개에서 찾은 대응 관계. 이음매 양쪽을 서로 섞지 않는다.
-        std::array<FAttributeMerge, 2> mAttributeMerges{};
+        Core::TStaticArray<FAttributeMerge, 2> mAttributeMerges{};
         Uint32 mMergeCount{};
         bool mFixedTarget{};
     };
@@ -293,7 +293,7 @@ private:
     static void MergeLODNormalGroups(FLODGeometry& Geometry, Uint32 Group0, Uint32 Group1);
     bool MakeLODCandidate(Uint64 Key, const FLODGeometry& Geometry, const FLODSimplification& State, FLODCandidate& Candidate) const;
     bool PrepareLODCollapse(const FLODCandidate& Candidate, const FLODGeometry& Geometry, const FLODSimplification& State, FLODCollapse& Collapse) const;
-    static bool EvaluateLODUVError(const FLODCollapse& Collapse, const FLODGeometry& Geometry, double& Error, std::array<double, 3>* UVQuadric = nullptr);
+    static bool EvaluateLODUVError(const FLODCollapse& Collapse, const FLODGeometry& Geometry, double& Error, Core::TStaticArray<double, 3>* UVQuadric = nullptr);
     bool CanCollapseEdge(const FLODCollapse& Collapse, const FLODGeometry& Geometry, FLODSimplification& State) const;
     void ApplyLODCollapse(const FLODCollapse& Collapse, FLODGeometry& Geometry, FLODSimplification& State);
     FLODRenderData BuildLODRenderData(const FLODGeometry& Geometry) const;
@@ -424,7 +424,7 @@ std::span<const TVertexAttributeElementType<Attribute>> UMesh::GetVertexAttribut
 
 template <typename... TAttributes>
 consteval bool UMesh::AreVertexAttributesUnique() {
-    constexpr std::array<EVertexAttribute, sizeof...(TAttributes)> Attributes{std::remove_cvref_t<TAttributes>::AttributeType...};
+    constexpr Core::TStaticArray<EVertexAttribute, sizeof...(TAttributes)> Attributes{std::remove_cvref_t<TAttributes>::AttributeType...};
 
     for (std::size_t I{0}; I < Attributes.size(); ++I) {
         for (std::size_t J{I + 1}; J < Attributes.size(); ++J) {

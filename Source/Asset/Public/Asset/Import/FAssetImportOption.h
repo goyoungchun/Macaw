@@ -115,6 +115,12 @@ namespace Asset {
         bool mCombineMeshes{true};
 
         /**
+         * @brief 정적 메시를 임포트할 때 메시 형태를 감싸는 볼록 충돌 형상을 만듭니다. 끄거나 만들 수 없으면 경계 상자를 사용합니다.
+         */
+        UPROPERTY(Edit)
+        bool mGenerateConvexCollision{true};
+
+        /**
          * @brief 메시와 재질을 가져옵니다. 끄면 스켈레톤이나 애니메이션만 가져옵니다.
          */
         UPROPERTY(Edit)

@@ -12,7 +12,6 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
-#include <array>
 #include <limits>
 #include <string_view>
 
@@ -71,7 +70,7 @@ namespace Editor {
         void DrawLines(const ImVec2& Origin, float LineHeight) const;
 
     private:
-        std::array<char, 128> mFilterInput{};
+        Core::TStaticArray<char, 128> mFilterInput{};
         Core::FString mFilter{};
         Core::FString mText{};
         Core::TArray<FLine> mLines{};

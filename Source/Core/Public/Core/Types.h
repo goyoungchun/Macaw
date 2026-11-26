@@ -59,6 +59,9 @@ namespace Core {
     template <typename T>
     using TArray = std::vector<T>;
 
+    template <typename T, std::size_t Size>
+    using TStaticArray = std::array<T, Size>;
+
     /**
      * @brief 키와 값 및 선택한 해시 함수로 구성하는 해시 맵입니다.
      * @tparam K 키 타입입니다.

@@ -23,7 +23,6 @@
 #include <imgui_node_editor.h>
 
 #include <algorithm>
-#include <array>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
@@ -244,7 +243,7 @@ namespace Editor {
             const Core::FString* Value{Node.FindParameter(Info.mName)};
             const Core::FString Text{Value != nullptr ? *Value : Info.mDefault};
 
-            if (Info.mType == Engine::EAnimGraphParameterType::AnimSequence || Info.mType == Engine::EAnimGraphParameterType::BlendSpace) {
+            if (Info.mType == Engine::EAnimGraphParameterType::AnimSequence || Info.mType == Engine::EAnimGraphParameterType::BlendSpace || Info.mType == Engine::EAnimGraphParameterType::PhysicsAsset) {
                 return Text.empty() ? Core::FString{"(없음)"} : Core::FilePath::ToUtf8(Core::FilePath::FromUtf8(Text).stem());
             }
 
@@ -478,7 +477,7 @@ namespace Editor {
             const float GetWidth{ImGui::CalcTextSize("Get").x + 2.0f * Style.FramePadding.x};
             const float NameWidth{std::max(1.0f, Width - FrameHeight - GetWidth - 2.0f * Style.ItemSpacing.x)};
             Asset::FAnimGraphVariable Variable{mRootEditing->GetVariables()[Index]};
-            std::array<char, 64> Name{};
+            Core::TStaticArray<char, 64> Name{};
             bool Changed{};
 
             std::copy_n(Variable.mName.begin(), std::min(Variable.mName.size(), Name.size() - 1), Name.begin());
@@ -989,7 +988,7 @@ namespace Editor {
 
         ed::Resume();
 
-        std::array<ed::NodeId, 2> Selected{};
+        Core::TStaticArray<ed::NodeId, 2> Selected{};
         const int SelectedCount{ed::GetSelectedNodes(Selected.data(), static_cast<int>(Selected.size()))};
 
         if (SelectedCount == 1) {
@@ -1054,7 +1053,7 @@ namespace Editor {
         ImGui::PushID(Node->mId);
         ImGui::TextDisabled("%s", Type != nullptr ? Type->mTitle.c_str() : Node->mType.c_str());
 
-        std::array<char, 64> Name{};
+        Core::TStaticArray<char, 64> Name{};
 
         std::copy_n(Node->mName.begin(), std::min(Node->mName.size(), Name.size() - 1), Name.begin());
 
@@ -1139,8 +1138,9 @@ namespace Editor {
                 }
 
                 case Engine::EAnimGraphParameterType::AnimSequence:
-                case Engine::EAnimGraphParameterType::BlendSpace: {
-                    const Asset::EAssetType AssetType{Info.mType == Engine::EAnimGraphParameterType::AnimSequence ? Asset::EAssetType::AnimSequence : Asset::EAssetType::BlendSpace};
+                case Engine::EAnimGraphParameterType::BlendSpace:
+                case Engine::EAnimGraphParameterType::PhysicsAsset: {
+                    const Asset::EAssetType AssetType{Info.mType == Engine::EAnimGraphParameterType::AnimSequence ? Asset::EAssetType::AnimSequence : Info.mType == Engine::EAnimGraphParameterType::BlendSpace ? Asset::EAssetType::BlendSpace : Asset::EAssetType::PhysicsAsset};
 
                     if (mCatalog != nullptr && mThumbnails != nullptr && mPicker.Draw(*mCatalog, *mThumbnails, Info.mName.c_str(), Value, AssetType, {}, "None")) {
                         Node->SetParameter(Info.mName, Value);

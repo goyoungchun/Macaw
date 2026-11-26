@@ -22,7 +22,6 @@
 #include <imgui_internal.h>
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <format>
 
@@ -264,7 +263,7 @@ namespace Editor {
         ImGui::SeparatorText("Axis");
 
         Asset::FBlendParameter Parameter{mEditing->GetBlendParameter(Asset::EBlendSpaceAxis::X)};
-        std::array<char, 64> Name{};
+        Core::TStaticArray<char, 64> Name{};
 
         std::copy_n(Parameter.mDisplayName.begin(), std::min(Parameter.mDisplayName.size(), Name.size() - 1), Name.begin());
 
@@ -544,7 +543,7 @@ namespace Editor {
         DrawList->AddText({Origin.x + Margin, End.y - 1.15f * TextHeight}, TextColor, Parameter.mDisplayName.c_str());
 
         Core::TArray<Index_t> Order{};
-        std::array<float, Asset::UBlendSpace::MaxSamples> SampleWeights{};
+        Core::TStaticArray<float, Asset::UBlendSpace::MaxSamples> SampleWeights{};
 
         Order.resize(Samples.size());
 
@@ -564,7 +563,7 @@ namespace Editor {
         });
 
         const std::size_t CommonPrefix{CommonNamePrefix(Samples)};
-        std::array<Core::TArray<ImVec2>, 2> LabelBounds{};
+        Core::TStaticArray<Core::TArray<ImVec2>, 2> LabelBounds{};
 
         for (const Index_t Index : Order) {
             const auto SampleIndex{Index};

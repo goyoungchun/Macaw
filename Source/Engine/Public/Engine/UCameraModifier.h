@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "Core/Literals/QuantityTypes.h"
+
 #include "Core/ReflectionMacros.h"
 #include "Core/Types.h"
 #include "CoreUObject/UObject.h"
@@ -55,13 +57,13 @@ namespace Engine {
          * @return 뒤 순서의 모디파이어를 건너뛰려면 true입니다.
          * @note 꺼진 상태에서는 호출되지 않습니다. 기반 구현은 아무것도 하지 않고 false를 반환합니다.
          */
-        virtual bool ModifyCamera(float DeltaTime, Engine::FMinimalViewInfo& ViewInfo);
+        virtual bool ModifyCamera(Core::FTime DeltaTime, Engine::FMinimalViewInfo& ViewInfo);
 
         /**
          * @brief Alpha를 목표값 쪽으로 진행하고, 끄는 중에 0이 되면 꺼진 상태로 바꿉니다.
          * @param[in] DeltaTime 이번 갱신의 초 단위 시간입니다.
          */
-        void UpdateAlpha(float DeltaTime);
+        void UpdateAlpha(Core::FTime DeltaTime);
 
         /**
          * @brief 이 모디파이어를 소유한 카메라 관리자를 반환합니다.
@@ -85,25 +87,25 @@ namespace Engine {
          * @brief 켜질 때 Alpha가 1이 되기까지의 시간을 반환합니다.
          * @return 초 단위 시간입니다.
          */
-        float GetAlphaInTime() const;
+        Core::FTime GetAlphaInTime() const;
 
         /**
          * @brief 켜질 때 Alpha가 1이 되기까지의 시간을 지정합니다.
          * @param[in] Time 초 단위 시간이며 0 이하이면 바로 1이 됩니다.
          */
-        void SetAlphaInTime(float Time);
+        void SetAlphaInTime(Core::FTime Time);
 
         /**
          * @brief 끌 때 Alpha가 0이 되기까지의 시간을 반환합니다.
          * @return 초 단위 시간입니다.
          */
-        float GetAlphaOutTime() const;
+        Core::FTime GetAlphaOutTime() const;
 
         /**
          * @brief 끌 때 Alpha가 0이 되기까지의 시간을 지정합니다.
          * @param[in] Time 초 단위 시간이며 0 이하이면 바로 0이 됩니다.
          */
-        void SetAlphaOutTime(float Time);
+        void SetAlphaOutTime(Core::FTime Time);
 
         /**
          * @brief 현재 효과의 세기를 반환합니다.
@@ -142,12 +144,12 @@ namespace Engine {
         /**
          * @brief 켜질 때 Alpha가 1이 되기까지의 초 단위 시간입니다.
          */
-        float mAlphaInTime{};
+        Core::FTime mAlphaInTime{};
 
         /**
          * @brief 끌 때 Alpha가 0이 되기까지의 초 단위 시간입니다.
          */
-        float mAlphaOutTime{};
+        Core::FTime mAlphaOutTime{};
 
         /**
          * @brief 현재 효과의 세기입니다.

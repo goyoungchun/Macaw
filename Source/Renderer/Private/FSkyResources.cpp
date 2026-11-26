@@ -6,89 +6,17 @@
 
 #include "Core/Types.h"
 #include "FSkyResources.h"
+#include "FScene.h"
 #include "FPassTarget.h"
 #include "Core/Base/ErrorHandler.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Core/Math/FMatrix.h"
 #include "Engine/FSceneView.h"
 
-#include <dxgiformat.h>
-#include <algorithm>
-#include <array>
-#include <fstream>
+#include "Asset/FAssetManager.h"
+#include "Asset/UTexture2D.h"
 
 namespace Renderer {
-
-    /**
-     * @brief 이 파일에서 사용하는 내부 보조 기능과 상태를 묶습니다.
-     */
-    namespace {
-        // DX10 확장을 포함한 DDS 헤더를 32비트 단위로 읽을 때의 필드 위치입니다.
-
-        /**
-         * @brief DX10 확장까지 포함한 DDS 헤더 워드 수입니다.
-         */
-        constexpr std::size_t HeaderWords{37};
-
-        /**
-         * @brief DDS 매직 값의 워드 위치입니다.
-         */
-        constexpr Index_t MagicWord{0};
-
-        /**
-         * @brief DDS 텍스처 높이의 워드 위치입니다.
-         */
-        constexpr Index_t HeightWord{3};
-
-        /**
-         * @brief DDS 텍스처 너비의 워드 위치입니다.
-         */
-        constexpr Index_t WidthWord{4};
-
-        /**
-         * @brief DDS 밉 개수의 워드 위치입니다.
-         */
-        constexpr Index_t MipCountWord{7};
-
-        /**
-         * @brief DDS 기본 헤더 FourCC의 워드 위치입니다.
-         */
-        constexpr Index_t FourCCWord{21};
-
-        /**
-         * @brief DDS DX10 DXGI 포맷의 워드 위치입니다.
-         */
-        constexpr Index_t FormatWord{32};
-
-        /**
-         * @brief DDS DX10 리소스 차원의 워드 위치입니다.
-         */
-        constexpr Index_t DimensionWord{33};
-
-        /**
-         * @brief DDS DX10 배열 크기의 워드 위치입니다.
-         */
-        constexpr Index_t ArraySizeWord{35};
-
-        /**
-         * @brief DDS 파일 식별 매직 값입니다.
-         */
-        constexpr Uint32 DDSMagic{0x20534444u};
-
-        /**
-         * @brief DX10 확장 DDS 헤더의 FourCC입니다.
-         */
-        constexpr Uint32 DX10FourCC{0x30315844u};
-
-        /**
-         * @brief DDS DX10의 2차원 텍스처 차원 값입니다.
-         */
-        constexpr Uint32 Texture2DDimension{3u};
-
-        /**
-         * @brief BC7 블록 하나의 바이트 수입니다.
-         */
-        constexpr std::size_t BC7BlockBytes{16};
-    }
 
     /**
      * @brief 기본 설정으로 FSkyResources 객체를 초기화합니다.
@@ -103,7 +31,7 @@ namespace Renderer {
     /**
      * @brief 상수 버퍼·샘플러·깊이·래스터라이저 상태를 생성하고 파노라마를 불러옵니다.
      */
-    bool Renderer::FSkyResources::Initialize(ID3D11Device* Device, const std::filesystem::path& PanoramaPath, const std::filesystem::path& PreviewPath) {
+    bool Renderer::FSkyResources::Initialize(ID3D11Device* Device, const std::filesystem::path& PreviewFallbackPath, const std::filesystem::path& PreviewPath) {
         D3D11_SAMPLER_DESC Sampler{};
         Sampler.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
         Sampler.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
@@ -122,15 +50,11 @@ namespace Renderer {
 
         Core::FString Error{};
 
-        if (!mConstants.Create(Device, Error) || FAILED(Device->CreateSamplerState(&Sampler, mSampler.GetAddressOf())) || FAILED(Device->CreateDepthStencilState(&Depth, mDepthState.GetAddressOf())) || FAILED(Device->CreateRasterizerState(&Rasterizer, mRasterizer.GetAddressOf()))) {
+        if (!mConstants.Create(Device, Error) || !mAtmosphereConstants.Create(Device, Error) || FAILED(Device->CreateSamplerState(&Sampler, mSampler.GetAddressOf())) || FAILED(Device->CreateDepthStencilState(&Depth, mDepthState.GetAddressOf())) || FAILED(Device->CreateRasterizerState(&Rasterizer, mRasterizer.GetAddressOf()))) {
             return false;
         }
 
-        if (!LoadPanorama(Device, PanoramaPath, mPanorama)) {
-            Core::ErrorHandler::Report("Sky", "Cannot load the sky panorama: " + PanoramaPath.string(), Core::ErrorHandler::EErrorLevel::Warning);
-        }
-
-        if (!LoadPanorama(Device, PreviewPath, mPreviewPanorama)) {
+        if (!LoadPanorama(Device, PreviewPath, mPreviewPanorama) && !LoadPanorama(Device, PreviewFallbackPath, mPreviewPanorama)) {
             Core::ErrorHandler::Report("Sky", "Cannot load the preview panorama: " + PreviewPath.string(), Core::ErrorHandler::EErrorLevel::Warning);
         }
 
@@ -154,13 +78,34 @@ namespace Renderer {
         return true;
     }
 
+    bool Renderer::FSkyResources::CreateAtmosphereShader(ID3D11Device* Device, std::span<const Uint8> PixelCode) {
+        Microsoft::WRL::ComPtr<ID3D11PixelShader> Pixel{};
+
+        if (FAILED(Device->CreatePixelShader(PixelCode.data(), PixelCode.size(), nullptr, Pixel.GetAddressOf()))) {
+            return false;
+        }
+
+        mAtmospherePixelShader = std::move(Pixel);
+
+        return true;
+    }
+
     /**
      * @brief 불투명 패스의 깊이가 비어 있는 픽셀에만 하늘을 그립니다.
      */
-    Uint32 Renderer::FSkyResources::Render(ID3D11DeviceContext* Context, const Renderer::FPassTarget& Target, const Engine::FSceneView& View, bool Preview) {
-        ID3D11ShaderResourceView* Panorama{Preview && mPreviewPanorama != nullptr ? mPreviewPanorama.Get() : mPanorama.Get()};
+    Uint32 Renderer::FSkyResources::Render(ID3D11Device* Device, ID3D11DeviceContext* Context, const Renderer::FPassTarget& Target, const Engine::FSceneView& View, const Renderer::FScene& Scene, bool Preview) {
+        const Engine::FSkyDomeSceneProxy* SkyDome{Preview ? nullptr : Scene.GetSkyDome()};
+        Asset::UTexture2D* SkyTexture{SkyDome != nullptr ? SkyDome->mPanorama.Get() : nullptr};
+        ID3D11ShaderResourceView* Panorama{Preview ? mPreviewPanorama.Get() : nullptr};
 
-        if (Panorama == nullptr || mVertexShader == nullptr || mPixelShader == nullptr) {
+        if (SkyTexture != nullptr && SkyTexture->CreateResources(Device)) {
+            Panorama = SkyTexture->GetShaderResourceView();
+        }
+
+        const Engine::FSkyAtmosphereSceneProxy* Atmosphere{!Preview && Panorama == nullptr ? Scene.GetSkyAtmosphere() : nullptr};
+        ID3D11PixelShader* PixelShader{Atmosphere != nullptr ? mAtmospherePixelShader.Get() : mPixelShader.Get()};
+
+        if (mVertexShader == nullptr || PixelShader == nullptr || (Atmosphere == nullptr && Panorama == nullptr)) {
             return 0;
         }
 
@@ -171,13 +116,18 @@ namespace Renderer {
         ViewRotation(3, 1) = 0.0f;
         ViewRotation(3, 2) = 0.0f;
 
-        FMatrix InverseViewRotationProjection{};
+        FSkyConstants Constants{};
 
-        if (!(ViewRotation * View.mProjection).TryInverse(InverseViewRotationProjection)) {
+        if (SkyDome != nullptr && Panorama != nullptr) {
+            ViewRotation = FMatrix::Rotation(SkyDome->mRotation) * ViewRotation;
+            Constants.mPanoramaParameters.x = SkyTexture->IsSRGB() ? 1.0f : 0.0f;
+        }
+
+        if (!(ViewRotation * View.mProjection).TryInverse(Constants.mInverseViewRotationProjection)) {
             return 0;
         }
 
-        mConstants.Update(Context, InverseViewRotationProjection);
+        mConstants.Update(Context, Constants);
         Context->OMSetRenderTargets(1, &Target.mColor, Target.mDepth);
         Context->OMSetDepthStencilState(mDepthState.Get(), 0);
         Context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFFu);
@@ -186,88 +136,57 @@ namespace Renderer {
         Context->IASetInputLayout(nullptr);
         Context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         Context->VSSetShader(mVertexShader.Get(), nullptr, 0);
-        Context->PSSetShader(mPixelShader.Get(), nullptr, 0);
-
-        ID3D11SamplerState* Sampler{mSampler.Get()};
-
+        Context->PSSetShader(PixelShader, nullptr, 0);
         mConstants.Bind(Context, RenderCore::EShaderStage::Pixel, 0);
-        Context->PSSetSamplers(0, 1, &Sampler);
-        Context->PSSetShaderResources(0, 1, &Panorama);
-        Context->Draw(3, 0);
 
-        ID3D11ShaderResourceView* Empty{};
+        if (Atmosphere != nullptr) {
+            BindAtmosphere(Context, View, *Atmosphere, Scene.GetAtmosphereSunLight());
+            Context->Draw(3, 0);
+        } else {
+            ID3D11SamplerState* Sampler{mSampler.Get()};
+            ID3D11ShaderResourceView* Empty{};
 
-        Context->PSSetShaderResources(0, 1, &Empty);
+            Context->PSSetSamplers(0, 1, &Sampler);
+            Context->PSSetShaderResources(0, 1, &Panorama);
+            Context->Draw(3, 0);
+            Context->PSSetShaderResources(0, 1, &Empty);
+        }
 
         return 1;
     }
 
+    void Renderer::FSkyResources::BindAtmosphere(ID3D11DeviceContext* Context, const Engine::FSceneView& View, const Engine::FSkyAtmosphereSceneProxy& Atmosphere, const Engine::FLightSceneProxy* Sun) {
+        constexpr float WorldUnitsPerKilometer{static_cast<float>(Core::QuantityUnits::Kilometer.mScale)};
+        const float GroundRadius{Atmosphere.mGroundRadius.GetBase() / WorldUnitsPerKilometer};
+        FVector CameraPosition{(View.mLocation - Atmosphere.mGroundPosition) / WorldUnitsPerKilometer};
+        CameraPosition.z += GroundRadius;
+
+        FSkyAtmosphereConstants Constants{};
+        Constants.mCameraPositionAndGroundRadius = {CameraPosition, GroundRadius};
+        Constants.mSunDirectionAndAtmosphereHeight = {Sun != nullptr ? -Sun->mDirection : FVector{0.0f, 0.0f, 1.0f}, Atmosphere.mAtmosphereHeight.GetBase() / WorldUnitsPerKilometer};
+        Constants.mSunColorAndMieAnisotropy = {Sun != nullptr ? FVector{Sun->mColor.x, Sun->mColor.y, Sun->mColor.z} * Sun->mIntensity : FVector{}, Atmosphere.mMieAnisotropy};
+        Constants.mDensityScaleHeightsAndScatteringScales = {Atmosphere.mRayleighScaleHeight.GetBase() / WorldUnitsPerKilometer, Atmosphere.mMieScaleHeight.GetBase() / WorldUnitsPerKilometer, Atmosphere.mRayleighScatteringScale, Atmosphere.mMieScatteringScale};
+        const float SunDiskChord{Sun != nullptr ? 2.0f * Core::Math::Sin(Sun->mShadowSourceAngle * 0.5f) : 0.0f};
+        Constants.mOzoneAbsorptionScaleAndSunDisk = {Atmosphere.mOzoneAbsorptionScale, SunDiskChord * SunDiskChord, 0.0f, 0.0f};
+
+        mAtmosphereConstants.Update(Context, Constants);
+        mAtmosphereConstants.Bind(Context, RenderCore::EShaderStage::Pixel, 1);
+    }
+
     /**
-     * @brief BC7 DDS를 CPU 변환 없이 밉 체인 그대로 GPU 텍스처로 생성합니다.
+     * @brief 하늘 텍스처를 표시 공간의 값으로 샘플링하도록 GPU 자원을 생성합니다.
      */
     bool Renderer::FSkyResources::LoadPanorama(ID3D11Device* Device, const std::filesystem::path& Path, Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>& Panorama) {
-        std::error_code Code{};
-        const auto Size{std::filesystem::file_size(Path, Code)};
-        std::ifstream Input{Path, std::ios::binary};
-        std::array<Uint32, HeaderWords> Header{};
-
-        if (Code || Size < sizeof(Header) || !Input || !Input.read(reinterpret_cast<char*>(Header.data()), sizeof(Header))) {
+        Asset::FAssetManager Assets{Path.parent_path()};
+        Core::FString Error{};
+        auto* Texture{Assets.LoadTexture(Path, Error)};
+        if (Texture == nullptr || !Texture->SetSRGB(false) || !Texture->CreateResources(Device)) {
             return false;
         }
 
-        const bool BC7{Header[FormatWord] == DXGI_FORMAT_BC7_UNORM || Header[FormatWord] == DXGI_FORMAT_BC7_UNORM_SRGB};
+        Panorama = Texture->GetShaderResourceView();
 
-        if (Header[MagicWord] != DDSMagic || Header[FourCCWord] != DX10FourCC || !BC7 || Header[DimensionWord] != Texture2DDimension || Header[ArraySizeWord] != 1 || Header[WidthWord] == 0 || Header[HeightWord] == 0 || Header[WidthWord] > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION || Header[HeightWord] > D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION) {
-            return false;
-        }
-
-        const Uint32 MipCount{std::max(Header[MipCountWord], 1u)};
-
-        if (MipCount > D3D11_REQ_MIP_LEVELS) {
-            return false;
-        }
-
-        Core::TArray<Uint8> Pixels(static_cast<std::size_t>(Size) - sizeof(Header));
-
-        if (!Input.read(reinterpret_cast<char*>(Pixels.data()), static_cast<std::streamsize>(Pixels.size()))) {
-            return false;
-        }
-
-        Core::TArray<D3D11_SUBRESOURCE_DATA> InitialData{};
-        InitialData.reserve(MipCount);
-
-        std::size_t Offset{};
-
-        for (Index_t Mip{}; Mip < MipCount; ++Mip) {
-            const std::size_t BlocksWide{(static_cast<std::size_t>(std::max(Header[WidthWord] >> Mip, 1u)) + 3) / 4};
-            const std::size_t BlocksHigh{(static_cast<std::size_t>(std::max(Header[HeightWord] >> Mip, 1u)) + 3) / 4};
-            const std::size_t RowPitch{BlocksWide * BC7BlockBytes};
-            const std::size_t SlicePitch{RowPitch * BlocksHigh};
-
-            if (SlicePitch > Pixels.size() - Offset) {
-                return false;
-            }
-
-            InitialData.push_back({Pixels.data() + Offset, static_cast<UINT>(RowPitch), static_cast<UINT>(SlicePitch)});
-
-            Offset += SlicePitch;
-        }
-
-        D3D11_TEXTURE2D_DESC Description{};
-        Description.Width = Header[WidthWord];
-        Description.Height = Header[HeightWord];
-        Description.MipLevels = MipCount;
-        Description.ArraySize = 1;
-
-        // 장면 컬러가 표시 공간 값을 그대로 담으므로 sRGB 디코드 없이 읽습니다.
-        Description.Format = DXGI_FORMAT_BC7_UNORM;
-        Description.SampleDesc.Count = 1;
-        Description.Usage = D3D11_USAGE_IMMUTABLE;
-        Description.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
-        Microsoft::WRL::ComPtr<ID3D11Texture2D> Texture{};
-
-        return SUCCEEDED(Device->CreateTexture2D(&Description, InitialData.data(), Texture.GetAddressOf())) && SUCCEEDED(Device->CreateShaderResourceView(Texture.Get(), nullptr, Panorama.ReleaseAndGetAddressOf()));
+        return Panorama != nullptr;
     }
 
 }

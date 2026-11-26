@@ -16,13 +16,19 @@
 #include "Engine/EPrimitiveType.h"
 #include "Engine/FDrawText.h"
 #include "Engine/FDrawSprite.h"
+#include "PhysicsRuntime/FClothSimulData.h"
 
+#include <memory>
 #include <optional>
 
 namespace Asset {
     class UStaticMesh;
     class USkeletalMesh;
     class UMaterial;
+}
+
+namespace Engine {
+    struct FParticleRenderData;
 }
 
 namespace Engine {
@@ -75,6 +81,21 @@ namespace Engine {
         Core::FRevision mPoseRevision{};
 
         /**
+         * @brief 천 에셋 번호별 마지막 천 시뮬레이션 결과이며, 천이 없으면 비어 있습니다.
+         */
+        Core::TMap<Index_t, PhysicsRuntime::FClothSimulData> mClothSimData{};
+
+        /**
+         * @brief 천 섹션 정점을 스키닝 위치와 시뮬레이션 위치 사이에서 섞는 비율이며 1이면 시뮬레이션 위치만 씁니다.
+         */
+        float mClothBlendWeight{};
+
+        /**
+         * @brief 천 결과가 같으면 입자 버퍼 업로드를 건너뛰도록 구분하는 개정입니다.
+         */
+        Core::FRevision mClothRevision{};
+
+        /**
          * @brief 텍스트 컴포넌트가 그릴 텍스트 요청이며, 텍스트가 없는 프리미티브는 비어 있습니다.
          */
         std::optional<Engine::FDrawText> mText{};
@@ -118,6 +139,11 @@ namespace Engine {
          * @brief 이 프리미티브가 데칼을 받는지 여부입니다.
          */
         bool mReceivesDecals{true};
+
+        /**
+         * @brief 파티클 컴포넌트가 매 Tick 만든 그리기 데이터이며 파티클이 아니면 비어 있습니다.
+         */
+        std::shared_ptr<const Engine::FParticleRenderData> mParticles{};
     };
 
 }

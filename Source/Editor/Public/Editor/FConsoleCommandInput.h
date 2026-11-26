@@ -9,7 +9,6 @@
 #include "Core/Types.h"
 #include "Core/Math/FVector2.h"
 
-#include <array>
 #include <string_view>
 
 struct ImGuiInputTextCallbackData;
@@ -89,7 +88,7 @@ namespace Editor {
         /**
          * @brief 콘솔 명령 문자열 입력 버퍼입니다.
          */
-        std::array<char, 512> mInput{};
+        Core::TStaticArray<char, 512> mInput{};
 
         /**
          * @brief 실행한 콘솔 명령의 기록입니다.

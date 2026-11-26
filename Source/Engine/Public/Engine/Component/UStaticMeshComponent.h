@@ -11,6 +11,9 @@
 #include "Core/ReflectionMacros.h"
 #include "Engine/Component/UMeshComponent.h"
 #include "Engine/EPrimitiveType.h"
+
+#include <memory>
+
 #include "UStaticMeshComponent.generated.h"
 
 namespace Engine {
@@ -90,6 +93,19 @@ namespace Engine {
          */
         bool ShouldCreateRenderState() const override;
 
+        /** @brief 메시가 물리 충돌 형상을 사용하는지 반환합니다. */
+        bool IsCollisionEnabled() const;
+
+        /** @brief 메시의 표시를 유지하며 물리 충돌을 켜거나 끕니다. */
+        void SetCollisionEnabled(bool Enabled);
+
+        /**
+         * @brief 충돌이 켜져 있으면 표시 중인 메시에 맞는 충돌 형상을 반환합니다.
+         * @return 메시 경로가 비어 있으면 기본 프리미티브 종류가 공유하는 바디 셋업이고, 그렇지 않으면 불러온 메시가 소유한 바디 셋업입니다.
+         *         메시를 불러오지 못했으면 nullptr입니다.
+         */
+        const PhysicsRuntime::UBodySetup* GetBodySetup() const override;
+
     private:
         /**
          * @brief Content 상대 경로의 메시를 에셋 관리자에서 조회합니다.
@@ -102,19 +118,24 @@ namespace Engine {
         /**
          * @brief 프리미티브 메시 종류입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetPrimitiveType, Setter = SetPrimitiveType)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetPrimitiveType, Setter = SetPrimitiveType)
         Engine::EPrimitiveType mPrimitive{Engine::EPrimitiveType::Cube};
 
         /**
          * @brief 프로젝트 콘텐츠 폴더 기준 메시 에셋의 상대 경로입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "Mesh", Getter = GetMeshPath, Setter = SetMeshPath)
+        UPROPERTY(Edit, Serialize, Category = "Mesh", Name = "Mesh", Meta = (AssetType = "Mesh", EmptyLabel = "Primitive mesh"), Getter = GetMeshPath, Setter = SetMeshPath)
         Core::FString mMeshPath{};
+
+        UPROPERTY(Edit, Serialize, Name = "CollisionEnabled", Getter = IsCollisionEnabled, Setter = SetCollisionEnabled)
+        bool mCollisionEnabled{true};
 
         /**
          * @brief 에셋 관리자가 보유한 정적 메시의 비소유 주소입니다.
          */
         CoreUObject::TObjectRef<Asset::UStaticMesh> mStaticMesh{};
+
+        mutable std::shared_ptr<const PhysicsRuntime::UBodySetup> mPrimitiveBodySetup{};
     };
 
 }

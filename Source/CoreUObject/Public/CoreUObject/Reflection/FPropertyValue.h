@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Core/Guid.h"
+#include "Core/Literals/FDimension.h"
 #include "Core/Math.h"
 #include "CoreUObject/FObjectReference.h"
 
@@ -14,10 +15,19 @@
 
 namespace CoreUObject {
 
+    struct FQuantityPropertyValue {
+    public:
+        bool operator==(const CoreUObject::FQuantityPropertyValue& Other) const = default;
+
+    public:
+        Core::FDimension mDimension{};
+        float mBaseValue{};
+    };
+
     /**
      * @brief 프로퍼티가 지원하는 스칼라·수학 타입과 불투명 주소의 variant입니다.
      */
-    using FPropertyValue = std::variant<bool, Int32, Uint32, Uint64, float, Core::FString, Core::FGuid, FVector2, FVector, FVector4, FQuat, FRotator, FMatrix, FTransform, FBox, FRay, CoreUObject::FObjectReference, const void*>;
+    using FPropertyValue = std::variant<bool, Int32, Uint32, Uint64, float, Core::FString, Core::FGuid, FVector2, FVector, FVector4, FQuat, FRotator, FMatrix, FTransform, FBox, FRay, CoreUObject::FObjectReference, CoreUObject::FQuantityPropertyValue, const void*>;
 
     /**
      * @brief 프로퍼티 variant에 저장된 실제 값의 주소를 반환합니다.

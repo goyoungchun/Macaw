@@ -7,6 +7,7 @@
 #pragma once
 
 #include "CoreUObject/TObjectRef.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include "Core/Guid.h"
 #include "Core/Math/FVector.h"
@@ -50,27 +51,27 @@ namespace Engine {
         /**
          * @brief 기준 높이에서의 거리당 안개 밀도입니다.
          */
-        float mDensity{0.02f};
+        Core::FInverseLength mDensity{mDefaultDensity};
 
         /**
          * @brief 기준 높이보다 높아질수록 밀도가 지수적으로 감소하는 계수입니다.
          */
-        float mHeightFalloff{0.2f};
+        Core::FInverseLength mHeightFalloff{mDefaultHeightFalloff};
 
         /**
          * @brief 카메라부터 안개 적분을 시작하는 월드 거리입니다.
          */
-        float mStartDistance{};
+        Core::FLength mStartDistance{};
 
         /**
          * @brief 안개 적분을 종료하는 월드 거리이며 0이면 거리 제한을 두지 않습니다.
          */
-        float mEndDistance{1000.0f};
+        Core::FLength mEndDistance{mDefaultEndDistance};
 
         /**
          * @brief 이 거리보다 먼 표면에는 안개를 적용하지 않으며 0이면 제한이 없습니다.
          */
-        float mCutoffDistance{};
+        Core::FLength mCutoffDistance{};
 
         /**
          * @brief 안개 합성 불투명도의 상한이며 0~1 범위입니다.
@@ -86,6 +87,11 @@ namespace Engine {
          * @brief 프로젝트 에셋 또는 대체 텍스처가 소유하는 언리얼 안개 아이콘의 비소유 주소입니다.
          */
         CoreUObject::TObjectRef<Asset::UTexture2D> mIcon{};
+
+    private:
+        static const Core::FInverseLength mDefaultDensity;
+        static const Core::FInverseLength mDefaultHeightFalloff;
+        static const Core::FLength mDefaultEndDistance;
     };
 
 }

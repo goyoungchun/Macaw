@@ -2,6 +2,7 @@
 #include "Render/FMeshRenderer.h"
 #include "Render/FRenderBuffers.h"
 #include "Core/Stat/Stat.h"
+#include "Core/Types.h"
 
 void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawCommandBatch>& Commands, ERenderMode Mode) {
     mLastDrawStats = {};
@@ -18,9 +19,9 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawCo
     DeviceContext->PSSetShaderResources(1, 1, &Context.mMaterialResource);
 
     const FMeshDrawPipelineState* BoundPipeline{nullptr};
-    std::array<ID3D11ShaderResourceView*, MaxMaterialTextureFields> BoundTextures{};
-    std::array<ID3D11Buffer*, 4> BoundVertices{};
-    std::array<Uint32, 4> BoundStrides{};
+    Core::TStaticArray<ID3D11ShaderResourceView*, MaxMaterialTextureFields> BoundTextures{};
+    Core::TStaticArray<ID3D11Buffer*, 4> BoundVertices{};
+    Core::TStaticArray<Uint32, 4> BoundStrides{};
     bool TexturesBound{};
     bool VerticesBound{};
 
@@ -43,7 +44,7 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawCo
             ++mLastDrawStats.mPipelineBindCount;
         }
 
-        std::array<ID3D11ShaderResourceView*, MaxMaterialTextureFields> Textures{};
+        Core::TStaticArray<ID3D11ShaderResourceView*, MaxMaterialTextureFields> Textures{};
 
         for (std::size_t Index{}; Index < Textures.size(); ++Index) {
             Textures[Index] = Command.mTextures[Index].Get();
@@ -58,14 +59,14 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawCo
             ++mLastDrawStats.mTextureBindCount;
         }
 
-        std::array<ID3D11Buffer*, 4> Vertices{};
+        Core::TStaticArray<ID3D11Buffer*, 4> Vertices{};
 
         for (std::size_t Index{}; Index < Vertices.size(); ++Index) {
             Vertices[Index] = Command.mVertexBuffers[Index].Get();
         }
 
         if (!VerticesBound || BoundVertices != Vertices || BoundStrides != Command.mVertexStrides) {
-            constexpr std::array<Uint32, 4> Offsets{};
+            constexpr Core::TStaticArray<Uint32, 4> Offsets{};
 
             DeviceContext->IASetVertexBuffers(0, static_cast<UINT>(Vertices.size()), Vertices.data(), Command.mVertexStrides.data(), Offsets.data());
 

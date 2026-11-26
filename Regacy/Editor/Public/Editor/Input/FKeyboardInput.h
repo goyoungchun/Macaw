@@ -1,12 +1,12 @@
 #pragma once
 
-#include <array>
 #include <cstdint>
 #include <optional>
 
 #include <Windows.h>
 #include "Core/Channel/FMessageChannel.h"
 #include "Editor/Input/EKeyState.h"
+#include "Core/Types.h"
 
 struct FViewportKeyboardNavigationInput {
     float mForwardAxis{0.0f};
@@ -36,6 +36,6 @@ private:
 
 private:
     static constexpr std::size_t KeyCount{256};
-    std::array<EKeyState, KeyCount> mKeyStates{};
+    Core::TStaticArray<EKeyState, KeyCount> mKeyStates{};
     std::optional<FMessageChannel::FSender> mWorldCommandSender{};
 };

@@ -57,4 +57,20 @@ namespace CoreUObject {
         std::size_t operator()(const CoreUObject::FObjectHandle& Handle) const;
     };
 
+    namespace ObjectHandlePrivate {
+
+        template <typename Key>
+        struct TObjectHashType;
+
+        template <>
+        struct TObjectHashType<CoreUObject::FObjectHandle> {
+        public:
+            using Type = CoreUObject::FObjectHandleHash;
+        };
+
+    }
+
+    template <typename Key, typename Value>
+    using ObjectHashMap = Core::TMap<Key, Value, typename CoreUObject::ObjectHandlePrivate::TObjectHashType<Key>::Type>;
+
 }

@@ -41,6 +41,9 @@ namespace Engine {
      * @brief 기본 프리미티브의 CPU 정점, 삼각형 인덱스와 경계 상자를 생성합니다.
      */
     Asset::FMeshData BuildPrimitive(Engine::EPrimitiveType Type) {
+        constexpr float HalfSize{(0.5_m).GetBase()};
+        constexpr float PlaneHalfThickness{(0.001_m).GetBase()};
+
         Asset::FMeshData Mesh{};
         Core::TArray<FVector>& Positions{Mesh.GetPositions()};
         Core::TArray<FVector>& Normals{Mesh.GetNormals()};
@@ -52,7 +55,7 @@ namespace Engine {
         Core::TArray<FVector2>& UVs{Mesh.GetUVChannels().front()};
 
         if (Type == Engine::EPrimitiveType::Plane) {
-            Positions = {{-0.5f, -0.5f, 0.0f}, {0.5f, -0.5f, 0.0f}, {0.5f, 0.5f, 0.0f}, {-0.5f, 0.5f, 0.0f}};
+            Positions = {{-HalfSize, -HalfSize, 0.0f}, {HalfSize, -HalfSize, 0.0f}, {HalfSize, HalfSize, 0.0f}, {-HalfSize, HalfSize, 0.0f}};
 
             Normals.assign(4, {0.0f, 0.0f, 1.0f});
             Tangents.assign(4, {1.0f, 0.0f, 0.0f, 1.0f});
@@ -60,16 +63,16 @@ namespace Engine {
             UVs = {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}};
             Indices = {0, 1, 2, 0, 2, 3};
 
-            Mesh.SetBounds({{-0.5f, -0.5f, -0.001f}, {0.5f, 0.5f, 0.001f}});
+            Mesh.SetBounds({{-HalfSize, -HalfSize, -PlaneHalfThickness}, {HalfSize, HalfSize, PlaneHalfThickness}});
         } else if (Type == Engine::EPrimitiveType::Cube) {
-            const std::array<FVector, 6> FaceNormals{{{1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}};
+            const Core::TStaticArray<FVector, 6> FaceNormals{{{1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, -1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, -1.0f}}};
 
             for (const FVector& Normal : FaceNormals) {
                 const FVector Up{std::abs(Normal.z) > 0.5f ? FVector{0.0f, 1.0f, 0.0f} : FVector{0.0f, 0.0f, 1.0f}};
                 const FVector Right{Up.Cross(Normal)};
                 const Uint32 Base{static_cast<Uint32>(Positions.size())};
 
-                Positions.insert(Positions.end(), {(Normal - Right - Up) * 0.5f, (Normal + Right - Up) * 0.5f, (Normal + Right + Up) * 0.5f, (Normal - Right + Up) * 0.5f});
+                Positions.insert(Positions.end(), {(Normal - Right - Up) * HalfSize, (Normal + Right - Up) * HalfSize, (Normal + Right + Up) * HalfSize, (Normal - Right + Up) * HalfSize});
                 Normals.insert(Normals.end(), 4, Normal);
                 Tangents.insert(Tangents.end(), 4, FVector4{Right, 1.0f});
                 UVs.insert(UVs.end(), {{0.0f, 0.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}, {0.0f, 1.0f}});
@@ -77,15 +80,15 @@ namespace Engine {
                 Indices.insert(Indices.end(), {Base, Base + 1, Base + 2, Base, Base + 2, Base + 3});
             }
 
-            Mesh.SetBounds({{-0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}});
+            Mesh.SetBounds({{-HalfSize, -HalfSize, -HalfSize}, {HalfSize, HalfSize, HalfSize}});
         } else if (Type == Engine::EPrimitiveType::Sphere) {
             constexpr Uint32 Rings{20};
             constexpr Uint32 Segments{32};
 
-            std::array<FVector2, Segments + 1> Circle{};
+            Core::TStaticArray<FVector2, Segments + 1> Circle{};
 
             for (Index_t Segment{}; Segment < Segments; ++Segment) {
-                Circle[Segment] = FVector2{1.0f, 0.0f}.Rotated(1_turn * Segment / Segments / 1_deg);
+                Circle[Segment] = FVector2{1.0f, 0.0f}.Rotated(1_turn * Segment / Segments);
             }
 
             Circle.back() = Circle.front();
@@ -104,7 +107,7 @@ namespace Engine {
                     const FVector2 Radial{Circle[Segment] * Radius};
                     const FVector Normal{Radial.x, Radial.y, Height};
 
-                    Positions.push_back(Normal * 0.5f);
+                    Positions.push_back(Normal * HalfSize);
                     Normals.push_back(Normal);
                     Tangents.push_back({-Circle[Segment].y, Circle[Segment].x, 0.0f, -1.0f});
                     UVs.push_back({static_cast<float>(Segment) / Segments, static_cast<float>(Ring) / Rings});
@@ -120,7 +123,7 @@ namespace Engine {
                 }
             }
 
-            Mesh.SetBounds({{-0.5f, -0.5f, -0.5f}, {0.5f, 0.5f, 0.5f}});
+            Mesh.SetBounds({{-HalfSize, -HalfSize, -HalfSize}, {HalfSize, HalfSize, HalfSize}});
         }
 
         Mesh.GetColors().assign(Positions.size(), {1.0f, 1.0f, 1.0f, 1.0f});
@@ -132,7 +135,7 @@ namespace Engine {
      * @brief 종류별로 캐시된 읽기 전용 기본 메시를 반환합니다.
      */
     const Asset::FMeshData& GetPrimitiveMesh(Engine::EPrimitiveType Type) {
-        static const std::array<Asset::FMeshData, 3> Meshes{Engine::BuildPrimitive(Engine::EPrimitiveType::Plane), Engine::BuildPrimitive(Engine::EPrimitiveType::Cube), Engine::BuildPrimitive(Engine::EPrimitiveType::Sphere)};
+        static const Core::TStaticArray<Asset::FMeshData, 3> Meshes{Engine::BuildPrimitive(Engine::EPrimitiveType::Plane), Engine::BuildPrimitive(Engine::EPrimitiveType::Cube), Engine::BuildPrimitive(Engine::EPrimitiveType::Sphere)};
 
         return Meshes[static_cast<Index_t>(Type)];
     }

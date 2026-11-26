@@ -6,7 +6,6 @@
 #pragma once
 #include <d3d11.h>
 #include <wrl/client.h>
-#include <array>
 #include <memory>
 #include "Render/FRenderAssetResources.h"
 #include "Render/FRenderView.h"
@@ -15,6 +14,7 @@
 #include "Render/FSwapChainRenderSurface.h"
 #include "Render/FRenderBuffers.h"
 #include "RenderCore/FSceneInterface.h"
+#include "Core/Types.h"
 
 class FRendererScene;
 struct FSceneUpdateBatch;
@@ -95,7 +95,7 @@ private:
     std::unique_ptr<FSwapChainRenderSurface> mBackBufferSurface{};
 
     // s0: LinearWrap, s1: LinearClamp, s2: PointClamp, s3: PointWrap, s4: AnisotropicWrap, s5: ShadowCompare.
-    std::array<Microsoft::WRL::ComPtr<ID3D11SamplerState>, 6> mSamplerStates{};
+    Core::TStaticArray<Microsoft::WRL::ComPtr<ID3D11SamplerState>, 6> mSamplerStates{};
 
     FRenderAssetResources mAssetResources{};
 

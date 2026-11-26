@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Engine/Component/UPointLightComponent.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "USpotLightComponent.generated.h"
 
 namespace Engine {
@@ -41,7 +42,7 @@ namespace Engine {
          * @brief 스포트라이트 내부 원뿔의 반각(도)를 반환합니다.
          * @return 스포트라이트 내부 원뿔의 반각(도)입니다.
          */
-        float GetInnerConeAngle() const;
+        Core::FAngle GetInnerConeAngle() const;
 
         /**
          * @brief 스포트라이트 내부 원뿔의 반각(도)를 검증하고 변경합니다.
@@ -49,13 +50,13 @@ namespace Engine {
          * @return 입력값을 수락하고 상태를 갱신하면 true이며 잘못된 값이면 false입니다.
          * @note 외부 원뿔각이 더 작으면 외부 각도도 함께 늘립니다.
          */
-        bool SetInnerConeAngle(float InnerConeAngle);
+        bool SetInnerConeAngle(Core::FAngle InnerConeAngle);
 
         /**
          * @brief 스포트라이트 외부 원뿔의 반각(도)를 반환합니다.
          * @return 스포트라이트 외부 원뿔의 반각(도)입니다.
          */
-        float GetOuterConeAngle() const;
+        Core::FAngle GetOuterConeAngle() const;
 
         /**
          * @brief 스포트라이트 외부 원뿔의 반각(도)를 검증하고 변경합니다.
@@ -63,20 +64,20 @@ namespace Engine {
          * @return 입력값을 수락하고 상태를 갱신하면 true이며 잘못된 값이면 false입니다.
          * @note 내부 원뿔각이 더 크면 내부 각도도 함께 줄입니다.
          */
-        bool SetOuterConeAngle(float OuterConeAngle);
+        bool SetOuterConeAngle(Core::FAngle OuterConeAngle);
 
     private:
         /**
          * @brief 스포트라이트 내부 원뿔의 반각(도)입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetInnerConeAngle, Setter = SetInnerConeAngle)
-        float mInnerConeAngle{20.0f};
+        UPROPERTY(Edit, Serialize, Category = "Light", Getter = GetInnerConeAngle, Setter = SetInnerConeAngle, Meta = (SerializeUnit = "deg"))
+        Core::FAngle mInnerConeAngle{};
 
         /**
          * @brief 스포트라이트 외부 원뿔의 반각(도)입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetOuterConeAngle, Setter = SetOuterConeAngle)
-        float mOuterConeAngle{35.0f};
+        UPROPERTY(Edit, Serialize, Category = "Light", Getter = GetOuterConeAngle, Setter = SetOuterConeAngle, Meta = (SerializeUnit = "deg"))
+        Core::FAngle mOuterConeAngle{};
     };
 
 }

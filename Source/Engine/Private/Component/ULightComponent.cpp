@@ -5,16 +5,21 @@
  */
 
 #include "Engine/Component/ULightComponent.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Core/Archive.h"
 
 #include <cmath>
+
+using namespace Core::Literals;
 
 namespace Engine {
 
     /**
      * @brief ULightComponent의 기본 상태를 초기화합니다.
      */
-    Engine::ULightComponent::ULightComponent() = default;
+    Engine::ULightComponent::ULightComponent()
+		: mShadowSourceRadius{0.1_m} {
+    }
 
     /**
      * @brief ULightComponent 객체의 수명을 끝내고 소유 자원을 정리합니다.
@@ -140,15 +145,15 @@ namespace Engine {
     /**
      * @brief PCSS 반그림자 계산에 쓰는 광원 반지름을 반환합니다.
      */
-    float Engine::ULightComponent::GetShadowSourceRadius() const {
+    Core::FLength Engine::ULightComponent::GetShadowSourceRadius() const {
         return mShadowSourceRadius;
     }
 
     /**
      * @brief PCSS 반그림자 계산에 쓰는 광원 반지름을 검증하고 변경합니다.
      */
-    bool Engine::ULightComponent::SetShadowSourceRadius(float Radius) {
-        if (!std::isfinite(Radius) || Radius < 0.0f || Radius > 10.0f) {
+    bool Engine::ULightComponent::SetShadowSourceRadius(Core::FLength Radius) {
+        if (!Radius.IsFinite() || Radius < 0_m || Radius > 10_m) {
             return false;
         }
 

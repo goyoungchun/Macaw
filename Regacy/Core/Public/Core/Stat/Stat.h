@@ -5,7 +5,8 @@
 
 #pragma once
 
-#include <array>
+#include "Core/Types.h"
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -240,7 +241,7 @@ namespace Stat {
         /**
          * @brief ESystemStatStage 값으로 접근할 시스템 단계별 표본.
          */
-        std::array<FSystemStatSample, static_cast<std::size_t>(ESystemStatStage::Count)> mSamples{};
+        Core::TStaticArray<FSystemStatSample, static_cast<std::size_t>(ESystemStatStage::Count)> mSamples{};
 
         /**
          * @brief 시스템 측정 표본에 반영한 프레임의 누적 개수.
@@ -351,7 +352,7 @@ namespace Stat {
         /**
          * @brief 최근 공개된 렌더 준비 세부 단계별 측정 결과.
          */
-        std::array<FSystemStatSample, static_cast<std::size_t>(ERenderPreparationStage::Count)> mRenderPreparationSamples{};
+        Core::TStaticArray<FSystemStatSample, static_cast<std::size_t>(ERenderPreparationStage::Count)> mRenderPreparationSamples{};
 
         /**
          * @brief 현재 메모리 할당 상태와 최대 및 누적 계수.
@@ -446,7 +447,7 @@ namespace Stat {
         /**
          * @brief 태그별 프레임 스냅샷 평균.
          */
-        std::array<FTagStatAverage, static_cast<std::size_t>(EMemoryTag::Count)> mTagStats{};
+        Core::TStaticArray<FTagStatAverage, static_cast<std::size_t>(EMemoryTag::Count)> mTagStats{};
     };
 
     /**
@@ -546,12 +547,12 @@ namespace Stat {
         /**
          * @brief 시스템 단계별 프레임당 평균 표본.
          */
-        std::array<FSystemStatAverage, static_cast<std::size_t>(ESystemStatStage::Count)> mSystemSamples{};
+        Core::TStaticArray<FSystemStatAverage, static_cast<std::size_t>(ESystemStatStage::Count)> mSystemSamples{};
 
         /**
          * @brief 렌더 준비 세부 단계별 프레임당 평균 표본.
          */
-        std::array<FSystemStatAverage, static_cast<std::size_t>(ERenderPreparationStage::Count)> mRenderPreparationSamples{};
+        Core::TStaticArray<FSystemStatAverage, static_cast<std::size_t>(ERenderPreparationStage::Count)> mRenderPreparationSamples{};
 
         /**
          * @brief 메모리 상태 평균과 집계 시점의 누적 계수.

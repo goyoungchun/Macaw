@@ -8,6 +8,7 @@
 #include "Core/Math/FVector.h"
 #include "Core/Math/FMatrix.h"
 #include "Math/SimdMath.h"
+#include "Core/Types.h"
 
 #include <algorithm>
 #include <cmath>
@@ -321,6 +322,6 @@ bool FVector4::TryPerspectiveDivide(FVector& Result, float Tolerance) const {
 /**
  * @brief 유효한 성분을 원래 순서의 일반 배열로 반환합니다.
  */
-std::array<float, 4> FVector4::ToArray() const {
+Core::TStaticArray<float, 4> FVector4::ToArray() const {
     return {x, y, z, w};
 }

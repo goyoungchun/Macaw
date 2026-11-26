@@ -5,6 +5,7 @@
  */
 
 #include "Editor/FPlayInEditorSession.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Editor/FEditorViewport.h"
 #include "FPlayInEditorWindow.h"
 #include "Engine/Engine.h"
@@ -18,7 +19,11 @@
 #include "CoreUObject/Reflection/Cast.h"
 #include <cmath>
 
+using namespace Core::Literals;
+
 namespace Editor {
+
+    constinit const Core::FTime Editor::FPlayInEditorSession::mDefaultStep{1.0f / 60_Hz};
 
     /**
      * @brief 전달받은 설정과 의존성으로 FPlayInEditorSession의 초기 상태를 구성합니다.
@@ -66,16 +71,18 @@ namespace Editor {
     /**
      * @brief 편집 월드와 뷰포트 상태가 PIE 시작 조건을 만족하는지 검사합니다.
      */
-    bool Editor::FPlayInEditorSession::CanStart() const {
-        return mEngine != nullptr && mContext != nullptr && mViewport != nullptr && !IsActive() && !mEngine->IsDispatching() && !mContext->IsChangingState() && !mContext->IsSceneEditActive() && mContext->CanEditWorld() && mContext->GetWorld()->GetPersistentLevel() != nullptr && mContext->GetWorld()->GetActiveCamera() != nullptr && !mViewport->GetClient()->GetGizmo().IsDragging();
+    bool Editor::FPlayInEditorSession::CanStart(EMode Mode) const {
+        return mEngine != nullptr && mContext != nullptr && mViewport != nullptr && !IsActive() && !mEngine->IsDispatching() && !mContext->IsChangingState() && !mContext->IsSceneEditActive() && mContext->CanEditWorld() && mContext->GetWorld()->GetPersistentLevel() != nullptr && (Mode == EMode::Simulate || mContext->GetWorld()->GetActiveCamera() != nullptr) && !mViewport->GetClient()->GetGizmo().IsDragging();
     }
 
     /**
      * @brief 편집 월드를 복제하여 PIE를 시작하고 뷰포트 입력과 조회 대상을 연결합니다.
      */
-    bool Editor::FPlayInEditorSession::Start(Core::FInput* Input) {
-        if (!CanStart()) {
-            if (!IsActive() && mContext != nullptr && mContext->GetWorld() != nullptr && mContext->GetWorld()->GetActiveCamera() == nullptr) {
+    bool Editor::FPlayInEditorSession::Start(Core::FInput* Input, EMode Mode) {
+        const bool Playing{Mode == EMode::Play};
+
+        if (!CanStart(Mode)) {
+            if (Playing && !IsActive() && mContext != nullptr && mContext->GetWorld() != nullptr && mContext->GetWorld()->GetActiveCamera() == nullptr) {
                 mContext->AddLog("PIE requires an active world camera");
             }
 
@@ -84,10 +91,15 @@ namespace Editor {
 
         mContext->RestorePreview();
 
+        mMode = Mode;
         mTransitioning = true;
         mStopRequested = false;
         mContext->mPlayLocked = true;
         mPreviousWorld = mEngine->GetWorldHandle();
+
+        const Editor::FEditorViewportClient* ViewportClient{mViewport->GetClient()};
+        mGameClient.SetDepthOfFieldShowFlag(ViewportClient->GetShowFlags().mDepthOfField);
+        mGameClient.SetPhysicsBodiesView(ViewportClient->GetViewMode() == Engine::EViewMode::PhysicsBodies, ViewportClient->GetLineThickness());
 
         Engine::UWorld* Source{mContext->GetWorld()};
         Core::TArray<std::pair<const CoreUObject::UObject*, CoreUObject::TObjectRef<CoreUObject::UObject>>> Originals{{Source, CoreUObject::MakeObjectRef(Source)}, {Source->GetPersistentLevel(), CoreUObject::MakeObjectRef(Source->GetPersistentLevel())}};
@@ -108,7 +120,7 @@ namespace Editor {
         mPlayWorld = mEngine->DuplicateWorld(mContext->GetWorldHandle(), Engine::EWorldType::PIE, Error, &Duplication);
 
         Engine::UWorld* World{mEngine->GetWorld(mPlayWorld)};
-        bool Ready{World != nullptr && !mStopRequested && mInspectionContext.SetWorld(mPlayWorld) && mGameClient.SetWorld(mPlayWorld)};
+        bool Ready{World != nullptr && !mStopRequested && mInspectionContext.SetWorld(mPlayWorld) && (!Playing || mGameClient.SetWorld(mPlayWorld))};
 
         if (Ready) {
             for (const auto& [Original, Handle] : Originals) {
@@ -131,14 +143,14 @@ namespace Editor {
 
             mInspectionContext.SetSelectedActors(Selection);
 
-            if (mOptions.mStartAtEditorCamera) {
+            if (Playing && mOptions.mStartAtEditorCamera) {
                 Engine::UCameraComponent* Camera{World->GetActiveCamera()};
-                const Engine::FEditorCameraState& EditorCamera{mViewport->GetClient()->GetPerspectiveCamera()};
+                const Engine::FEditorCameraState EditorCamera{ViewportClient->GetPerspectiveCamera()};
 
                 Ready = Camera != nullptr && Camera->SetTransform(FTransform{EditorCamera.GetLocation(), FQuat{EditorCamera.GetRotation()}, {1.0f, 1.0f, 1.0f}}) && Camera->SetFieldOfView(EditorCamera.GetFieldOfView());
             }
 
-            if (Ready && mOptions.mNewWindow) {
+            if (Ready && Playing && mOptions.mNewWindow) {
                 mPlayWindow = std::make_unique<Editor::FPlayInEditorWindow>();
                 Ready = mPlayWindow->Initialize(mEngine->GetRenderer(), &mGameClient, mOptions.mWindowWidth, mOptions.mWindowHeight, mOptions.mCaptureInput && !mOptions.mStartPaused);
 
@@ -155,19 +167,19 @@ namespace Editor {
                 }
             }
 
-            Ready = Ready && mEngine->SetCurrentWorld(mPlayWorld) && World->BeginPlay() && World->GetPlayState() == Engine::EWorldPlayState::Playing && World->GetActiveCamera() != nullptr && !mStopRequested;
+            Ready = Ready && mEngine->SetCurrentWorld(mPlayWorld) && World->BeginPlay() && World->GetPlayState() == Engine::EWorldPlayState::Playing && (!Playing || World->GetActiveCamera() != nullptr) && !mStopRequested;
 
             if (Ready && mOptions.mStartPaused) {
                 Ready = World->SetPaused(true);
             }
         }
 
-        if (Ready && Input != nullptr) {
-            Input->SetGameInputEnabled(false);
-        }
-
-        if (Ready) {
+        if (Ready && Playing) {
             mInput = Input;
+
+            if (mInput != nullptr) {
+                mInput->SetGameInputEnabled(false);
+            }
 
             if (mPlayWindow == nullptr) {
                 mViewport->SetPlayClient(&mGameClient);
@@ -176,18 +188,19 @@ namespace Editor {
                     mViewport->CapturePlayInput();
                 }
             }
-
-            mContext->AddLog("PIE started");
         }
 
         mTransitioning = false;
 
-        if (!Ready) {
-            mContext->AddLog(Error.empty() ? "PIE could not start" : Error);
+        if (Ready) {
+            mContext->AddLog(Playing ? "PIE started" : "Simulation started");
+        } else {
+            mContext->AddLog(Error.empty() ? (Playing ? "PIE could not start" : "Simulation could not start") : Error);
 
             if (mPlayWorld.IsValid()) {
                 Stop();
             } else {
+                mMode = EMode::Play;
                 mContext->mPlayLocked = false;
                 mPreviousWorld = {};
                 mStopRequested = false;
@@ -218,8 +231,13 @@ namespace Editor {
             mInput = nullptr;
         }
 
-        mViewport->SetPlayClient(nullptr);
-        mGameClient.SetWorld({});
+        const bool Simulating{IsSimulating()};
+
+        if (!Simulating) {
+            mViewport->SetPlayClient(nullptr);
+            mGameClient.SetWorld({});
+        }
+
         mInspectionContext.Reset();
 
         if (mEngine->GetWorld(mPlayWorld) != nullptr) {
@@ -237,10 +255,11 @@ namespace Editor {
         mObjectPairs.clear();
         mPlayWorld = {};
         mPreviousWorld = {};
+        mMode = EMode::Play;
         mContext->mPlayLocked = false;
         mStopRequested = false;
         mTransitioning = false;
-        mContext->AddLog("PIE stopped");
+        mContext->AddLog(Simulating ? "Simulation stopped" : "PIE stopped");
 
         return true;
     }
@@ -257,10 +276,10 @@ namespace Editor {
     /**
      * @brief 일시정지한 PIE 월드를 지정한 시간만큼 한 번 갱신합니다.
      */
-    bool Editor::FPlayInEditorSession::Step(float DeltaTime) {
+    bool Editor::FPlayInEditorSession::Step(Core::FTime DeltaTime) {
         Engine::UWorld* World{mEngine->GetWorld(mPlayWorld)};
 
-        return !mTransitioning && !mEngine->IsDispatching() && World != nullptr && std::isfinite(DeltaTime) && DeltaTime > 0.0f && World->Step(DeltaTime);
+        return !mTransitioning && !mEngine->IsDispatching() && World != nullptr && DeltaTime.IsFinite() && DeltaTime > Core::FTime{} && World->Step(DeltaTime);
     }
 
     /**
@@ -272,9 +291,11 @@ namespace Editor {
         }
 
         const Engine::UWorld* World{mEngine->GetWorld(mPlayWorld)};
+        const bool Playing{mMode == EMode::Play};
+        const bool CameraMissing{Playing && World != nullptr && World->GetActiveCamera() == nullptr};
 
-        if (mStopRequested || World == nullptr || World->GetPlayState() == Engine::EWorldPlayState::Stopped || World->GetActiveCamera() == nullptr || (mPlayWindow != nullptr && (!mPlayWindow->IsOpen() || mPlayWindow->GetInput().WasPressed(Core::EKey::Escape)))) {
-            if (World != nullptr && World->GetActiveCamera() == nullptr) {
+        if (mStopRequested || World == nullptr || World->GetPlayState() == Engine::EWorldPlayState::Stopped || CameraMissing || (mPlayWindow != nullptr && (!mPlayWindow->IsOpen() || mPlayWindow->GetInput().WasPressed(Core::EKey::Escape)))) {
+            if (CameraMissing) {
                 mContext->AddLog("PIE stopped because its active camera was removed");
             }
 
@@ -283,20 +304,26 @@ namespace Editor {
             return;
         }
 
+        if (Playing) {
+            const Editor::FEditorViewportClient* ViewportClient{mViewport->GetClient()};
+            mGameClient.SetDepthOfFieldShowFlag(ViewportClient->GetShowFlags().mDepthOfField);
+            mGameClient.SetPhysicsBodiesView(ViewportClient->GetViewMode() == Engine::EViewMode::PhysicsBodies, ViewportClient->GetLineThickness());
+        }
+
         Engine::FWorldHandle Replacement{};
         Core::FString Error{};
         bool Ready{true};
 
         mTransitioning = true;
 
-        const bool Changed{mEngine->ProcessSceneTransition(mPlayWorld, Replacement, Error)};
+        const bool Changed{mEngine->ProcessSceneTransition(mPlayWorld, Replacement, Error, Playing)};
 
         if (Changed) {
             mPlayWorld = Replacement;
             mObjectPairs.clear();
             mInspectionContext.Reset();
 
-            Ready = mInspectionContext.SetWorld(mPlayWorld) && mGameClient.SetWorld(mPlayWorld);
+            Ready = mInspectionContext.SetWorld(mPlayWorld) && (!Playing || mGameClient.SetWorld(mPlayWorld));
 
             if (!Ready && Error.empty()) {
                 Error = "Cannot connect the new PIE scene";
@@ -347,6 +374,10 @@ namespace Editor {
      */
     bool Editor::FPlayInEditorSession::IsActive() const {
         return mTransitioning || mPlayWorld.IsValid();
+    }
+
+    bool Editor::FPlayInEditorSession::IsSimulating() const {
+        return IsActive() && mMode == EMode::Simulate;
     }
 
     /**

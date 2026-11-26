@@ -17,8 +17,14 @@
 
 #include <filesystem>
 #include <functional>
+#include <memory>
+
+namespace PhysicsRuntime {
+    class FClothingSimulationNv;
+}
 
 namespace Engine {
+    class FPrimitiveDrawInterface;
     class ALevelSequenceActor;
     class UEngine;
     class FProject;
@@ -29,6 +35,7 @@ namespace Engine {
     class ACameraActor;
     class UCameraComponent;
     class UActorComponent;
+    class USkeletalMeshComponent;
     class USceneComponent;
     class FWorldContext;
 
@@ -451,6 +458,12 @@ namespace Editor {
          */
         Engine::UActorComponent* AddComponent(const CoreUObject::UClass* Class);
 
+        bool CanAttachComponent(const Engine::USceneComponent* Component, const Engine::USceneComponent* Parent) const;
+        bool AttachComponent(Engine::USceneComponent* Component, Engine::USceneComponent* Parent);
+
+        bool CanPromoteRootComponent(const Engine::USceneComponent* Component) const;
+        bool PromoteRootComponent(Engine::USceneComponent* Component);
+
         /**
          * @brief 현재 선택에서 사용할 수 있는 카메라 컴포넌트를 조회합니다.
          * @return 대상의 비소유 주소이며, 없거나 유효하지 않으면 nullptr입니다.
@@ -468,6 +481,8 @@ namespace Editor {
          * @return 삭제 요청을 수락하면 true입니다.
          */
         bool DestroySelectedActor();
+        bool DestroySelectedComponent();
+        bool DestroySelection();
 
         /**
          * @brief 대상 액터들의 가시성을 변경하고 실행 취소 이력에 반영합니다.
@@ -690,6 +705,124 @@ namespace Editor {
         void SetShadowAtlasOpen(bool Open);
 
         /**
+         * @brief 격자 천 테스트를 켜거나 끕니다.
+         * @details 켜면 원점 위에 한 변을 고정한 격자 천을 만들고, 끄면 천과 솔버를 해제합니다.
+         *          컴포넌트 연결 전까지 솔버 동작을 확인하기 위한 임시 기능입니다.
+         * @param[in] Enable 켤지 지정합니다.
+         */
+        void SetClothGridTest(bool Enable);
+
+        /**
+         * @brief 격자 천 테스트가 켜져 있으면 천을 한 프레임 진행합니다.
+         * @param[in] DeltaTime 초 단위 프레임 시간입니다.
+         */
+        void TickClothGridTest(float DeltaTime);
+
+        /**
+         * @brief 격자 천 테스트의 입자 사이를 선분으로 그립니다.
+         * @param[in,out] DrawInterface 선분을 수집할 그리기 인터페이스입니다.
+         * @param[in] Thickness 선분 두께입니다.
+         */
+        void DrawClothGridTest(Engine::FPrimitiveDrawInterface& DrawInterface, float Thickness) const;
+
+        /**
+         * @brief 선택한 스켈레탈 메시의 섹션 하나로 천 에셋을 만들어 연결하고 그리기 대상으로 정합니다.
+         * @details 섹션에 이미 천이 연결되어 있으면 새로 만들지 않고 그리기 대상만 바꿉니다.
+         *          칠하기 도구가 생기기 전까지 위쪽 일부 입자만 고정하는 최대 거리를 임시로 채웁니다.
+         * @param[in] SubMeshIndex 천으로 바꿀 섹션 번호입니다.
+         * @return 천 에셋이 연결되어 있으면 true입니다.
+         */
+        bool SetClothAssetTest(Index_t SubMeshIndex);
+
+        /**
+         * @brief 선택한 스켈레탈 메시의 천 에셋들이 부딪힐 물리 에셋을 바꾸고 천을 다시 만듭니다.
+         * @param[in] Path Content 상대 물리 에셋 경로이며 "mesh"이면 메시가 쓰는 물리 에셋을, "none"이면 물리 에셋 없이 씁니다.
+         * @return 물리 에셋을 바꿨으면 true입니다.
+         */
+        bool SetClothPhysicsAssetTest(const Core::FString& Path);
+
+        /**
+         * @brief 선택한 스켈레탈 메시의 천 에셋들의 설정 하나를 바꾸고 천을 다시 만듭니다.
+         * @details 이름 없이 부르면 첫 천 에셋의 설정 값을 모두 로그에 보여 줍니다.
+         * @param[in] Name 바꿀 설정 이름이며 비어 있으면 값을 보여 줍니다.
+         * @param[in] Values 넣을 값이며 벡터 설정에 값 하나를 주면 세 축에 같은 값을 넣습니다.
+         * @return 설정을 바꾸거나 보여 줬으면 true입니다.
+         */
+        bool SetClothConfigTest(const Core::FString& Name, const Core::TArray<float>& Values);
+
+        /**
+         * @brief 선택한 스켈레탈 메시를 천 데이터와 함께 메시 파일에 저장합니다.
+         * @return 저장했으면 true입니다.
+         */
+        bool SaveClothMesh();
+
+        /**
+         * @brief 선택한 스켈레탈 메시의 섹션에서 천을 빼고, 이 메시를 쓰는 월드의 컴포넌트 천을 다시 만듭니다.
+         * @param[in] SubMeshIndex 천을 뺄 섹션 번호입니다.
+         * @return 천을 뺐으면 true입니다.
+         */
+        bool RemoveClothTest(Index_t SubMeshIndex);
+
+        /**
+         * @brief 선택한 컴포넌트가 스켈레탈 메시 컴포넌트이면 그것을, 액터이면 그 액터의 첫 스켈레탈 메시 컴포넌트를 찾습니다.
+         * @return 찾은 컴포넌트이며 없으면 nullptr입니다.
+         */
+        Engine::USkeletalMeshComponent* FindSelectedSkeletalMeshComponent();
+
+        /**
+         * @brief 천 에셋 테스트의 그리기 대상을 비웁니다.
+         */
+        void ClearClothAssetTest();
+
+        /**
+         * @brief 천 에셋 테스트 대상의 천 메시를 바인드 포즈로 그립니다.
+         * @details 두 끝 입자가 모두 고정된 변은 빨강, 나머지는 초록으로 그립니다.
+         * @param[in,out] DrawInterface 선분을 수집할 그리기 인터페이스입니다.
+         * @param[in] Thickness 선분 두께입니다.
+         */
+        void DrawClothAssetTest(Engine::FPrimitiveDrawInterface& DrawInterface, float Thickness) const;
+
+        /**
+         * @brief 선택한 스켈레탈 메시의 섹션 하나를 천으로 시뮬레이션합니다.
+         * @details 섹션에 천 에셋이 없으면 먼저 만들고, 현재 자세로 천을 만들어 솔버에 넣습니다.
+         *          컴포넌트에 천을 붙이기 전까지 천 생성 과정을 확인하기 위한 임시 기능입니다.
+         * @param[in] SubMeshIndex 시뮬레이션할 섹션 번호입니다.
+         * @return 천을 만들어 시뮬레이션을 시작했으면 true입니다.
+         */
+        bool SetClothSimTest(Index_t SubMeshIndex);
+
+        /**
+         * @brief 천 시뮬레이션 테스트를 끄고 천과 솔버를 해제합니다.
+         */
+        void ClearClothSimTest();
+
+        /**
+         * @brief 천 시뮬레이션 테스트가 켜져 있으면 천을 한 프레임 진행합니다.
+         * @param[in] DeltaTime 초 단위 프레임 시간입니다.
+         */
+        void TickClothSimTest(float DeltaTime);
+
+        /**
+         * @brief 천 시뮬레이션 테스트의 입자 사이를 선분으로 그립니다.
+         * @details 두 끝 입자가 모두 고정된 변은 빨강, 나머지는 초록으로 그립니다.
+         * @param[in,out] DrawInterface 선분을 수집할 그리기 인터페이스입니다.
+         * @param[in] Thickness 선분 두께입니다.
+         */
+        void DrawClothSimTest(Engine::FPrimitiveDrawInterface& DrawInterface, float Thickness) const;
+
+        /**
+         * @brief 컴포넌트 천 시뮬레이션 결과를 뷰포트에 그릴지 반환합니다.
+         * @return 그리면 true입니다.
+         */
+        bool IsClothDebugDrawEnabled() const;
+
+        /**
+         * @brief 컴포넌트 천 시뮬레이션 결과를 뷰포트에 그릴지 설정합니다.
+         * @param[in] Enable 그릴지 지정합니다.
+         */
+        void SetClothDebugDrawEnabled(bool Enable);
+
+        /**
          * @brief 공통 편집 작업이 사용할 뷰포트 제공자를 설정합니다.
          * @param[in] Provider 호출 시점의 활성 뷰포트를 반환합니다.
          */
@@ -829,6 +962,41 @@ namespace Editor {
          * @brief 월드의 소유권과 렌더러를 제공하는 엔진의 비소유 주소입니다.
          */
         Engine::UEngine* mEngine{};
+
+        /**
+         * @brief 격자 천 테스트의 시뮬레이션이며 꺼져 있으면 비어 있습니다.
+         */
+        std::unique_ptr<PhysicsRuntime::FClothingSimulationNv> mClothGridTest{};
+
+        /**
+         * @brief 천 에셋 테스트로 천 메시를 그릴 스켈레탈 메시 컴포넌트입니다.
+         */
+        CoreUObject::TObjectRef<Engine::USkeletalMeshComponent> mClothAssetTestComponent{};
+
+        /**
+         * @brief 천 에셋 테스트로 그릴 섹션 번호입니다.
+         */
+        Index_t mClothAssetTestSubMesh{InvalidIndex};
+
+        /**
+         * @brief 천 시뮬레이션 테스트의 시뮬레이션이며 꺼져 있으면 비어 있습니다.
+         */
+        std::unique_ptr<PhysicsRuntime::FClothingSimulationNv> mClothSimTest{};
+
+        /**
+         * @brief 천 시뮬레이션 테스트로 천을 만든 스켈레탈 메시 컴포넌트입니다.
+         */
+        CoreUObject::TObjectRef<Engine::USkeletalMeshComponent> mClothSimTestComponent{};
+
+        /**
+         * @brief 천 시뮬레이션 테스트로 시뮬레이션하는 섹션 번호입니다.
+         */
+        Index_t mClothSimTestSubMesh{InvalidIndex};
+
+        /**
+         * @brief 컴포넌트 천 시뮬레이션 결과를 뷰포트에 그릴지 나타냅니다.
+         */
+        bool mClothDebugDrawEnabled{};
 
         /**
          * @brief PIE 실행 중 원본 편집 상태의 수정을 제한하는 플래그입니다.

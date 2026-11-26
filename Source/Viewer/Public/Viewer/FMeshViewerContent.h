@@ -13,7 +13,9 @@
 #include "Viewer/FBonePreview.h"
 #include "Asset/FAssetFile.h"
 #include "Core/Guid.h"
+#include "Core/FRevision.h"
 #include "Engine/FSkeletalMeshPose.h"
+#include "PhysicsRuntime/FClothSimulData.h"
 
 namespace CoreUObject {
     class UObject;
@@ -146,12 +148,24 @@ namespace Viewer {
          * @param Skeleton 호출자가 수명을 보장하는 스켈레톤입니다.
          * @return 메시와 스켈레톤을 함께 사용할 수 있으면 true입니다.
          */
-        bool SetSkeleton(Asset::USkeleton* Skeleton);
+        bool SetSkeleton(Asset::USkeleton* Skeleton, bool ShowBones = false);
 
         /**
          * @brief 콘텐츠 변경을 표시하고 미리보기 프록시와 경계를 다시 구성합니다.
          */
         void Refresh();
+
+        /**
+         * @brief 천 섹션을 그릴 천 시뮬레이션 결과를 넣고 미리 보기 프록시를 다시 만듭니다.
+         * @details 섹션 천 연결이 바뀌었을 수 있으므로 메시의 천 정점 버퍼도 함께 준비합니다.
+         * @param[in] Data 메시 천 에셋 번호를 키로 한 천 시뮬레이션 결과입니다.
+         */
+        void SetClothSimulationData(Core::TMap<Index_t, PhysicsRuntime::FClothSimulData> Data);
+
+        /**
+         * @brief 천 시뮬레이션 결과를 비워 천 섹션을 스키닝 위치로 그리게 합니다.
+         */
+        void ClearClothSimulationData();
 
     private:
 
@@ -216,6 +230,7 @@ namespace Viewer {
          * @brief 스켈레톤 오버레이의 본·관절 도형 캐시입니다.
          */
         Core::TArray<Viewer::FBoneShape> mSkeletonShapes{};
+        bool mShowBones{};
         
 
         /**
@@ -232,5 +247,15 @@ namespace Viewer {
          * @brief 저장 또는 장면 동기화가 필요한 변경이 있는지 여부입니다.
          */
         bool mDirty{true};
+
+        /**
+         * @brief 천 섹션을 그릴 마지막 천 시뮬레이션 결과입니다.
+         */
+        Core::TMap<Index_t, PhysicsRuntime::FClothSimulData> mClothSimData{};
+
+        /**
+         * @brief 천 시뮬레이션 결과를 넣을 때마다 바뀌는 개정 번호입니다.
+         */
+        Core::FRevision mClothRevision{};
     };
 }

@@ -18,6 +18,16 @@ namespace Core {
      * @brief 경로의 네이티브 구분자와 공통 구분자를 구분하여 UTF-8로 변환합니다.
      */
     namespace FilePath {
+        enum class EContentMount {
+            Invalid,
+            Game,
+            Engine
+        };
+
+        EContentMount GetContentMount(const std::filesystem::path& Path, std::filesystem::path* RelativePath = nullptr);
+        std::filesystem::path GetEngineContentRoot();
+        std::filesystem::path GetEngineShaderRoot();
+
         /**
          * @brief 네이티브 경로 구분자를 유지한 UTF-8 문자열을 반환합니다.
          * @param[in] Path 변환할 경로입니다.

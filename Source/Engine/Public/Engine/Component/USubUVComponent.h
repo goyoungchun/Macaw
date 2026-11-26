@@ -7,6 +7,7 @@
 #pragma once
 
 #include "CoreUObject/TObjectRef.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include "Core/Types.h"
 #include "Engine/Component/UActorComponent.h"
@@ -98,14 +99,14 @@ namespace Engine {
          * @brief 초당 재생 프레임 수를 반환합니다.
          * @return 계산하거나 조회한 값입니다.
          */
-        float GetFramesPerSecond() const;
+        Core::FFrequency GetFramesPerSecond() const;
 
         /**
          * @brief 초당 재생 프레임 수를 설정합니다.
          * @param[in] FramesPerSecond 0에서 10000 사이의 유한한 초당 프레임 수입니다.
          * @return 값이 유효해 적용했으면 true, 거부했으면 false입니다.
          */
-        bool SetFramesPerSecond(float FramesPerSecond);
+        bool SetFramesPerSecond(Core::FFrequency FramesPerSecond);
 
         /**
          * @brief 마지막 프레임 이후 반복 여부인지 검사합니다.
@@ -189,43 +190,43 @@ namespace Engine {
         /**
          * @brief 대상 컴포넌트 이름이며 빈 문자열은 같은 액터에서 자동 선택입니다.
          */
-        UPROPERTY(Edit, Serialize, Name = "TargetComponent", Getter = GetTargetName, Setter = SetTargetName)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Name = "TargetComponent", Getter = GetTargetName, Setter = SetTargetName)
         Core::FString mTargetName{};
 
         /**
          * @brief 아틀라스의 가로 셀 수입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetColumns, Setter = SetColumns)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetColumns, Setter = SetColumns)
         Uint32 mColumns{4};
 
         /**
          * @brief 아틀라스의 세로 셀 수입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetRows, Setter = SetRows)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetRows, Setter = SetRows)
         Uint32 mRows{4};
 
         /**
          * @brief 재생할 셀 수이며 0은 전체 격자입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetFrameCount, Setter = SetFrameCount)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetFrameCount, Setter = SetFrameCount)
         Uint32 mFrameCount{};
 
         /**
          * @brief 초당 재생 프레임 수입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetFramesPerSecond, Setter = SetFramesPerSecond)
-        float mFramesPerSecond{12.0f};
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = GetFramesPerSecond, Setter = SetFramesPerSecond)
+        Core::FFrequency mFramesPerSecond{};
 
         /**
          * @brief 마지막 프레임 이후 반복 여부입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = IsLooping, Setter = SetLooping)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = IsLooping, Setter = SetLooping)
         bool mLooping{true};
 
         /**
          * @brief SubUV 재생 상태입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = IsPlaying, Setter = SetPlaying)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = IsPlaying, Setter = SetPlaying)
         bool mPlaying{true};
 
         /**

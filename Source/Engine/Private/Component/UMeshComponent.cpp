@@ -34,7 +34,7 @@ namespace Engine {
 
         const std::filesystem::path AssetPath{Core::FilePath::FromUtf8(Path)};
 
-        if (!Path.empty() && (AssetPath.has_root_path() || AssetPath.extension() != L".masset")) {
+        if (!Path.empty() && (Core::FilePath::GetContentMount(AssetPath) == Core::FilePath::EContentMount::Invalid || AssetPath.extension() != L".masset")) {
             return false;
         }
 
@@ -140,7 +140,7 @@ namespace Engine {
 
         const std::filesystem::path AssetPath{Core::FilePath::FromUtf8(Path)};
 
-        if (Path.find('\0') != Core::FString::npos || (!Path.empty() && (AssetPath.has_root_path() || AssetPath.extension() != L".masset" || LoadMaterial(Path) == nullptr))) {
+        if (Path.find('\0') != Core::FString::npos || (!Path.empty() && (Core::FilePath::GetContentMount(AssetPath) == Core::FilePath::EContentMount::Invalid || AssetPath.extension() != L".masset" || LoadMaterial(Path) == nullptr))) {
             return false;
         }
 
@@ -174,7 +174,7 @@ namespace Engine {
     bool Engine::UMeshComponent::SetSlotMaterialPaths(const Core::TArray<Core::FString>& Paths) {
         for (const Core::FString& Override : Paths) {
             const auto Path{Core::FilePath::FromUtf8(Override)};
-            bool Valid{Override.find('\0') == Core::FString::npos && (Path.empty() || (!Path.has_root_path() && Path.extension() == L".masset"))};
+            bool Valid{Override.find('\0') == Core::FString::npos && (Path.empty() || (Core::FilePath::GetContentMount(Path) != Core::FilePath::EContentMount::Invalid && Path.extension() == L".masset"))};
 
             for (const auto& Part : Path) {
                 Valid = Valid && Part != L"..";

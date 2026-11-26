@@ -146,6 +146,11 @@ namespace Engine {
         Engine::UWorld::FDispatchScope SourceScope{SourceWorld};
         auto Context{std::make_unique<Engine::FWorldContext>(Type)};
         Engine::UWorld* World{Context->GetWorld()};
+
+        // 에셋을 연결하면 스켈레탈 메시가 메시를 해석하며 천을 만들므로, 천 시스템을 먼저 연결합니다.
+        World->SetClothingSystem(SourceWorld->GetClothingSystem());
+        World->SetAssets(SourceWorld->GetAssets());
+
         Engine::UWorld::FDispatchScope DuplicateScope{World};
         const auto Originals{CollectObjects(SourceWorld)};
         Core::TMap<Core::FGuid, Core::FGuid, Core::FGuidHash> Remapping{};

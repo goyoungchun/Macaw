@@ -117,8 +117,152 @@ namespace Editor {
             }
         }});
 
+        mConsoleCommands.Register({"Reload Shader", {}, {}, [this](const Editor::FConsoleInvocation& Invocation) {
+            if (!Invocation.mArguments.empty()) {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            RenderCore::IRendererModule* Renderer{GetRenderer()};
+
+            if (Renderer == nullptr) {
+                AddLog("Reload Shader: renderer is unavailable.");
+
+                return;
+            }
+
+            AddLog(Renderer->ReloadAllShaders() ? "All loaded shaders reloaded." : "Shader reload failed. See the Console for details.");
+        }});
+
         mConsoleCommands.Register({"Allow Tearing", "[on/off/status]", {"on", "off", "status"}, [this](const Editor::FConsoleInvocation& Invocation) {
             ExecuteAllowTearing(Invocation);
+        }});
+        mConsoleCommands.Register({"cloth.grid", "[on/off]", {"on", "off"}, [this](const Editor::FConsoleInvocation& Invocation) {
+            const Core::FString Value{Invocation.mArguments};
+            const bool Enable{Value.empty() ? !mClothGridTest : Value == "on"};
+
+            if (!Value.empty() && Value != "on" && Value != "off") {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            SetClothGridTest(Enable);
+            AddLog(mClothGridTest != nullptr ? "Cloth grid on. Use stat cloth for timing." : "Cloth grid off.");
+        }});
+        mConsoleCommands.Register({"cloth.asset", "<section/off>", {"off"}, [this](const Editor::FConsoleInvocation& Invocation) {
+            const std::optional<Core::FString> Value{ReadConsoleValue(Invocation.mArguments)};
+
+            if (Value && *Value == "off") {
+                ClearClothAssetTest();
+                AddLog("Cloth asset view off.");
+
+                return;
+            }
+
+            if (!Value || Value->empty()) {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            Uint32 SubMeshIndex{};
+            const auto [End, Error]{std::from_chars(Value->data(), Value->data() + Value->size(), SubMeshIndex)};
+
+            if (Error != std::errc{} || End != Value->data() + Value->size()) {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            SetClothAssetTest(SubMeshIndex);
+        }});
+        mConsoleCommands.Register({"cloth.physicsasset", "<path/mesh/none>", {"mesh", "none"}, [this](const Editor::FConsoleInvocation& Invocation) {
+            const std::optional<Core::FString> Value{ReadConsoleValue(Invocation.mArguments)};
+
+            if (!Value || Value->empty()) {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            SetClothPhysicsAssetTest(*Value);
+        }});
+        mConsoleCommands.Register({"cloth.config", "[name value...]", {}, [this](const Editor::FConsoleInvocation& Invocation) {
+            std::istringstream Input{Core::FString{Invocation.mArguments}};
+            Core::FString Name{};
+            Core::TArray<float> Values{};
+            float Value{};
+
+            Input >> Name;
+
+            while (Input >> Value) {
+                Values.push_back(Value);
+            }
+
+            // 숫자가 아닌 값이 남아 있으면 잘못된 입력입니다.
+            if (!Input.eof()) {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            SetClothConfigTest(Lowercase(Name), Values);
+        }});
+        mConsoleCommands.Register({"cloth.save", {}, {}, [this](const Editor::FConsoleInvocation&) {
+            SaveClothMesh();
+        }});
+        mConsoleCommands.Register({"cloth.remove", "<section>", {}, [this](const Editor::FConsoleInvocation& Invocation) {
+            const std::optional<Core::FString> Value{ReadConsoleValue(Invocation.mArguments)};
+            Uint32 SubMeshIndex{};
+
+            if (!Value || Value->empty() || std::from_chars(Value->data(), Value->data() + Value->size(), SubMeshIndex).ec != std::errc{}) {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            RemoveClothTest(SubMeshIndex);
+        }});
+        mConsoleCommands.Register({"cloth.sim", "<section/off>", {"off"}, [this](const Editor::FConsoleInvocation& Invocation) {
+            const std::optional<Core::FString> Value{ReadConsoleValue(Invocation.mArguments)};
+
+            if (Value && *Value == "off") {
+                ClearClothSimTest();
+                AddLog("Cloth sim off.");
+
+                return;
+            }
+
+            if (!Value || Value->empty()) {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            Uint32 SubMeshIndex{};
+            const auto [End, Error]{std::from_chars(Value->data(), Value->data() + Value->size(), SubMeshIndex)};
+
+            if (Error != std::errc{} || End != Value->data() + Value->size()) {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            SetClothSimTest(SubMeshIndex);
+        }});
+        mConsoleCommands.Register({"cloth.debug", "[on/off]", {"on", "off"}, [this](const Editor::FConsoleInvocation& Invocation) {
+            const Core::FString Value{Invocation.mArguments};
+
+            if (!Value.empty() && Value != "on" && Value != "off") {
+                AddLog(MakeUsage(Invocation));
+
+                return;
+            }
+
+            SetClothDebugDrawEnabled(Value.empty() ? !IsClothDebugDrawEnabled() : Value == "on");
+            AddLog(IsClothDebugDrawEnabled() ? "Cloth debug draw on." : "Cloth debug draw off.");
         }});
         mConsoleCommands.Register({"Shadow Atlas", {}, {}, [this](const Editor::FConsoleInvocation& Invocation) {
             if (Invocation.mArguments.empty()) {
@@ -231,6 +375,7 @@ namespace Editor {
             }});
         }};
         RegisterShowFlag("ShowFlag.Fog", &Engine::FEngineShowFlags::mFog);
+        RegisterShowFlag("ShowFlag.DepthOfField", &Engine::FEngineShowFlags::mDepthOfField);
         RegisterShowFlag("ShowFlag.FXAA", &Engine::FEngineShowFlags::mFXAA);
         RegisterShowFlag("ShowFlag.Shadows", &Engine::FEngineShowFlags::mShadows);
         RegisterShowFlag("ShowFlag.Sky", &Engine::FEngineShowFlags::mSky);

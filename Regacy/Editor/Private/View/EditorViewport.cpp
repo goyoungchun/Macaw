@@ -3,9 +3,9 @@
 #include "Editor/Settings/FEditorConfigManager.h"
 #include "CoreUObject/Reflection/UClass.h"
 #include "Editor/View/EditorViewport.h"
+#include "Core/Types.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdint>
 #include "Editor/Input/FMouseInput.h"
@@ -21,9 +21,9 @@ namespace {
             return false;
         }
 
-        const std::array<FVector3, 8> ClipCorners{FVector3{-1.0f, -1.0f, 0.0f}, FVector3{1.0f, -1.0f, 0.0f}, FVector3{1.0f, 1.0f, 0.0f}, FVector3{-1.0f, 1.0f, 0.0f}, FVector3{-1.0f, -1.0f, 1.0f}, FVector3{1.0f, -1.0f, 1.0f}, FVector3{1.0f, 1.0f, 1.0f}, FVector3{-1.0f, 1.0f, 1.0f}};
-        constexpr std::array<std::array<int, 2>, 12> Edges{std::array<int, 2>{0, 1}, std::array<int, 2>{1, 2}, std::array<int, 2>{2, 3}, std::array<int, 2>{3, 0}, std::array<int, 2>{4, 5}, std::array<int, 2>{5, 6}, std::array<int, 2>{6, 7}, std::array<int, 2>{7, 4}, std::array<int, 2>{0, 4}, std::array<int, 2>{1, 5}, std::array<int, 2>{2, 6}, std::array<int, 2>{3, 7}};
-        std::array<FVector3, 8> WorldCorners{};
+        const Core::TStaticArray<FVector3, 8> ClipCorners{FVector3{-1.0f, -1.0f, 0.0f}, FVector3{1.0f, -1.0f, 0.0f}, FVector3{1.0f, 1.0f, 0.0f}, FVector3{-1.0f, 1.0f, 0.0f}, FVector3{-1.0f, -1.0f, 1.0f}, FVector3{1.0f, -1.0f, 1.0f}, FVector3{1.0f, 1.0f, 1.0f}, FVector3{-1.0f, 1.0f, 1.0f}};
+        constexpr Core::TStaticArray<Core::TStaticArray<int, 2>, 12> Edges{Core::TStaticArray<int, 2>{0, 1}, Core::TStaticArray<int, 2>{1, 2}, Core::TStaticArray<int, 2>{2, 3}, Core::TStaticArray<int, 2>{3, 0}, Core::TStaticArray<int, 2>{4, 5}, Core::TStaticArray<int, 2>{5, 6}, Core::TStaticArray<int, 2>{6, 7}, Core::TStaticArray<int, 2>{7, 4}, Core::TStaticArray<int, 2>{0, 4}, Core::TStaticArray<int, 2>{1, 5}, Core::TStaticArray<int, 2>{2, 6}, Core::TStaticArray<int, 2>{3, 7}};
+        Core::TStaticArray<FVector3, 8> WorldCorners{};
 
         for (std::size_t Index{0}; Index < ClipCorners.size(); ++Index) {
             if (!InverseViewProjection.TransformCoord(ClipCorners[Index], WorldCorners[Index])) {
@@ -50,7 +50,7 @@ namespace {
 
         constexpr float PlaneEpsilon{0.0001f};
 
-        for (const std::array<int, 2>& Edge : Edges) {
+        for (const Core::TStaticArray<int, 2>& Edge : Edges) {
             const FVector3& Start{WorldCorners[Edge[0]]};
             const FVector3& End{WorldCorners[Edge[1]]};
             const bool StartOnPlane{std::abs(Start.mZ) <= PlaneEpsilon};
@@ -204,7 +204,7 @@ void EditorViewport::BuildBounds(FLineRenderData& Lines, const FViewMatrices& Ca
             return;
 
         const UBillboardComponent* Billboard{static_cast<const UBillboardComponent*>(SelectedComponent)};
-        std::array<FVector3, 4> Corners{};
+        Core::TStaticArray<FVector3, 4> Corners{};
 
         if (!Billboard->GetWorldCorners(CameraWorld, Corners))
             return;
@@ -224,11 +224,11 @@ void EditorViewport::BuildBounds(FLineRenderData& Lines, const FViewMatrices& Ca
             Maximum = FVector3::Max(Maximum, Corner);
         }
 
-        const std::array<FVector3, 8> BoxCorners{FVector3{Minimum.mX, Minimum.mY, Minimum.mZ}, FVector3{Maximum.mX, Minimum.mY, Minimum.mZ}, FVector3{Maximum.mX, Maximum.mY, Minimum.mZ}, FVector3{Minimum.mX, Maximum.mY, Minimum.mZ}, FVector3{Minimum.mX, Minimum.mY, Maximum.mZ}, FVector3{Maximum.mX, Minimum.mY, Maximum.mZ}, FVector3{Maximum.mX, Maximum.mY, Maximum.mZ}, FVector3{Minimum.mX, Maximum.mY, Maximum.mZ}};
+        const Core::TStaticArray<FVector3, 8> BoxCorners{FVector3{Minimum.mX, Minimum.mY, Minimum.mZ}, FVector3{Maximum.mX, Minimum.mY, Minimum.mZ}, FVector3{Maximum.mX, Maximum.mY, Minimum.mZ}, FVector3{Minimum.mX, Maximum.mY, Minimum.mZ}, FVector3{Minimum.mX, Minimum.mY, Maximum.mZ}, FVector3{Maximum.mX, Minimum.mY, Maximum.mZ}, FVector3{Maximum.mX, Maximum.mY, Maximum.mZ}, FVector3{Minimum.mX, Maximum.mY, Maximum.mZ}};
         const FVector4 BoxColor{1.0f, 0.0f, 0.0f, 1.0f};
-        constexpr std::array<std::array<std::size_t, 2>, 12> BoxEdges{std::array<std::size_t, 2>{0, 1}, std::array<std::size_t, 2>{1, 2}, std::array<std::size_t, 2>{2, 3}, std::array<std::size_t, 2>{3, 0}, std::array<std::size_t, 2>{4, 5}, std::array<std::size_t, 2>{5, 6}, std::array<std::size_t, 2>{6, 7}, std::array<std::size_t, 2>{7, 4}, std::array<std::size_t, 2>{0, 4}, std::array<std::size_t, 2>{1, 5}, std::array<std::size_t, 2>{2, 6}, std::array<std::size_t, 2>{3, 7}};
+        constexpr Core::TStaticArray<Core::TStaticArray<std::size_t, 2>, 12> BoxEdges{Core::TStaticArray<std::size_t, 2>{0, 1}, Core::TStaticArray<std::size_t, 2>{1, 2}, Core::TStaticArray<std::size_t, 2>{2, 3}, Core::TStaticArray<std::size_t, 2>{3, 0}, Core::TStaticArray<std::size_t, 2>{4, 5}, Core::TStaticArray<std::size_t, 2>{5, 6}, Core::TStaticArray<std::size_t, 2>{6, 7}, Core::TStaticArray<std::size_t, 2>{7, 4}, Core::TStaticArray<std::size_t, 2>{0, 4}, Core::TStaticArray<std::size_t, 2>{1, 5}, Core::TStaticArray<std::size_t, 2>{2, 6}, Core::TStaticArray<std::size_t, 2>{3, 7}};
 
-        for (const std::array<std::size_t, 2>& Edge : BoxEdges) {
+        for (const Core::TStaticArray<std::size_t, 2>& Edge : BoxEdges) {
             Lines.AddLine(BoxCorners[Edge[0]], BoxCorners[Edge[1]], BoxColor, 1.0f, DepthMode);
         }
     } else if (SelectedComponent->GetClass()->IsChildOf<UMeshComponent>()) {
@@ -239,7 +239,7 @@ void EditorViewport::BuildBounds(FLineRenderData& Lines, const FViewMatrices& Ca
 
         BB.Transform(WorldBB, MeshComponent->GetComponentToWorld().ToSimpleMath());
 
-        std::array<DirectX::XMFLOAT3, DirectX::BoundingOrientedBox::CORNER_COUNT> Corners{};
+        Core::TStaticArray<DirectX::XMFLOAT3, DirectX::BoundingOrientedBox::CORNER_COUNT> Corners{};
 
         WorldBB.GetCorners(Corners.data());
 
@@ -276,7 +276,7 @@ void EditorViewport::BuildBounds(FLineRenderData& Lines, const FViewMatrices& Ca
             Max.z = std::max(Max.z, Corner.z);
         }
 
-        std::array<DirectX::XMFLOAT3, 8> AABBCorners{DirectX::XMFLOAT3{Min.x, Min.y, Min.z}, DirectX::XMFLOAT3{Max.x, Min.y, Min.z}, DirectX::XMFLOAT3{Max.x, Max.y, Min.z}, DirectX::XMFLOAT3{Min.x, Max.y, Min.z}, DirectX::XMFLOAT3{Min.x, Min.y, Max.z}, DirectX::XMFLOAT3{Max.x, Min.y, Max.z}, DirectX::XMFLOAT3{Max.x, Max.y, Max.z}, DirectX::XMFLOAT3{Min.x, Max.y, Max.z}};
+        Core::TStaticArray<DirectX::XMFLOAT3, 8> AABBCorners{DirectX::XMFLOAT3{Min.x, Min.y, Min.z}, DirectX::XMFLOAT3{Max.x, Min.y, Min.z}, DirectX::XMFLOAT3{Max.x, Max.y, Min.z}, DirectX::XMFLOAT3{Min.x, Max.y, Min.z}, DirectX::XMFLOAT3{Min.x, Min.y, Max.z}, DirectX::XMFLOAT3{Max.x, Min.y, Max.z}, DirectX::XMFLOAT3{Max.x, Max.y, Max.z}, DirectX::XMFLOAT3{Min.x, Max.y, Max.z}};
 
         const FVector4 AABBColor{FVector4{1.0f, 0.0f, 0.0f, 1.0f}};
 

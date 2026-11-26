@@ -1,7 +1,7 @@
 #pragma once
-#include <array>
 #include "Core/Common.h"
 #include "Math/FMath.h"
+#include "Core/Types.h"
 
 enum class EInputState : Uint8 {
     None,
@@ -31,8 +31,8 @@ private:
     static EInputState UpdateState(EInputState State, bool Down);
 
 private:
-    std::array<EInputState, 256> mKeys{};
-    std::array<EInputState, 5> mMouseButtons{};
+    Core::TStaticArray<EInputState, 256> mKeys{};
+    Core::TStaticArray<EInputState, 5> mMouseButtons{};
     FVector2 mMousePosition{};
     FVector2 mMouseDelta{};
     float mMouseWheel{};

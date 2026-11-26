@@ -5,6 +5,7 @@
  */
 
 #include "Core/Types.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Viewer/FViewerCamera.h"
 
 #include "Core/Math.h"
@@ -13,9 +14,16 @@
 #include <algorithm>
 #include <cmath>
 
+using namespace Core::Literals;
+
 using namespace Viewer;
 
-FViewerCamera::FViewerCamera() = default;
+FViewerCamera::FViewerCamera()
+	: mRotation{-20_deg, 45_deg, 0_deg},
+	  mRadius{(1_m).GetBase()},
+	  mDistance{(3_m).GetBase()},
+	  mFieldOfView{60_deg} {
+}
 
 bool FViewerCamera::Fit(const FBox& Bounds, const FVector2& Size, float Padding) {
     if (!std::isfinite(Size.x) || !std::isfinite(Size.y) || Size.x <= 0.0f || Size.y <= 0.0f || !std::isfinite(Padding) || Padding < 1.0f) {
@@ -33,10 +41,10 @@ bool FViewerCamera::Fit(const FBox& Bounds, const FVector2& Size, float Padding)
     const FVector Forward{Rotation.ForwardVector()};
     const FVector Right{Rotation.RightVector()};
     const FVector Up{Rotation.UpVector()};
-    const float TanVertical{std::tan(Core::Math::ToRadians(mFieldOfView) * 0.5f)};
+    const float TanVertical{Core::Math::Tan(mFieldOfView * 0.5f)};
     const float TanHorizontal{TanVertical * Size.x / Size.y};
-    const float Radius{std::max(Extent.Length(), 0.01f)};
-    const float MinimumDepth{std::max(Radius * 0.01f, 0.0001f)};
+    const float Radius{std::max(Extent.Length(), (0.01_m).GetBase())};
+    const float MinimumDepth{std::max(Radius * 0.01f, (0.0001_m).GetBase())};
     float Distance{MinimumDepth};
 
     for (Index_t Corner{}; Corner < 8; ++Corner) {
@@ -65,7 +73,7 @@ Engine::FSceneView FViewerCamera::CalcSceneView(const FVector2& Size) const {
     View.mForward = Rotation.ForwardVector();
     View.mFieldOfView = mFieldOfView;
     View.mView = FMatrix::LookTo(View.mLocation, View.mForward, Rotation.UpVector());
-    View.mProjection = FMatrix::Perspective(mFieldOfView, std::max(Size.x, 1.0f) / std::max(Size.y, 1.0f), std::max(mRadius * 0.001f, 0.00001f), std::max(mDistance + mRadius * 3.0f, mRadius * 10.0f));
+    View.mProjection = FMatrix::Perspective(mFieldOfView, std::max(Size.x, 1.0f) / std::max(Size.y, 1.0f), std::max(Core::FLength::FromBase(mRadius * 0.001f), 0.00001_m), Core::FLength::FromBase(std::max(mDistance + mRadius * 3.0f, mRadius * 10.0f)));
     View.mViewProjection = View.mView * View.mProjection;
 
     return View;
@@ -73,8 +81,8 @@ Engine::FSceneView FViewerCamera::CalcSceneView(const FVector2& Size) const {
 
 void FViewerCamera::Orbit(const FVector2& Delta) {
     if (std::isfinite(Delta.x) && std::isfinite(Delta.y)) {
-        mRotation.yaw += Delta.x * 0.3f;
-        mRotation.pitch = std::clamp(mRotation.pitch - Delta.y * 0.3f, -89.0f, 89.0f);
+        mRotation.yaw += Delta.x * Core::Math::ToDegrees(0.3_deg);
+        mRotation.pitch = std::clamp(mRotation.pitch - Delta.y * Core::Math::ToDegrees(0.3_deg), Core::Math::ToDegrees(-89_deg), Core::Math::ToDegrees(89_deg));
     }
 }
 
@@ -92,15 +100,38 @@ void FViewerCamera::Zoom(float Delta) {
     }
 }
 
+FVector FViewerCamera::GetLocation() const {
+    return mCenter - mRotation.Quaternion().ForwardVector() * mDistance;
+}
+
+void FViewerCamera::MoveEye(const FVector& Delta) {
+    if (Delta.IsFinite()) {
+        mCenter += Delta;
+    }
+}
+
+void FViewerCamera::LookAround(const FVector2& Delta) {
+    if (!std::isfinite(Delta.x) || !std::isfinite(Delta.y)) {
+        return;
+    }
+
+    // 눈 위치를 먼저 구해 두고 회전한 뒤, 같은 거리만큼 새 시선 방향 앞에 중심을 다시 놓는다.
+    const FVector Eye{GetLocation()};
+
+    mRotation.yaw += Delta.x * 0.3f;
+    mRotation.pitch = std::clamp(mRotation.pitch - Delta.y * 0.3f, -89.0f, 89.0f);
+    mCenter = Eye + mRotation.Quaternion().ForwardVector() * mDistance;
+}
+
 void FViewerCamera::SetRotation(const FRotator& Rotation) {
     if (std::isfinite(Rotation.pitch) && std::isfinite(Rotation.yaw) && std::isfinite(Rotation.roll)) {
         mRotation = Rotation;
     }
 }
 
-void FViewerCamera::SetFieldOfView(float FieldOfView) {
-    if (std::isfinite(FieldOfView)) {
-        mFieldOfView = std::clamp(FieldOfView, 1.0f, 170.0f);
+void FViewerCamera::SetFieldOfView(Core::FAngle FieldOfView) {
+    if (FieldOfView.IsFinite()) {
+        mFieldOfView = std::clamp(FieldOfView, 1_deg, 170_deg);
     }
 }
 

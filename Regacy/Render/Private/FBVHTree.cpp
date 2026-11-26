@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Render/FBVHTree.h"
+#include "Core/Types.h"
 
 #include <algorithm>
 #include <cmath>
@@ -174,7 +175,7 @@ void FBVHTree::FrustumCull(const FMatrix& ViewProjection, TArray<Uint32>& OutInd
         return;
     }
 
-    std::array<DirectX::XMFLOAT4, 6> Planes{};
+    Core::TStaticArray<DirectX::XMFLOAT4, 6> Planes{};
 
     for (Uint32 Axis{}; Axis < 3; ++Axis) {
         const float NearScale{Axis == 2 ? 0.0f : 1.0f};
@@ -300,7 +301,7 @@ void FBVHTree::CullRecursive(Int32 NodeIndex, const FFrustum& Frustum, TArray<Ui
     }
 }
 
-void FBVHTree::CullRecursive(Int32 NodeIndex, const std::array<DirectX::XMFLOAT4, 6>& Planes, TArray<Uint32>& OutIndices, TArray<Uint32>* OutBoundaryPositions) const {
+void FBVHTree::CullRecursive(Int32 NodeIndex, const Core::TStaticArray<DirectX::XMFLOAT4, 6>& Planes, TArray<Uint32>& OutIndices, TArray<Uint32>* OutBoundaryPositions) const {
     if (NodeIndex == -1) {
         return;
     }

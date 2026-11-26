@@ -7,10 +7,10 @@
 #include "Editor/FEditorTabManager.h"
 #include "Editor/Widget/FEditorWidget.h"
 #include "Editor/FEditorTab.h"
+#include "Core/Types.h"
 
 #include <imgui_internal.h>
 #include <algorithm>
-#include <array>
 #include <utility>
 
 using namespace Editor;
@@ -227,7 +227,7 @@ bool FEditorTabManager::IsFocused() const {
 }
 
 void FEditorTabManager::ApplyLayout(Uint32 Left, Uint32 Outliner, Uint32 Details, Uint32 Bottom, Uint32 Center) {
-    const std::array<ImGuiID, 5> Regions{Center, Left, Outliner, Details, Bottom};
+    const Core::TStaticArray<ImGuiID, 5> Regions{Center, Left, Outliner, Details, Bottom};
 
     for (const FEntry& Entry : mEntries) {
         if (Entry.mTab != nullptr && Entry.mTab->GetRole() != EEditorTabRole::Drawer) {

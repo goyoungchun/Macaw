@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Core/ReflectionMacros.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Engine/FViewportClient.h"
 #include "Editor/Gizmo.h"
 #include "Editor/EViewportCommand.h"
@@ -14,12 +15,13 @@
 #include "Engine/EViewMode.h"
 #include "Engine/FEngineShowFlags.h"
 #include "Engine/FEditorCameraState.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <filesystem>
 
 namespace Engine {
     class AActor;
+    class UCameraComponent;
     class UPrimitiveComponent;
 }
 
@@ -35,6 +37,18 @@ namespace Editor {
      * @note 툴바, 메뉴와 단축키는 동일한 명령 경로를 사용하며 기즈모는 이 클라이언트의 모드와 좌표계를 읽습니다.
      */
     class FEditorViewportClient final : public Engine::FViewportClient {
+    private:
+        enum class EActorIcon : Uint8 {
+            EmptyActor,
+            Decal,
+            LevelSequence,
+            ParticleSystem,
+            Pawn,
+            SkyAtmosphere,
+            Wind,
+            Count
+        };
+
     public:
         /**
          * @brief FEditorViewportClient의 초기 상태와 전달받은 의존성을 구성합니다.
@@ -237,6 +251,10 @@ namespace Editor {
          * @note 스냅 간격은 양수여야 하며 크기 배율은 0.5부터 2.0까지로 제한합니다.
          */
         bool SetGizmoSetting(Editor::EGizmoSetting Setting, float Value);
+        float GetGizmoSettingValue(Editor::EGizmoSetting Setting) const;
+
+        bool SetTranslationSnapStep(Core::FLength Step);
+        bool SetRotationSnapStep(Core::FAngle Step);
 
         /**
          * @brief 장면의 Lit 또는 Wireframe 표시 모드를 반환합니다.
@@ -255,6 +273,7 @@ namespace Editor {
          * @param[in] Mode 적용할 장면 표시 모드입니다.
          */
         void SetViewMode(Engine::EViewMode Mode);
+        bool SupportsViewMode(Engine::EViewMode Mode) const;
 
         /**
          * @brief 뷰포트별 장면·보조 표시 필터를 반환합니다.
@@ -311,14 +330,14 @@ namespace Editor {
          * @brief 자유 시점 카메라의 기본 이동 속도를 반환합니다.
          * @return 초당 이동할 월드 단위 수이며 빠른 이동 시에는 3배를 적용합니다.
          */
-        float GetCameraSpeed() const;
+        Core::FSpeed GetCameraSpeed() const;
 
         /**
          * @brief 자유 시점 카메라의 기본 이동 속도를 설정합니다.
          * @param[in] Speed 0.1에서 128 사이의 유한한 초당 월드 이동 거리입니다.
          * @return 유효한 속도를 적용하면 true, 범위를 벗어나거나 유한하지 않으면 false입니다.
          */
-        bool SetCameraSpeed(float Speed);
+        bool SetCameraSpeed(Core::FSpeed Speed);
 
         /**
          * @brief 정사영 뷰의 가로 가시 범위를 반환합니다.
@@ -367,7 +386,18 @@ namespace Editor {
          */
         bool NavigateCamera(const Engine::FViewportInput& Input, const FVector2& Size, float DeltaTime);
 
+        /** @brief 원근 뷰에서 미리 보는 시퀀서 카메라 컷을 조회합니다. */
+        const Engine::UCameraComponent* GetPreviewCamera() const;
+
         void UpdateCameraFocus(float DeltaTime);
+
+        /**
+         * @brief 편집 월드의 활성 카메라 시야각이 바뀌면 원근 뷰의 시야각을 같은 값으로 맞춥니다.
+         * @details 처음 관찰한 카메라나 다른 카메라로 바뀐 경우에는 값만 기록하고 에디터 시야각은 유지합니다.
+         */
+        void SyncFieldOfViewWithActiveCamera();
+
+        bool TryCreateActorIcon(const Engine::AActor& Actor, Engine::FPrimitiveSceneProxy& Proxy) const;
 
         /**
          * @brief 텍스트·Billboard의 뷰 정렬을 반영한 월드 AABB를 계산합니다.
@@ -383,7 +413,7 @@ namespace Editor {
          * @param[in] View 카메라 행렬과 뷰포트 크기입니다.
          * @return 계산하거나 조회한 값입니다.
          */
-        std::array<FVector, 8> CalcComponentCorners(const Engine::UPrimitiveComponent* Component, const Engine::FSceneView& View) const;
+        Core::TStaticArray<FVector, 8> CalcComponentCorners(const Engine::UPrimitiveComponent* Component, const Engine::FSceneView& View) const;
 
     private:
         /**
@@ -394,12 +424,12 @@ namespace Editor {
         /**
          * @brief 에디터 카메라의 월드 위치입니다.
          */
-        FVector mCameraLocation{-7.0f, -9.0f, 6.0f};
+        FVector mCameraLocation{};
 
         /**
          * @brief 에디터 카메라의 도 단위 회전입니다.
          */
-        FRotator mCameraRotation{-26.0f, 50.0f, 0.0f};
+        FRotator mCameraRotation{};
 
         /**
          * @brief 카메라 오빗의 월드 중심점입니다.
@@ -418,12 +448,12 @@ namespace Editor {
         /**
          * @brief 카메라 이동 속도입니다.
          */
-        float mCameraSpeed{4.0f};
+        Core::FSpeed mCameraSpeed{};
 
         /**
          * @brief 마우스 이동 1픽셀당 카메라 회전 각도입니다.
          */
-        float mCameraSensitivity{0.2f};
+        float mCameraSensitivity{};
 
         /**
          * @brief 장면의 Lit 또는 Wireframe 표시 모드입니다.
@@ -448,7 +478,7 @@ namespace Editor {
         /**
          * @brief 그리드 선 사이의 월드 거리입니다.
          */
-        float mGridSpacing{1.0f};
+        float mGridSpacing{};
 
         /**
          * @brief 원근 또는 정사영 뷰 방향입니다.
@@ -458,12 +488,12 @@ namespace Editor {
         /**
          * @brief 정사영 전환 전 원근 카메라 위치입니다.
          */
-        FVector mPerspectiveLocation{-7.0f, -9.0f, 6.0f};
+        FVector mPerspectiveLocation{};
 
         /**
          * @brief 정사영 전환 전 원근 카메라 회전입니다.
          */
-        FRotator mPerspectiveRotation{-26.0f, 50.0f, 0.0f};
+        FRotator mPerspectiveRotation{};
 
         /**
          * @brief 정사영 전환 전 원근 카메라 피벗입니다.
@@ -473,22 +503,32 @@ namespace Editor {
         /**
          * @brief 정사영 가로 가시 범위의 월드 길이입니다.
          */
-        float mOrthographicWidth{20.0f};
+        float mOrthographicWidth{};
 
         /**
          * @brief 원근 카메라의 수직 시야각입니다.
          */
-        float mFieldOfView{60.0f};
+        Core::FAngle mFieldOfView{};
+
+        /**
+         * @brief 시야각 변경을 감지하려고 마지막으로 관찰한 활성 카메라입니다. 비교에만 쓰며 역참조하지 않습니다.
+         */
+        const void* mObservedCamera{};
+
+        /**
+         * @brief 마지막으로 관찰한 활성 카메라의 실제 시야각입니다.
+         */
+        Core::FAngle mObservedCameraFieldOfView{};
 
         /**
          * @brief 원근 투영의 근평면 거리입니다.
          */
-        float mNearClip{0.05f};
+        Core::FLength mNearClip{};
 
         /**
          * @brief 원근 투영의 원평면 거리입니다.
          */
-        float mFarClip{10000.0f};
+        Core::FLength mFarClip{};
 
         /**
          * @brief 클라이언트가 소유하며 기즈모와 UI가 함께 조회하는 변환 모드입니다.
@@ -509,6 +549,8 @@ namespace Editor {
          * @brief 현재 프레임의 에디터 보조 선분 수집기입니다.
          */
         Engine::FPrimitiveDrawInterface mDrawInterface{};
+
+        mutable Core::TStaticArray<CoreUObject::TObjectRef<Asset::UTexture2D>, static_cast<Index_t>(EActorIcon::Count)> mActorIconTextures{};
     };
 
 }

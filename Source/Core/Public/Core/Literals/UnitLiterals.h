@@ -10,7 +10,7 @@
 
 #include "Core/Literals/QuantityTypes.h"
 
-#include <numbers>
+#include "Core/Literals/QuantityUnits.h"
 
 /**
  * @brief 실세계 단위를 엔진 물리량으로 만드는 리터럴입니다.
@@ -21,11 +21,6 @@ namespace Core::Literals {
      * @brief 물리량 리터럴의 단위 계수 변환 구현입니다.
      */
     namespace Detail {
-        /**
-         * @brief 단위 변환 계수 계산에 쓰는 원주율입니다.
-         */
-        inline constexpr long double kPi = std::numbers::pi_v<long double>;
-
         /**
          * @brief 리터럴 값에 단위 계수를 곱해 SI 기본 단위 물리량을 만듭니다.
          * @tparam Q 만들 물리량 타입입니다.
@@ -49,56 +44,56 @@ namespace Core::Literals {
      * @param[in] Value 밀리미터(mm) 단위로 표현한 수치입니다.
      * @return 미터 단위의 길이 값입니다.
      */
-    constexpr Core::FLength operator""_mm(long double Value) { return Detail::MakeUnit<Core::FLength>(Value, 0.001L); }
+    constexpr Core::FLength operator""_mm(long double Value) { return Detail::MakeUnit<Core::FLength>(Value, Core::QuantityUnits::Millimeter.mScale); }
 
     /**
      * @brief 밀리미터(mm) 값을 FLength로 만듭니다.
      * @param[in] Value 밀리미터(mm) 단위로 표현한 수치입니다.
      * @return 미터 단위의 길이 값입니다.
      */
-    constexpr Core::FLength operator""_mm(unsigned long long Value) { return Detail::MakeUnit<Core::FLength>(static_cast<long double>(Value), 0.001L); }
+    constexpr Core::FLength operator""_mm(unsigned long long Value) { return Detail::MakeUnit<Core::FLength>(static_cast<long double>(Value), Core::QuantityUnits::Millimeter.mScale); }
 
     /**
      * @brief 센티미터(cm) 값을 FLength로 만듭니다.
      * @param[in] Value 센티미터(cm) 단위로 표현한 수치입니다.
      * @return 미터 단위의 길이 값입니다.
      */
-    constexpr Core::FLength operator""_cm(long double Value) { return Detail::MakeUnit<Core::FLength>(Value, 0.01L); }
+    constexpr Core::FLength operator""_cm(long double Value) { return Detail::MakeUnit<Core::FLength>(Value, Core::QuantityUnits::Centimeter.mScale); }
 
     /**
      * @brief 센티미터(cm) 값을 FLength로 만듭니다.
      * @param[in] Value 센티미터(cm) 단위로 표현한 수치입니다.
      * @return 미터 단위의 길이 값입니다.
      */
-    constexpr Core::FLength operator""_cm(unsigned long long Value) { return Detail::MakeUnit<Core::FLength>(static_cast<long double>(Value), 0.01L); }
+    constexpr Core::FLength operator""_cm(unsigned long long Value) { return Detail::MakeUnit<Core::FLength>(static_cast<long double>(Value), Core::QuantityUnits::Centimeter.mScale); }
 
     /**
      * @brief 미터(m) 값을 FLength로 만듭니다.
      * @param[in] Value 미터(m) 단위로 표현한 수치입니다.
      * @return 미터 단위의 길이 값입니다.
      */
-    constexpr Core::FLength operator""_m(long double Value) { return Detail::MakeUnit<Core::FLength>(Value, 1.0L); }
+    constexpr Core::FLength operator""_m(long double Value) { return Detail::MakeUnit<Core::FLength>(Value, Core::QuantityUnits::Meter.mScale); }
 
     /**
      * @brief 미터(m) 값을 FLength로 만듭니다.
      * @param[in] Value 미터(m) 단위로 표현한 수치입니다.
      * @return 미터 단위의 길이 값입니다.
      */
-    constexpr Core::FLength operator""_m(unsigned long long Value) { return Detail::MakeUnit<Core::FLength>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FLength operator""_m(unsigned long long Value) { return Detail::MakeUnit<Core::FLength>(static_cast<long double>(Value), Core::QuantityUnits::Meter.mScale); }
 
     /**
      * @brief 킬로미터(km) 값을 FLength로 만듭니다.
      * @param[in] Value 킬로미터(km) 단위로 표현한 수치입니다.
      * @return 미터 단위의 길이 값입니다.
      */
-    constexpr Core::FLength operator""_km(long double Value) { return Detail::MakeUnit<Core::FLength>(Value, 1000.0L); }
+    constexpr Core::FLength operator""_km(long double Value) { return Detail::MakeUnit<Core::FLength>(Value, Core::QuantityUnits::Kilometer.mScale); }
 
     /**
      * @brief 킬로미터(km) 값을 FLength로 만듭니다.
      * @param[in] Value 킬로미터(km) 단위로 표현한 수치입니다.
      * @return 미터 단위의 길이 값입니다.
      */
-    constexpr Core::FLength operator""_km(unsigned long long Value) { return Detail::MakeUnit<Core::FLength>(static_cast<long double>(Value), 1000.0L); }
+    constexpr Core::FLength operator""_km(unsigned long long Value) { return Detail::MakeUnit<Core::FLength>(static_cast<long double>(Value), Core::QuantityUnits::Kilometer.mScale); }
 
     /**
      * @}
@@ -114,42 +109,42 @@ namespace Core::Literals {
      * @param[in] Value 그램(g) 단위로 표현한 수치입니다.
      * @return 킬로그램 단위의 질량 값입니다.
      */
-    constexpr Core::FMass operator""_g(long double Value) { return Detail::MakeUnit<Core::FMass>(Value, 0.001L); }
+    constexpr Core::FMass operator""_g(long double Value) { return Detail::MakeUnit<Core::FMass>(Value, Core::QuantityUnits::Gram.mScale); }
 
     /**
      * @brief 그램(g) 값을 FMass로 만듭니다.
      * @param[in] Value 그램(g) 단위로 표현한 수치입니다.
      * @return 킬로그램 단위의 질량 값입니다.
      */
-    constexpr Core::FMass operator""_g(unsigned long long Value) { return Detail::MakeUnit<Core::FMass>(static_cast<long double>(Value), 0.001L); }
+    constexpr Core::FMass operator""_g(unsigned long long Value) { return Detail::MakeUnit<Core::FMass>(static_cast<long double>(Value), Core::QuantityUnits::Gram.mScale); }
 
     /**
      * @brief 킬로그램(kg) 값을 FMass로 만듭니다.
      * @param[in] Value 킬로그램(kg) 단위로 표현한 수치입니다.
      * @return 킬로그램 단위의 질량 값입니다.
      */
-    constexpr Core::FMass operator""_kg(long double Value) { return Detail::MakeUnit<Core::FMass>(Value, 1.0L); }
+    constexpr Core::FMass operator""_kg(long double Value) { return Detail::MakeUnit<Core::FMass>(Value, Core::QuantityUnits::Kilogram.mScale); }
 
     /**
      * @brief 킬로그램(kg) 값을 FMass로 만듭니다.
      * @param[in] Value 킬로그램(kg) 단위로 표현한 수치입니다.
      * @return 킬로그램 단위의 질량 값입니다.
      */
-    constexpr Core::FMass operator""_kg(unsigned long long Value) { return Detail::MakeUnit<Core::FMass>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FMass operator""_kg(unsigned long long Value) { return Detail::MakeUnit<Core::FMass>(static_cast<long double>(Value), Core::QuantityUnits::Kilogram.mScale); }
 
     /**
      * @brief 톤(t) 값을 FMass로 만듭니다.
      * @param[in] Value 톤(t) 단위로 표현한 수치입니다.
      * @return 킬로그램 단위의 질량 값입니다.
      */
-    constexpr Core::FMass operator""_t(long double Value) { return Detail::MakeUnit<Core::FMass>(Value, 1000.0L); }
+    constexpr Core::FMass operator""_t(long double Value) { return Detail::MakeUnit<Core::FMass>(Value, Core::QuantityUnits::Tonne.mScale); }
 
     /**
      * @brief 톤(t) 값을 FMass로 만듭니다.
      * @param[in] Value 톤(t) 단위로 표현한 수치입니다.
      * @return 킬로그램 단위의 질량 값입니다.
      */
-    constexpr Core::FMass operator""_t(unsigned long long Value) { return Detail::MakeUnit<Core::FMass>(static_cast<long double>(Value), 1000.0L); }
+    constexpr Core::FMass operator""_t(unsigned long long Value) { return Detail::MakeUnit<Core::FMass>(static_cast<long double>(Value), Core::QuantityUnits::Tonne.mScale); }
 
     /**
      * @}
@@ -165,56 +160,56 @@ namespace Core::Literals {
      * @param[in] Value 밀리초(ms) 단위로 표현한 수치입니다.
      * @return 초 단위의 시간 값입니다.
      */
-    constexpr Core::FTime operator""_ms(long double Value) { return Detail::MakeUnit<Core::FTime>(Value, 0.001L); }
+    constexpr Core::FTime operator""_ms(long double Value) { return Detail::MakeUnit<Core::FTime>(Value, Core::QuantityUnits::Millisecond.mScale); }
 
     /**
      * @brief 밀리초(ms) 값을 FTime으로 만듭니다.
      * @param[in] Value 밀리초(ms) 단위로 표현한 수치입니다.
      * @return 초 단위의 시간 값입니다.
      */
-    constexpr Core::FTime operator""_ms(unsigned long long Value) { return Detail::MakeUnit<Core::FTime>(static_cast<long double>(Value), 0.001L); }
+    constexpr Core::FTime operator""_ms(unsigned long long Value) { return Detail::MakeUnit<Core::FTime>(static_cast<long double>(Value), Core::QuantityUnits::Millisecond.mScale); }
 
     /**
      * @brief 초(s) 값을 FTime으로 만듭니다.
      * @param[in] Value 초(s) 단위로 표현한 수치입니다.
      * @return 초 단위의 시간 값입니다.
      */
-    constexpr Core::FTime operator""_s(long double Value) { return Detail::MakeUnit<Core::FTime>(Value, 1.0L); }
+    constexpr Core::FTime operator""_s(long double Value) { return Detail::MakeUnit<Core::FTime>(Value, Core::QuantityUnits::Second.mScale); }
 
     /**
      * @brief 초(s) 값을 FTime으로 만듭니다.
      * @param[in] Value 초(s) 단위로 표현한 수치입니다.
      * @return 초 단위의 시간 값입니다.
      */
-    constexpr Core::FTime operator""_s(unsigned long long Value) { return Detail::MakeUnit<Core::FTime>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FTime operator""_s(unsigned long long Value) { return Detail::MakeUnit<Core::FTime>(static_cast<long double>(Value), Core::QuantityUnits::Second.mScale); }
 
     /**
      * @brief 분(min) 값을 FTime으로 만듭니다.
      * @param[in] Value 분(min) 단위로 표현한 수치입니다.
      * @return 초 단위의 시간 값입니다.
      */
-    constexpr Core::FTime operator""_min(long double Value) { return Detail::MakeUnit<Core::FTime>(Value, 60.0L); }
+    constexpr Core::FTime operator""_min(long double Value) { return Detail::MakeUnit<Core::FTime>(Value, Core::QuantityUnits::Minute.mScale); }
 
     /**
      * @brief 분(min) 값을 FTime으로 만듭니다.
      * @param[in] Value 분(min) 단위로 표현한 수치입니다.
      * @return 초 단위의 시간 값입니다.
      */
-    constexpr Core::FTime operator""_min(unsigned long long Value) { return Detail::MakeUnit<Core::FTime>(static_cast<long double>(Value), 60.0L); }
+    constexpr Core::FTime operator""_min(unsigned long long Value) { return Detail::MakeUnit<Core::FTime>(static_cast<long double>(Value), Core::QuantityUnits::Minute.mScale); }
 
     /**
      * @brief 시간(h) 값을 FTime으로 만듭니다.
      * @param[in] Value 시간(h) 단위로 표현한 수치입니다.
      * @return 초 단위의 시간 값입니다.
      */
-    constexpr Core::FTime operator""_h(long double Value) { return Detail::MakeUnit<Core::FTime>(Value, 3600.0L); }
+    constexpr Core::FTime operator""_h(long double Value) { return Detail::MakeUnit<Core::FTime>(Value, Core::QuantityUnits::Hour.mScale); }
 
     /**
      * @brief 시간(h) 값을 FTime으로 만듭니다.
      * @param[in] Value 시간(h) 단위로 표현한 수치입니다.
      * @return 초 단위의 시간 값입니다.
      */
-    constexpr Core::FTime operator""_h(unsigned long long Value) { return Detail::MakeUnit<Core::FTime>(static_cast<long double>(Value), 3600.0L); }
+    constexpr Core::FTime operator""_h(unsigned long long Value) { return Detail::MakeUnit<Core::FTime>(static_cast<long double>(Value), Core::QuantityUnits::Hour.mScale); }
 
     /**
      * @}
@@ -230,42 +225,42 @@ namespace Core::Literals {
      * @param[in] Value 초속 미터(m/s) 단위로 표현한 수치입니다.
      * @return 미터/초 단위의 속력 값입니다.
      */
-    constexpr Core::FSpeed operator""_mps(long double Value) { return Detail::MakeUnit<Core::FSpeed>(Value, 1.0L); }
+    constexpr Core::FSpeed operator""_mps(long double Value) { return Detail::MakeUnit<Core::FSpeed>(Value, Core::QuantityUnits::MeterPerSecond.mScale); }
 
     /**
      * @brief 초속 미터(m/s) 값을 FSpeed로 만듭니다.
      * @param[in] Value 초속 미터(m/s) 단위로 표현한 수치입니다.
      * @return 미터/초 단위의 속력 값입니다.
      */
-    constexpr Core::FSpeed operator""_mps(unsigned long long Value) { return Detail::MakeUnit<Core::FSpeed>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FSpeed operator""_mps(unsigned long long Value) { return Detail::MakeUnit<Core::FSpeed>(static_cast<long double>(Value), Core::QuantityUnits::MeterPerSecond.mScale); }
 
     /**
      * @brief 시속 킬로미터(km/h) 값을 FSpeed로 만듭니다.
      * @param[in] Value 시속 킬로미터(km/h) 단위로 표현한 수치입니다.
      * @return 미터/초 단위의 속력 값입니다.
      */
-    constexpr Core::FSpeed operator""_kmh(long double Value) { return Detail::MakeUnit<Core::FSpeed>(Value, 1000.0L / 3600.0L); }
+    constexpr Core::FSpeed operator""_kmh(long double Value) { return Detail::MakeUnit<Core::FSpeed>(Value, Core::QuantityUnits::KilometerPerHour.mScale); }
 
     /**
      * @brief 시속 킬로미터(km/h) 값을 FSpeed로 만듭니다.
      * @param[in] Value 시속 킬로미터(km/h) 단위로 표현한 수치입니다.
      * @return 미터/초 단위의 속력 값입니다.
      */
-    constexpr Core::FSpeed operator""_kmh(unsigned long long Value) { return Detail::MakeUnit<Core::FSpeed>(static_cast<long double>(Value), 1000.0L / 3600.0L); }
+    constexpr Core::FSpeed operator""_kmh(unsigned long long Value) { return Detail::MakeUnit<Core::FSpeed>(static_cast<long double>(Value), Core::QuantityUnits::KilometerPerHour.mScale); }
 
     /**
      * @brief 미터 매 초 제곱(m/s²) 값을 FAcceleration으로 만듭니다.
      * @param[in] Value 미터 매 초 제곱(m/s²) 단위로 표현한 수치입니다.
      * @return 미터/초 제곱 단위의 가속도 값입니다.
      */
-    constexpr Core::FAcceleration operator""_mps2(long double Value) { return Detail::MakeUnit<Core::FAcceleration>(Value, 1.0L); }
+    constexpr Core::FAcceleration operator""_mps2(long double Value) { return Detail::MakeUnit<Core::FAcceleration>(Value, Core::QuantityUnits::MeterPerSecondSquared.mScale); }
 
     /**
      * @brief 미터 매 초 제곱(m/s²) 값을 FAcceleration으로 만듭니다.
      * @param[in] Value 미터 매 초 제곱(m/s²) 단위로 표현한 수치입니다.
      * @return 미터/초 제곱 단위의 가속도 값입니다.
      */
-    constexpr Core::FAcceleration operator""_mps2(unsigned long long Value) { return Detail::MakeUnit<Core::FAcceleration>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FAcceleration operator""_mps2(unsigned long long Value) { return Detail::MakeUnit<Core::FAcceleration>(static_cast<long double>(Value), Core::QuantityUnits::MeterPerSecondSquared.mScale); }
 
     /**
      * @}
@@ -281,98 +276,112 @@ namespace Core::Literals {
      * @param[in] Value 뉴턴(N) 단위로 표현한 수치입니다.
      * @return 뉴턴 단위의 힘 값입니다.
      */
-    constexpr Core::FForce operator""_N(long double Value) { return Detail::MakeUnit<Core::FForce>(Value, 1.0L); }
+    constexpr Core::FForce operator""_N(long double Value) { return Detail::MakeUnit<Core::FForce>(Value, Core::QuantityUnits::Newton.mScale); }
 
     /**
      * @brief 뉴턴(N) 값을 FForce로 만듭니다.
      * @param[in] Value 뉴턴(N) 단위로 표현한 수치입니다.
      * @return 뉴턴 단위의 힘 값입니다.
      */
-    constexpr Core::FForce operator""_N(unsigned long long Value) { return Detail::MakeUnit<Core::FForce>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FForce operator""_N(unsigned long long Value) { return Detail::MakeUnit<Core::FForce>(static_cast<long double>(Value), Core::QuantityUnits::Newton.mScale); }
 
     /**
      * @brief 킬로뉴턴(kN) 값을 FForce로 만듭니다.
      * @param[in] Value 킬로뉴턴(kN) 단위로 표현한 수치입니다.
      * @return 뉴턴 단위의 힘 값입니다.
      */
-    constexpr Core::FForce operator""_kN(long double Value) { return Detail::MakeUnit<Core::FForce>(Value, 1000.0L); }
+    constexpr Core::FForce operator""_kN(long double Value) { return Detail::MakeUnit<Core::FForce>(Value, Core::QuantityUnits::Kilonewton.mScale); }
 
     /**
      * @brief 킬로뉴턴(kN) 값을 FForce로 만듭니다.
      * @param[in] Value 킬로뉴턴(kN) 단위로 표현한 수치입니다.
      * @return 뉴턴 단위의 힘 값입니다.
      */
-    constexpr Core::FForce operator""_kN(unsigned long long Value) { return Detail::MakeUnit<Core::FForce>(static_cast<long double>(Value), 1000.0L); }
+    constexpr Core::FForce operator""_kN(unsigned long long Value) { return Detail::MakeUnit<Core::FForce>(static_cast<long double>(Value), Core::QuantityUnits::Kilonewton.mScale); }
+
+    /**
+     * @brief 뉴턴미터(N·m) 값을 FTorque로 만듭니다.
+     * @param[in] Value 뉴턴미터(N·m) 단위로 표현한 수치입니다.
+     * @return 뉴턴미터 단위의 토크 값입니다.
+     */
+    constexpr Core::FTorque operator""_Nm(long double Value) { return Detail::MakeUnit<Core::FTorque>(Value, 1.0L); }
+
+    /**
+     * @brief 뉴턴미터(N·m) 값을 FTorque로 만듭니다.
+     * @param[in] Value 뉴턴미터(N·m) 단위로 표현한 수치입니다.
+     * @return 뉴턴미터 단위의 토크 값입니다.
+     */
+    constexpr Core::FTorque operator""_Nm(unsigned long long Value) { return Detail::MakeUnit<Core::FTorque>(static_cast<long double>(Value), 1.0L); }
 
     /**
      * @brief 줄(J) 값을 FEnergy로 만듭니다.
      * @param[in] Value 줄(J) 단위로 표현한 수치입니다.
      * @return 줄 단위의 에너지 값입니다.
      */
-    constexpr Core::FEnergy operator""_J(long double Value) { return Detail::MakeUnit<Core::FEnergy>(Value, 1.0L); }
+    constexpr Core::FEnergy operator""_J(long double Value) { return Detail::MakeUnit<Core::FEnergy>(Value, Core::QuantityUnits::Joule.mScale); }
 
     /**
      * @brief 줄(J) 값을 FEnergy로 만듭니다.
      * @param[in] Value 줄(J) 단위로 표현한 수치입니다.
      * @return 줄 단위의 에너지 값입니다.
      */
-    constexpr Core::FEnergy operator""_J(unsigned long long Value) { return Detail::MakeUnit<Core::FEnergy>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FEnergy operator""_J(unsigned long long Value) { return Detail::MakeUnit<Core::FEnergy>(static_cast<long double>(Value), Core::QuantityUnits::Joule.mScale); }
 
     /**
      * @brief 킬로줄(kJ) 값을 FEnergy로 만듭니다.
      * @param[in] Value 킬로줄(kJ) 단위로 표현한 수치입니다.
      * @return 줄 단위의 에너지 값입니다.
      */
-    constexpr Core::FEnergy operator""_kJ(long double Value) { return Detail::MakeUnit<Core::FEnergy>(Value, 1000.0L); }
+    constexpr Core::FEnergy operator""_kJ(long double Value) { return Detail::MakeUnit<Core::FEnergy>(Value, Core::QuantityUnits::Kilojoule.mScale); }
 
     /**
      * @brief 킬로줄(kJ) 값을 FEnergy로 만듭니다.
      * @param[in] Value 킬로줄(kJ) 단위로 표현한 수치입니다.
      * @return 줄 단위의 에너지 값입니다.
      */
-    constexpr Core::FEnergy operator""_kJ(unsigned long long Value) { return Detail::MakeUnit<Core::FEnergy>(static_cast<long double>(Value), 1000.0L); }
+    constexpr Core::FEnergy operator""_kJ(unsigned long long Value) { return Detail::MakeUnit<Core::FEnergy>(static_cast<long double>(Value), Core::QuantityUnits::Kilojoule.mScale); }
 
     /**
      * @brief 와트(W) 값을 FPower로 만듭니다.
      * @param[in] Value 와트(W) 단위로 표현한 수치입니다.
      * @return 와트 단위의 일률 값입니다.
      */
-    constexpr Core::FPower operator""_W(long double Value) { return Detail::MakeUnit<Core::FPower>(Value, 1.0L); }
+    constexpr Core::FPower operator""_W(long double Value) { return Detail::MakeUnit<Core::FPower>(Value, Core::QuantityUnits::Watt.mScale); }
 
     /**
      * @brief 와트(W) 값을 FPower로 만듭니다.
      * @param[in] Value 와트(W) 단위로 표현한 수치입니다.
      * @return 와트 단위의 일률 값입니다.
      */
-    constexpr Core::FPower operator""_W(unsigned long long Value) { return Detail::MakeUnit<Core::FPower>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FPower operator""_W(unsigned long long Value) { return Detail::MakeUnit<Core::FPower>(static_cast<long double>(Value), Core::QuantityUnits::Watt.mScale); }
 
     /**
      * @brief 킬로와트(kW) 값을 FPower로 만듭니다.
      * @param[in] Value 킬로와트(kW) 단위로 표현한 수치입니다.
      * @return 와트 단위의 일률 값입니다.
      */
-    constexpr Core::FPower operator""_kW(long double Value) { return Detail::MakeUnit<Core::FPower>(Value, 1000.0L); }
+    constexpr Core::FPower operator""_kW(long double Value) { return Detail::MakeUnit<Core::FPower>(Value, Core::QuantityUnits::Kilowatt.mScale); }
 
     /**
      * @brief 킬로와트(kW) 값을 FPower로 만듭니다.
      * @param[in] Value 킬로와트(kW) 단위로 표현한 수치입니다.
      * @return 와트 단위의 일률 값입니다.
      */
-    constexpr Core::FPower operator""_kW(unsigned long long Value) { return Detail::MakeUnit<Core::FPower>(static_cast<long double>(Value), 1000.0L); }
+    constexpr Core::FPower operator""_kW(unsigned long long Value) { return Detail::MakeUnit<Core::FPower>(static_cast<long double>(Value), Core::QuantityUnits::Kilowatt.mScale); }
 
     /**
      * @brief 헤르츠(Hz) 값을 FFrequency로 만듭니다.
      * @param[in] Value 헤르츠(Hz) 단위로 표현한 수치입니다.
      * @return 헤르츠 단위의 주파수 값입니다.
      */
-    constexpr Core::FFrequency operator""_Hz(long double Value) { return Detail::MakeUnit<Core::FFrequency>(Value, 1.0L); }
+    constexpr Core::FFrequency operator""_Hz(long double Value) { return Detail::MakeUnit<Core::FFrequency>(Value, Core::QuantityUnits::Hertz.mScale); }
 
     /**
      * @brief 헤르츠(Hz) 값을 FFrequency로 만듭니다.
      * @param[in] Value 헤르츠(Hz) 단위로 표현한 수치입니다.
      * @return 헤르츠 단위의 주파수 값입니다.
      */
-    constexpr Core::FFrequency operator""_Hz(unsigned long long Value) { return Detail::MakeUnit<Core::FFrequency>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FFrequency operator""_Hz(unsigned long long Value) { return Detail::MakeUnit<Core::FFrequency>(static_cast<long double>(Value), Core::QuantityUnits::Hertz.mScale); }
 
     /**
      * @}
@@ -388,112 +397,112 @@ namespace Core::Literals {
      * @param[in] Value 라디안(rad) 단위로 표현한 수치입니다.
      * @return 라디안 단위의 각도 값입니다.
      */
-    constexpr Core::FAngle operator""_rad(long double Value) { return Detail::MakeUnit<Core::FAngle>(Value, 1.0L); }
+    constexpr Core::FAngle operator""_rad(long double Value) { return Detail::MakeUnit<Core::FAngle>(Value, Core::QuantityUnits::Radian.mScale); }
 
     /**
      * @brief 라디안(rad) 값을 FAngle로 만듭니다.
      * @param[in] Value 라디안(rad) 단위로 표현한 수치입니다.
      * @return 라디안 단위의 각도 값입니다.
      */
-    constexpr Core::FAngle operator""_rad(unsigned long long Value) { return Detail::MakeUnit<Core::FAngle>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FAngle operator""_rad(unsigned long long Value) { return Detail::MakeUnit<Core::FAngle>(static_cast<long double>(Value), Core::QuantityUnits::Radian.mScale); }
 
     /**
      * @brief 도(°) 값을 FAngle로 만듭니다.
      * @param[in] Value 도(°) 단위로 표현한 수치입니다.
      * @return 라디안 단위의 각도 값입니다.
      */
-    constexpr Core::FAngle operator""_deg(long double Value) { return Detail::MakeUnit<Core::FAngle>(Value, Detail::kPi / 180.0L); }
+    constexpr Core::FAngle operator""_deg(long double Value) { return Detail::MakeUnit<Core::FAngle>(Value, Core::QuantityUnits::Degree.mScale); }
 
     /**
      * @brief 도(°) 값을 FAngle로 만듭니다.
      * @param[in] Value 도(°) 단위로 표현한 수치입니다.
      * @return 라디안 단위의 각도 값입니다.
      */
-    constexpr Core::FAngle operator""_deg(unsigned long long Value) { return Detail::MakeUnit<Core::FAngle>(static_cast<long double>(Value), Detail::kPi / 180.0L); }
+    constexpr Core::FAngle operator""_deg(unsigned long long Value) { return Detail::MakeUnit<Core::FAngle>(static_cast<long double>(Value), Core::QuantityUnits::Degree.mScale); }
 
     /**
      * @brief 회전수(한 바퀴 = 360°) 값을 FAngle로 만듭니다.
      * @param[in] Value 회전수(한 바퀴 = 360°) 단위로 표현한 수치입니다.
      * @return 라디안 단위의 각도 값입니다.
      */
-    constexpr Core::FAngle operator""_turn(long double Value) { return Detail::MakeUnit<Core::FAngle>(Value, 2.0L * Detail::kPi); }
+    constexpr Core::FAngle operator""_turn(long double Value) { return Detail::MakeUnit<Core::FAngle>(Value, Core::QuantityUnits::Turn.mScale); }
 
     /**
      * @brief 회전수(한 바퀴 = 360°) 값을 FAngle로 만듭니다.
      * @param[in] Value 회전수(한 바퀴 = 360°) 단위로 표현한 수치입니다.
      * @return 라디안 단위의 각도 값입니다.
      */
-    constexpr Core::FAngle operator""_turn(unsigned long long Value) { return Detail::MakeUnit<Core::FAngle>(static_cast<long double>(Value), 2.0L * Detail::kPi); }
+    constexpr Core::FAngle operator""_turn(unsigned long long Value) { return Detail::MakeUnit<Core::FAngle>(static_cast<long double>(Value), Core::QuantityUnits::Turn.mScale); }
 
     /**
      * @brief 라디안 매 초(rad/s) 값을 FAngularSpeed로 만듭니다.
      * @param[in] Value 라디안 매 초(rad/s) 단위로 표현한 수치입니다.
      * @return 라디안/초 단위의 각속도 값입니다.
      */
-    constexpr Core::FAngularSpeed operator""_radps(long double Value) { return Detail::MakeUnit<Core::FAngularSpeed>(Value, 1.0L); }
+    constexpr Core::FAngularSpeed operator""_radps(long double Value) { return Detail::MakeUnit<Core::FAngularSpeed>(Value, Core::QuantityUnits::RadianPerSecond.mScale); }
 
     /**
      * @brief 라디안 매 초(rad/s) 값을 FAngularSpeed로 만듭니다.
      * @param[in] Value 라디안 매 초(rad/s) 단위로 표현한 수치입니다.
      * @return 라디안/초 단위의 각속도 값입니다.
      */
-    constexpr Core::FAngularSpeed operator""_radps(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularSpeed>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FAngularSpeed operator""_radps(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularSpeed>(static_cast<long double>(Value), Core::QuantityUnits::RadianPerSecond.mScale); }
 
     /**
      * @brief 도 매 초(°/s) 값을 FAngularSpeed로 만듭니다.
      * @param[in] Value 도 매 초(°/s) 단위로 표현한 수치입니다.
      * @return 라디안/초 단위의 각속도 값입니다.
      */
-    constexpr Core::FAngularSpeed operator""_degps(long double Value) { return Detail::MakeUnit<Core::FAngularSpeed>(Value, Detail::kPi / 180.0L); }
+    constexpr Core::FAngularSpeed operator""_degps(long double Value) { return Detail::MakeUnit<Core::FAngularSpeed>(Value, Core::QuantityUnits::DegreePerSecond.mScale); }
 
     /**
      * @brief 도 매 초(°/s) 값을 FAngularSpeed로 만듭니다.
      * @param[in] Value 도 매 초(°/s) 단위로 표현한 수치입니다.
      * @return 라디안/초 단위의 각속도 값입니다.
      */
-    constexpr Core::FAngularSpeed operator""_degps(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularSpeed>(static_cast<long double>(Value), Detail::kPi / 180.0L); }
+    constexpr Core::FAngularSpeed operator""_degps(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularSpeed>(static_cast<long double>(Value), Core::QuantityUnits::DegreePerSecond.mScale); }
 
     /**
      * @brief 분당 회전수(rpm) 값을 FAngularSpeed로 만듭니다.
      * @param[in] Value 분당 회전수(rpm) 단위로 표현한 수치입니다.
      * @return 라디안/초 단위의 각속도 값입니다.
      */
-    constexpr Core::FAngularSpeed operator""_rpm(long double Value) { return Detail::MakeUnit<Core::FAngularSpeed>(Value, 2.0L * Detail::kPi / 60.0L); }
+    constexpr Core::FAngularSpeed operator""_rpm(long double Value) { return Detail::MakeUnit<Core::FAngularSpeed>(Value, Core::QuantityUnits::RevolutionPerMinute.mScale); }
 
     /**
      * @brief 분당 회전수(rpm) 값을 FAngularSpeed로 만듭니다.
      * @param[in] Value 분당 회전수(rpm) 단위로 표현한 수치입니다.
      * @return 라디안/초 단위의 각속도 값입니다.
      */
-    constexpr Core::FAngularSpeed operator""_rpm(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularSpeed>(static_cast<long double>(Value), 2.0L * Detail::kPi / 60.0L); }
+    constexpr Core::FAngularSpeed operator""_rpm(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularSpeed>(static_cast<long double>(Value), Core::QuantityUnits::RevolutionPerMinute.mScale); }
 
     /**
      * @brief 라디안 매 초 제곱(rad/s²) 값을 FAngularAcceleration으로 만듭니다.
      * @param[in] Value 라디안 매 초 제곱(rad/s²) 단위로 표현한 수치입니다.
      * @return 라디안/초 제곱 단위의 각가속도 값입니다.
      */
-    constexpr Core::FAngularAcceleration operator""_radps2(long double Value) { return Detail::MakeUnit<Core::FAngularAcceleration>(Value, 1.0L); }
+    constexpr Core::FAngularAcceleration operator""_radps2(long double Value) { return Detail::MakeUnit<Core::FAngularAcceleration>(Value, Core::QuantityUnits::RadianPerSecondSquared.mScale); }
 
     /**
      * @brief 라디안 매 초 제곱(rad/s²) 값을 FAngularAcceleration으로 만듭니다.
      * @param[in] Value 라디안 매 초 제곱(rad/s²) 단위로 표현한 수치입니다.
      * @return 라디안/초 제곱 단위의 각가속도 값입니다.
      */
-    constexpr Core::FAngularAcceleration operator""_radps2(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularAcceleration>(static_cast<long double>(Value), 1.0L); }
+    constexpr Core::FAngularAcceleration operator""_radps2(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularAcceleration>(static_cast<long double>(Value), Core::QuantityUnits::RadianPerSecondSquared.mScale); }
 
     /**
      * @brief 도 매 초 제곱(°/s²) 값을 FAngularAcceleration으로 만듭니다.
      * @param[in] Value 도 매 초 제곱(°/s²) 단위로 표현한 수치입니다.
      * @return 라디안/초 제곱 단위의 각가속도 값입니다.
      */
-    constexpr Core::FAngularAcceleration operator""_degps2(long double Value) { return Detail::MakeUnit<Core::FAngularAcceleration>(Value, Detail::kPi / 180.0L); }
+    constexpr Core::FAngularAcceleration operator""_degps2(long double Value) { return Detail::MakeUnit<Core::FAngularAcceleration>(Value, Core::QuantityUnits::DegreePerSecondSquared.mScale); }
 
     /**
      * @brief 도 매 초 제곱(°/s²) 값을 FAngularAcceleration으로 만듭니다.
      * @param[in] Value 도 매 초 제곱(°/s²) 단위로 표현한 수치입니다.
      * @return 라디안/초 제곱 단위의 각가속도 값입니다.
      */
-    constexpr Core::FAngularAcceleration operator""_degps2(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularAcceleration>(static_cast<long double>(Value), Detail::kPi / 180.0L); }
+    constexpr Core::FAngularAcceleration operator""_degps2(unsigned long long Value) { return Detail::MakeUnit<Core::FAngularAcceleration>(static_cast<long double>(Value), Core::QuantityUnits::DegreePerSecondSquared.mScale); }
 
     /**
      * @}
@@ -504,6 +513,8 @@ namespace Core::Literals {
     static_assert(36_kmh == 10_mps);
     static_assert(1_kg * 1_mps2 == 1_N);
     static_assert(1_N * 1_m / 1_s == 1_W);
+    static_assert(1_Nm * 1_rad == 1_J);
+    static_assert(1_Nm * 1_radps == 1_W);
     static_assert(1_km / 1_m == 1000.0f);
 
 }

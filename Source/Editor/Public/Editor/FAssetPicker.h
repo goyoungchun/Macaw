@@ -8,6 +8,7 @@
 
 #include "Core/ReflectionMacros.h"
 #include "Asset/FAssetFile.h"
+#include "Core/Types.h"
 
 namespace Editor {
 
@@ -81,7 +82,7 @@ namespace Editor {
         /**
          * @brief 현재 열린 선택기의 검색 문자열입니다.
          */
-        std::array<char, 128> mSearch{};
+        Core::TStaticArray<char, 128> mSearch{};
     };
 
 }

@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Core/Archive.h"
+#include <functional>
 
 namespace Serialization {
 
@@ -15,6 +16,8 @@ namespace Serialization {
      */
     class FMemoryArchive final : public Core::FArchive {
     public:
+        using FStringReader = std::function<void(std::string_view, const Core::FString&, std::size_t)>;
+
         /**
          * @brief 기반 아카이브의 복합 값 직렬화 오버로드를 함께 노출합니다.
          * @param[in] Name 직렬화할 필드의 이름입니다.
@@ -41,6 +44,7 @@ namespace Serialization {
          * @return 로드 아카이브에서 아직 읽지 않은 바이트 수를 나타내는 정수 값입니다.
          */
         std::size_t GetRemainingBytes() const;
+        void SetStringReader(Serialization::FMemoryArchive::FStringReader Reader);
 
         /**
          * @brief 현재 컨테이너에 지정한 이름의 필드가 있는지 검사합니다.
@@ -139,6 +143,7 @@ namespace Serialization {
          * @brief 로드 바이트 배열에서 다음에 읽을 위치입니다.
          */
         std::size_t mReadOffset{};
+        Serialization::FMemoryArchive::FStringReader mStringReader{};
     };
 
 }

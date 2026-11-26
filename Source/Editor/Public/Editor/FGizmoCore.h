@@ -17,8 +17,6 @@
 #include "Engine/FHitProxy.h"
 #include "Editor/FGizmoSettings.h"
 
-#include <array>
-
 namespace Engine {
     class AActor;
 }
@@ -77,7 +75,7 @@ namespace Editor {
         /**
          * @brief 기즈모의 세 단위 축입니다.
          */
-        std::array<FVector, 3> mAxes{};
+        Core::TStaticArray<FVector, 3> mAxes{};
 
         /**
          * @brief 표시하고 드래그할 변환 모드입니다.
@@ -101,7 +99,8 @@ namespace Editor {
          * @brief 기즈모의 기본 X·Y·Z 단위 축을 반환합니다.
          * @return 월드 좌표계의 세 단위 축입니다.
          */
-        static const std::array<FVector, 3>& GetUnitAxes();
+        static const Core::TStaticArray<FVector, 3>& GetUnitAxes();
+        static const Core::TStaticArray<FVector, 3>& GetAxisColors();
 
         /**
          * @brief 기즈모 핸들이 주어진 로컬 축에 영향을 주는지 검사합니다.
@@ -202,7 +201,7 @@ namespace Editor {
          * @brief 드래그 시작 시 고정한 세 기저 축을 반환합니다.
          * @return 시작 시점의 기저 축입니다.
          */
-        const std::array<FVector, 3>& GetDragAxes() const;
+        const Core::TStaticArray<FVector, 3>& GetDragAxes() const;
 
         /**
          * @brief 현재 드래그의 누적 월드 이동량을 반환합니다.
@@ -312,7 +311,7 @@ namespace Editor {
         /**
          * @brief 드래그 시작 시 고정하여 대상 회전과 독립적으로 유지할 세 기저 축입니다.
          */
-        std::array<FVector, 3> mDragAxes{};
+        Core::TStaticArray<FVector, 3> mDragAxes{};
 
         /**
          * @brief 퇴화한 드래그 평면의 대체 계산이나 스케일에 사용할 화면 방향입니다.
@@ -322,12 +321,12 @@ namespace Editor {
         /**
          * @brief 각 프레임의 회전을 더하여 여러 바퀴 회전도 유지하는 라디안 각도입니다.
          */
-        float mRawAngle{};
+        Core::FAngle mRawAngle{};
 
         /**
          * @brief 각도 스냅을 적용한 실제 라디안 회전량입니다.
          */
-        float mAppliedAngle{};
+        Core::FAngle mAppliedAngle{};
 
         /**
          * @brief 스냅을 적용한 스케일 변화량입니다.

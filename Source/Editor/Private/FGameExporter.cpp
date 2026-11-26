@@ -105,7 +105,8 @@ namespace Editor {
             }
 
             CopyDirectory(Project.GetAssets()->GetContentRoot(), Output / "Content");
-            CopyDirectory(Runtime / "Templates", Output / "Templates");
+            CopyDirectory(Project.GetAssets()->GetEngineContentRoot(), Output / "Engine/Content");
+            CopyDirectory(Project.GetAssets()->GetEngineShaderRoot(), Output / "Engine/Shaders");
             CopyFile(Project.GetFilePath(), Output / "Game.mproject");
 
             std::filesystem::path ExecutableName{Project.GetFilePath().filename()};

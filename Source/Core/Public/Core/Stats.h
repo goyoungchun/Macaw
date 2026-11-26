@@ -10,7 +10,6 @@
 #include "Core/ReflectionMacros.h"
 
 #include <chrono>
-#include <mutex>
 #include <string_view>
 
 namespace Core {
@@ -274,7 +273,7 @@ namespace Core {
         /**
          * @brief 최근 최대 120프레임의 값을 저장하는 순환 이력입니다.
          */
-        std::array<double, 120> mHistory{};
+        Core::TStaticArray<double, 120> mHistory{};
 
         /**
          * @brief 다음 완료 프레임 값을 기록할 순환 이력 위치입니다.
@@ -380,7 +379,7 @@ namespace Core {
         void Unregister(Core::FStat* Stat);
 
         /**
-         * @brief 뮤텍스로 보호하여 유한한 값의 누적 또는 교체를 반영합니다.
+         * @brief 유한한 값의 누적 또는 교체를 반영합니다.
          * @param[in,out] Stat 기록하거나 집계할 통계 항목이며 소유권을 이전하지 않습니다.
          * @param[in] Value 기록할 유한한 통계 값입니다.
          * @param[in] Replace true이면 현재 값을 교체하고 false이면 입력값을 더합니다.
@@ -395,11 +394,6 @@ namespace Core {
         Core::FStatSnapshot MakeSnapshot(const Core::FStat& Stat) const;
 
     private:
-        /**
-         * @brief 통계 등록·기록·조회와 프레임 경계 처리를 보호하는 뮤텍스입니다.
-         */
-        mutable std::mutex mMutex{};
-
         /**
          * @brief 현재 수명이 유지되는 등록 통계 항목의 비소유 주소 목록입니다.
          */

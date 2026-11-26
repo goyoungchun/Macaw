@@ -9,6 +9,7 @@
 #include "Core/ReflectionMacros.h"
 #include "Core/Types.h"
 #include "Core/Math/FVector.h"
+#include "Core/Literals/UnitLiterals.h"
 #include "Engine/UCameraModifier.h"
 #include <random>
 #include "UCameraShakeModifier.generated.h"
@@ -45,7 +46,7 @@ namespace Engine {
          * @param[in,out] ViewInfo 흔들 시점입니다.
          * @return 뒤 순서의 모디파이어도 적용하도록 항상 false입니다.
          */
-        bool ModifyCamera(float DeltaTime, Engine::FMinimalViewInfo& ViewInfo) override;
+        bool ModifyCamera(Core::FTime DeltaTime, Engine::FMinimalViewInfo& ViewInfo) override;
 
         /**
          * @brief 새 셰이크를 재생합니다.
@@ -58,7 +59,7 @@ namespace Engine {
          * @param[in] BlendOutTime 끝날 때 세기가 0이 되기까지의 초 단위 시간입니다.
          * @return 셰이크 식별 번호이며 인자가 유효하지 않으면 0입니다.
          */
-        Int32 StartShake(float Duration, float Frequency, const FVector& LocationAmplitude, const FVector& RotationAmplitude, float FieldOfViewAmplitude, float BlendInTime, float BlendOutTime);
+        Int32 StartShake(Core::FTime Duration, Core::FFrequency Frequency, const FVector& LocationAmplitude, const FVector& RotationAmplitude, Core::FAngle FieldOfViewAmplitude, Core::FTime BlendInTime, Core::FTime BlendOutTime);
 
         /**
          * @brief 재생 중인 셰이크를 멈춥니다.
@@ -93,12 +94,12 @@ namespace Engine {
             /**
              * @brief 재생 시간이며 0 이하이면 멈출 때까지 계속합니다.
              */
-            float mDuration{};
+            Core::FTime mDuration{};
 
             /**
              * @brief 초당 진동 횟수입니다.
              */
-            float mFrequency{};
+            Core::FFrequency mFrequency{};
 
             /**
              * @brief 카메라 기준 최대 이동량입니다.
@@ -113,27 +114,27 @@ namespace Engine {
             /**
              * @brief 시야각 최대 변화량입니다.
              */
-            float mFieldOfViewAmplitude{};
+            Core::FAngle mFieldOfViewAmplitude{};
 
             /**
              * @brief 처음 세기가 1이 되기까지의 시간입니다.
              */
-            float mBlendInTime{};
+            Core::FTime mBlendInTime{};
 
             /**
              * @brief 끝날 때 세기가 0이 되기까지의 시간입니다.
              */
-            float mBlendOutTime{};
+            Core::FTime mBlendOutTime{};
 
             /**
              * @brief 시작한 뒤 지난 시간입니다.
              */
-            float mElapsed{};
+            Core::FTime mElapsed{};
 
             /**
              * @brief StopShake로 줄이기 시작한 시각이며 음수이면 멈추는 중이 아닙니다.
              */
-            float mStopTime{-1.0f};
+            Core::FTime mStopTime{mNotStopping};
 
             /**
              * @brief 위치·회전·시야각 7개 축의 시작 위상이며 라디안입니다.
@@ -154,6 +155,8 @@ namespace Engine {
         static float EvaluateWeight(const FActiveShake& Shake);
 
     private:
+        static const Core::FTime mNotStopping;
+
         /**
          * @brief 재생 중인 셰이크 목록입니다.
          */

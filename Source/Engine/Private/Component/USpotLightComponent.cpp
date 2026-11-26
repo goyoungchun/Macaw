@@ -5,16 +5,22 @@
  */
 
 #include "Engine/Component/USpotLightComponent.h"
+#include "Core/Literals/AngleFunctions.h"
 
 #include <algorithm>
 #include <cmath>
+
+using namespace Core::Literals;
 
 namespace Engine {
 
     /**
      * @brief USpotLightComponent의 기본 상태를 초기화합니다.
      */
-    Engine::USpotLightComponent::USpotLightComponent() = default;
+    Engine::USpotLightComponent::USpotLightComponent()
+		: mInnerConeAngle{20_deg},
+		  mOuterConeAngle{35_deg} {
+    }
 
     /**
      * @brief USpotLightComponent 객체의 수명을 끝내고 소유 자원을 정리합니다.
@@ -36,15 +42,15 @@ namespace Engine {
     /**
      * @brief 스포트라이트 내부 원뿔의 반각(도)를 반환합니다.
      */
-    float Engine::USpotLightComponent::GetInnerConeAngle() const {
+    Core::FAngle Engine::USpotLightComponent::GetInnerConeAngle() const {
         return mInnerConeAngle;
     }
 
     /**
      * @brief 스포트라이트 내부 원뿔의 반각(도)를 검증하고 변경합니다.
      */
-    bool Engine::USpotLightComponent::SetInnerConeAngle(float InnerConeAngle) {
-        if (!std::isfinite(InnerConeAngle) || InnerConeAngle < 0.0f || InnerConeAngle >= 89.0f) {
+    bool Engine::USpotLightComponent::SetInnerConeAngle(Core::FAngle InnerConeAngle) {
+        if (!InnerConeAngle.IsFinite() || InnerConeAngle < 0_deg || InnerConeAngle >= 89_deg) {
             return false;
         }
 
@@ -59,15 +65,15 @@ namespace Engine {
     /**
      * @brief 스포트라이트 외부 원뿔의 반각(도)를 반환합니다.
      */
-    float Engine::USpotLightComponent::GetOuterConeAngle() const {
+    Core::FAngle Engine::USpotLightComponent::GetOuterConeAngle() const {
         return mOuterConeAngle;
     }
 
     /**
      * @brief 스포트라이트 외부 원뿔의 반각(도)를 검증하고 변경합니다.
      */
-    bool Engine::USpotLightComponent::SetOuterConeAngle(float OuterConeAngle) {
-        if (!std::isfinite(OuterConeAngle) || OuterConeAngle < 0.0f || OuterConeAngle >= 89.0f) {
+    bool Engine::USpotLightComponent::SetOuterConeAngle(Core::FAngle OuterConeAngle) {
+        if (!OuterConeAngle.IsFinite() || OuterConeAngle < 0_deg || OuterConeAngle >= 89_deg) {
             return false;
         }
 

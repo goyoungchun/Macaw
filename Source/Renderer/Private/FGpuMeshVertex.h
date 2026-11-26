@@ -7,8 +7,8 @@
 #pragma once
 
 #include "Core/ReflectionMacros.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <cstddef>
 #include <type_traits>
 
@@ -34,12 +34,12 @@ namespace Renderer {
         /**
          * @brief 정점 위치입니다.
          */
-        std::array<float, 3> mPosition{};
+        Core::TStaticArray<float, 3> mPosition{};
 
         /**
          * @brief 정점 법선입니다.
          */
-        std::array<float, 3> mNormal{};
+        Core::TStaticArray<float, 3> mNormal{};
     };
 
     static_assert(std::is_standard_layout_v<Renderer::FGpuMeshVertex> && std::is_trivially_copyable_v<Renderer::FGpuMeshVertex>);

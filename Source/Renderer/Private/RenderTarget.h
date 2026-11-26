@@ -10,8 +10,8 @@
 #include "Engine/FRenderTarget.h"
 #include "Asset/UTexture2D.h"
 #include "GBuffer.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <d3d11.h>
 #include <wrl/client.h>
 
@@ -23,11 +23,18 @@ namespace Renderer {
      */
     class FDXRenderTarget final : public Engine::FRenderTarget {
     public:
+        /** @brief 절반 해상도의 전경·배경 분리 및 블러 결과 텍스처입니다. */
+        struct FDepthOfFieldTargets {
+            Core::TStaticArray<std::unique_ptr<Asset::UTexture2D>, 2> mSeparated{};
+            Core::TStaticArray<std::unique_ptr<Asset::UTexture2D>, 2> mBlurred{};
+            /** @brief 절반 해상도 텍셀의 전경·배경 착란원 반경(절반 해상도 텍셀 단위)을 RG에 저장합니다. */
+            std::unique_ptr<Asset::UTexture2D> mCircleOfConfusion{};
+        };
 
         /**
          * @brief FDXRenderTarget의 초기 상태와 전달받은 의존성을 구성합니다.
          */
-        FDXRenderTarget();
+        explicit FDXRenderTarget(bool ForwardShading = false);
 
         /**
          * @brief 객체의 수명을 끝내고 소유한 리소스를 정리합니다.
@@ -91,7 +98,7 @@ namespace Renderer {
          * @brief 표면 속성을 저장하는 GBuffer 텍스처를 반환합니다.
          * @return 타깃이 소유하는 텍스처 배열의 읽기 전용 참조입니다.
          */
-        const std::array<std::unique_ptr<Asset::UTexture2D>, Renderer::GBuffer::AttachmentCount>& GetGBuffer() const;
+        const Core::TStaticArray<std::unique_ptr<Asset::UTexture2D>, Renderer::GBuffer::AttachmentCount>& GetGBuffer() const;
 
         /**
          * @brief 데칼 노멀 혼합에 필요한 원본 또는 누적 노멀 복사본을 준비합니다.
@@ -125,6 +132,9 @@ namespace Renderer {
          */
         Asset::UTexture2D* GetSceneDepth() const;
 
+        /** @brief 현재 뷰포트 크기의 DOF 텍스처를 필요할 때 생성합니다. */
+        const FDepthOfFieldTargets* PrepareDepthOfFieldTargets();
+
         /**
          * @brief 현재 보유한 GPU 리소스의 추정 바이트 수를 반환합니다.
          * @return 현재 보유한 GPU 리소스의 추정 바이트 수를 나타내는 정수 값입니다.
@@ -145,6 +155,7 @@ namespace Renderer {
          * @brief UI 샘플링에 사용할 셰이더 리소스 뷰입니다.
          */
         std::unique_ptr<Asset::UTexture2D> mColor{};
+        const bool mForwardShading{};
 
         /**
          * @brief 후처리 입력 컬러와 다중 안개 합성의 교대 출력으로 사용하는 텍스처입니다.
@@ -155,6 +166,8 @@ namespace Renderer {
          * @brief 다중 안개를 읽기·쓰기 충돌 없이 합성하기 위한 교대 컬러 텍스처입니다.
          */
         std::unique_ptr<Asset::UTexture2D> mPostProcessColor{};
+
+        std::unique_ptr<FDepthOfFieldTargets> mDepthOfFieldTargets{};
 
         /**
          * @brief 깊이 텍스처입니다.
@@ -178,7 +191,7 @@ namespace Renderer {
         /**
          * @brief 지연 렌더링의 표면 속성 텍스처를 소유합니다.
          */
-        std::array<std::unique_ptr<Asset::UTexture2D>, Renderer::GBuffer::AttachmentCount> mGBuffer{};
+        Core::TStaticArray<std::unique_ptr<Asset::UTexture2D>, Renderer::GBuffer::AttachmentCount> mGBuffer{};
 
         /**
          * @brief 데칼 적용 전 노멀을 읽기 위해 소유한 복사 텍스처입니다.

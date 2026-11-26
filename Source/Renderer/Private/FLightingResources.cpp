@@ -42,7 +42,7 @@ namespace Renderer {
     /**
      * @brief 현재 뷰의 타일 광원 목록과 카메라 상수를 GPU에 업로드합니다.
      */
-    bool FLightingResources::Upload(ID3D11Device* Device, ID3D11DeviceContext* Context, std::span<const Engine::FLightSceneProxy> Lights, const Engine::FSceneView& View, std::span<const std::array<Uint32, 2>> ShadowRanges) {
+    bool FLightingResources::Upload(ID3D11Device* Device, ID3D11DeviceContext* Context, std::span<const Engine::FLightSceneProxy> Lights, const Engine::FSceneView& View, std::span<const Core::TStaticArray<Uint32, 2>> ShadowRanges) {
         static Core::FStat PrepareTime{"render", "GPU light culling submission CPU", Core::EStatUnit::Milliseconds};
         static Core::FStat SubmittedLights{"render", "Input lights (sum of views)"};
         const Core::FScopedStatTimer StatTimer{PrepareTime};
@@ -59,7 +59,8 @@ namespace Renderer {
                 continue;
             }
 
-            mLights.push_back({{Light.mPosition, Light.mAttenuationRadius}, {Light.mDirection, static_cast<float>(Light.mType)}, {Light.mColor.x, Light.mColor.y, Light.mColor.z, Light.mIntensity}, {Light.mLightFalloffExponent, Core::Math::Cos(Light.mInnerConeAngle * 1_deg), Core::Math::Cos(Light.mOuterConeAngle * 1_deg), 0.0f}});
+            const float SourceAngularRadius{Light.mType == Engine::ELightType::Directional ? Light.mShadowSourceAngle.GetBase() : 0.0f};
+            mLights.push_back({{Light.mPosition, Light.mAttenuationRadius.GetBase()}, {Light.mDirection, static_cast<float>(Light.mType)}, {Light.mColor.x, Light.mColor.y, Light.mColor.z, Light.mIntensity}, {Light.mLightFalloffExponent, Core::Math::Cos(Light.mInnerConeAngle), Core::Math::Cos(Light.mOuterConeAngle), SourceAngularRadius}});
 
             if (Index < ShadowRanges.size()) {
                 mLights.back().mShadowInfo = {static_cast<float>(ShadowRanges[Index][0]), static_cast<float>(ShadowRanges[Index][1]), 0.0f, 0.0f};

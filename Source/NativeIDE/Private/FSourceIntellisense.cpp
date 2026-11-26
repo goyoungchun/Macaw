@@ -1,14 +1,16 @@
 #include "FSourceIntellisense.h"
 #include "Core/FilePath.h"
+#include "Core/Types.h"
 
 #include <rapidjson/document.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 #include <algorithm>
-#include <array>
 #include <charconv>
 #include <string_view>
 #include <utility>
+
+using namespace std::chrono_literals;
 
 using namespace NativeIDE;
 
@@ -17,7 +19,7 @@ namespace {
     constexpr size_t ServerDiagnostic{2};
 
     std::filesystem::path GetProgramDirectory() {
-        std::array<wchar_t, 32768> Executable{};
+        Core::TStaticArray<wchar_t, 32768> Executable{};
         const DWORD Count{GetModuleFileNameW(nullptr, Executable.data(), static_cast<DWORD>(Executable.size()))};
         return Count > 0 && Count < Executable.size() ? std::filesystem::path{Executable.data()}.parent_path() : std::filesystem::path{};
     }
@@ -141,7 +143,9 @@ bool FSourceIntellisense::StartServer(const std::filesystem::path& Workspace) {
 std::string FSourceIntellisense::GetShaderSettings() const {
     const auto ProjectShaders{Core::FilePath::ToGenericUtf8(mWorkspace / L"Shaders")};
 
-    return R"({"validate":false,"includes":[)" + QuoteJson(ProjectShaders) + "]}";
+    const auto EngineShaders{Core::FilePath::ToGenericUtf8(Core::FilePath::GetEngineShaderRoot())};
+
+    return R"({"validate":false,"includes":[)" + QuoteJson(ProjectShaders) + "," + QuoteJson(EngineShaders) + "]}";
 }
 
 void FSourceIntellisense::Close() {
@@ -163,7 +167,7 @@ void FSourceIntellisense::Edit(std::string Source) {
     CancelCompletion();
     mSource = std::move(Source);
     ++mVersion;
-    mCheckAt = std::chrono::steady_clock::now() + std::chrono::milliseconds{200};
+    mCheckAt = std::chrono::steady_clock::now() + 200ms;
 }
 
 void FSourceIntellisense::Save() {
@@ -227,7 +231,7 @@ void FSourceIntellisense::Update() {
 
 void FSourceIntellisense::UpdateValidation() {
     if (mValidation.valid()) {
-        if (mValidation.wait_for(std::chrono::seconds{0}) != std::future_status::ready) {
+        if (mValidation.wait_for(0s) != std::future_status::ready) {
             return;
         }
 

@@ -6,7 +6,6 @@
 
 #include "Engine/ADecalActor.h"
 
-#include "CoreUObject/Reflection/Cast.h"
 #include "CoreUObject/Reflection/NewObject.h"
 #include "Engine/Component/UDecalComponent.h"
 
@@ -24,7 +23,7 @@ namespace Engine {
     }
 
     Engine::UDecalComponent* Engine::ADecalActor::GetDecalComponent() const {
-        return CoreUObject::Cast<Engine::UDecalComponent>(GetRootComponent());
+        return static_cast<Engine::UDecalComponent*>(FindDefaultComponent(Engine::UDecalComponent::StaticClass(), Core::FName{"DecalComponent"}));
     }
 
 }

@@ -1,6 +1,6 @@
 /**
  * @file FEditorToolkit.cpp
- * @brief 에디터 기능 단위의 프레임 갱신·그리기·닫기 확인 인터페이스입니다.
+ * @brief 에디터 기능 단위의 프레임 갱신·그리기 인터페이스입니다.
  * @ingroup Editor
  */
 
@@ -11,7 +11,3 @@ using namespace Editor;
 FEditorToolkit::FEditorToolkit() = default;
 
 FEditorToolkit::~FEditorToolkit() = default;
-
-bool FEditorToolkit::CanClose() {
-    return true;
-}

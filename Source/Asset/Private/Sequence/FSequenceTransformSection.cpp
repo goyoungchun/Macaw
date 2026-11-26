@@ -18,7 +18,7 @@ namespace Asset {
         /**
          * @brief 변환 섹션의 위치·회전·스케일 채널 이름입니다.
          */
-        constexpr std::array<const char*, Asset::FSequenceTransformSection::ChannelCount> ChannelNames{"LocationX", "LocationY", "LocationZ", "RotationPitch", "RotationYaw", "RotationRoll", "ScaleX", "ScaleY", "ScaleZ"};
+        constexpr Core::TStaticArray<const char*, Asset::FSequenceTransformSection::ChannelCount> ChannelNames{"LocationX", "LocationY", "LocationZ", "RotationPitch", "RotationYaw", "RotationRoll", "ScaleX", "ScaleY", "ScaleZ"};
     }
 
     /**

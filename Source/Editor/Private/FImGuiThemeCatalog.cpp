@@ -10,7 +10,6 @@
 
 #include <toml++/toml.hpp>
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -146,7 +145,7 @@ namespace Editor {
                 std::replace(Components.begin(), Components.end(), ',', ' ');
 
                 std::istringstream Input{Components};
-                std::array<float, 4> Channels{};
+                Core::TStaticArray<float, 4> Channels{};
 
                 for (float& Channel : Channels) {
                     if (!(Input >> Channel) || !std::isfinite(Channel)) {

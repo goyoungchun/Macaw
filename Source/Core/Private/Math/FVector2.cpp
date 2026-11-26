@@ -5,8 +5,10 @@
  */
 
 #include "Core/Math/FVector2.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Math/SimdMath.h"
 #include "Core/Math/MathUtility.h"
+#include "Core/Types.h"
 
 #include <algorithm>
 #include <cmath>
@@ -279,9 +281,12 @@ float FVector2::Cross(const FVector2& Other) const {
  * @brief 2차원 벡터를 도 단위 각도만큼 회전합니다.
  */
 FVector2 FVector2::Rotated(float Degrees) const {
-    const float Radians{Core::Math::ToRadians(Degrees)};
-    const float Sine{std::sin(Radians)};
-    const float Cosine{std::cos(Radians)};
+    return Rotated(Core::FAngle::FromBase(Core::Math::ToRadians(Degrees)));
+}
+
+FVector2 FVector2::Rotated(Core::FAngle Angle) const {
+    const float Sine{Core::Math::Sin(Angle)};
+    const float Cosine{Core::Math::Cos(Angle)};
 
     return {x * Cosine - y * Sine, x * Sine + y * Cosine};
 }
@@ -289,6 +294,6 @@ FVector2 FVector2::Rotated(float Degrees) const {
 /**
  * @brief 유효한 성분을 원래 순서의 일반 배열로 반환합니다.
  */
-std::array<float, 2> FVector2::ToArray() const {
+Core::TStaticArray<float, 2> FVector2::ToArray() const {
     return {x, y};
 }

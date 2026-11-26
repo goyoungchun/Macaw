@@ -3,8 +3,8 @@
 #include "Render/FMeshDrawState.h"
 #include "Render/FMeshDrawPipelineState.h"
 #include "Asset/Pipeline/UPipeline.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <memory>
 
 struct FMeshDrawCommand {
@@ -12,10 +12,10 @@ struct FMeshDrawCommand {
     Uint32 mMaterialIndex{};
     FName mMaterialSlotName{};
     ERenderPass mPass{ERenderPass::Opaque};
-    std::array<FMeshDrawPipelineState, static_cast<std::size_t>(ERenderMode::Max)> mPipelineStates{};
-    std::array<Microsoft::WRL::ComPtr<ID3D11Buffer>, 4> mVertexBuffers{};
-    std::array<Uint32, 4> mVertexStrides{};
-    std::array<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>, MaxMaterialTextureFields> mTextures{};
+    Core::TStaticArray<FMeshDrawPipelineState, static_cast<std::size_t>(ERenderMode::Max)> mPipelineStates{};
+    Core::TStaticArray<Microsoft::WRL::ComPtr<ID3D11Buffer>, 4> mVertexBuffers{};
+    Core::TStaticArray<Uint32, 4> mVertexStrides{};
+    Core::TStaticArray<Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>, MaxMaterialTextureFields> mTextures{};
 };
 
 struct FVisibleMeshDrawCommand {

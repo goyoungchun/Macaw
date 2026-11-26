@@ -6,11 +6,69 @@
 
 #include "Core/FilePath.h"
 
+#include <Windows.h>
 #include <algorithm>
 #include <cwctype>
 #include <utility>
 
 namespace Core {
+
+    FilePath::EContentMount FilePath::GetContentMount(const std::filesystem::path& Path, std::filesystem::path* RelativePath) {
+        if (Path.empty() || Path.has_root_name() || Path.native().find(L'\0') != std::wstring::npos || Path.native().find(L':') != std::wstring::npos) {
+            return EContentMount::Invalid;
+        }
+
+        EContentMount Mount{EContentMount::Game};
+        auto Part{Path.begin()};
+
+        if (Path.has_root_directory()) {
+            ++Part;
+
+            if (Part == Path.end()) {
+                return EContentMount::Invalid;
+            }
+
+            const auto Name{ToLower(*Part)};
+            ++Part;
+
+            if (Name == L"engine") {
+                Mount = EContentMount::Engine;
+            } else if (Name != L"game") {
+                return EContentMount::Invalid;
+            }
+        }
+
+        std::filesystem::path Relative{};
+
+        for (; Part != Path.end(); ++Part) {
+            if (*Part == L"..") {
+                return EContentMount::Invalid;
+            }
+
+            if (RelativePath != nullptr) {
+                Relative /= *Part;
+            }
+        }
+
+        if (RelativePath != nullptr) {
+            *RelativePath = std::move(Relative);
+        }
+
+        return Mount;
+    }
+
+    std::filesystem::path FilePath::GetEngineContentRoot() {
+        Core::TStaticArray<wchar_t, 32768> Executable{};
+        const DWORD Length{GetModuleFileNameW(nullptr, Executable.data(), static_cast<DWORD>(Executable.size()))};
+
+        return Length > 0 && Length < Executable.size() ? std::filesystem::path{Executable.data()}.parent_path() / "Engine/Content" : std::filesystem::path{};
+    }
+
+    std::filesystem::path FilePath::GetEngineShaderRoot() {
+        const auto EngineContentRoot{GetEngineContentRoot()};
+
+        return EngineContentRoot.empty() ? std::filesystem::path{} : EngineContentRoot.parent_path() / "Shaders";
+    }
 
     /**
      * @brief 네이티브 경로 구분자를 유지한 UTF-8 문자열을 반환합니다.

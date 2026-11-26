@@ -20,6 +20,7 @@ namespace Editor {
      * @note 함수는 현재 ImGui 컨텍스트와 창을 사용하며 뷰포트 명령이나 편집 상태를 소유하지 않습니다.
      */
     namespace EditorStyle {
+
         /**
          * @brief 최상위 탭 표시줄에서 브랜드 영역에 확보할 기준 너비입니다.
          */
@@ -276,6 +277,8 @@ namespace Editor {
          * @pre 현재 ImGui 프레임이 유효해야 합니다.
          */
         float GetLabelButtonWidth(const char* Label, const EIcon* Icon = nullptr, bool Dropdown = false);
+
+        void DrawFieldLabel(const char* Label, float LabelWidth = -1.0f, float FieldWidth = -1.0f);
 
         /**
          * @brief 에셋 에디터 툴바의 찾아보기 버튼이 콘텐츠 브라우저에서 에셋을 선택할 때 호출할 처리기를 지정합니다.

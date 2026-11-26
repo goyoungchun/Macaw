@@ -201,7 +201,7 @@ namespace Editor {
         /**
          * @brief 통계 패널의 그룹·항목 이름 검색 버퍼입니다.
          */
-        std::array<char, 128> mFilter{};
+        Core::TStaticArray<char, 128> mFilter{};
     };
 
 }

@@ -28,11 +28,18 @@
     "lua-language-server",
     "luajit",
     "nvapi",
+    "nvcloth",
     "physx",
     "range-v3",
     "rapidjson",
     "sol2",
     "stb",
     "tomlplusplus"
+  ],
+  "overrides": [
+    {
+      "name": "physx",
+      "version-semver": "4.1.2#2"
+    }
   ]
 }

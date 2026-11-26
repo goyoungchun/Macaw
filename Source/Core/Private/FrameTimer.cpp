@@ -5,8 +5,11 @@
  */
 
 #include "Core/FrameTimer.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include <algorithm>
+
+using namespace Core::Literals;
 
 namespace Core {
 
@@ -20,13 +23,13 @@ namespace Core {
     /**
      * @brief 이전 호출 이후 경과한 시간을 초 단위로 반환하고 기준 시각을 갱신합니다.
      */
-    float Core::FFrameTimer::Tick() {
+    Core::FTime Core::FFrameTimer::Tick() {
         const auto Current{std::chrono::steady_clock::now()};
-        const float Delta{std::chrono::duration<float>{Current - mPrevious}.count()};
+        const Core::FTime Delta{Core::FTime::FromBase(std::chrono::duration<float>{Current - mPrevious}.count())};
 
         mPrevious = Current;
 
-        return std::clamp(Delta, 0.000001f, 0.1f);
+        return std::clamp(Delta, 0.000001_s, 0.1_s);
     }
 
 }

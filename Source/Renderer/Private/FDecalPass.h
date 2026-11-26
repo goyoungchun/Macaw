@@ -9,8 +9,8 @@
 #include "Core/Math/FMatrix.h"
 #include "Core/Math/FVector4.h"
 #include "RenderCore/TConstantBuffer.h"
+#include "Core/Types.h"
 
-#include <array>
 #include <d3d11.h>
 #include <span>
 #include <wrl/client.h>
@@ -55,7 +55,7 @@ namespace Renderer {
             /**
              * @brief 색상 텍스처 존재·색상 출력 활성화 플래그와 예약 값입니다.
              */
-            std::array<Uint32, 4> mTextureFlags{};
+            Core::TStaticArray<Uint32, 4> mTextureFlags{};
         };
 
         static_assert(sizeof(FConstants) == 160);

@@ -7,6 +7,7 @@
 #pragma once
 
 #include "CoreUObject/TObjectRef.h"
+#include "Core/Literals/UnitLiterals.h"
 
 #include "Engine/Component/USceneComponent.h"
 #include "Engine/FHeightFogSceneProxy.h"
@@ -42,66 +43,66 @@ namespace Engine {
          * @brief 안개 기준 높이의 밀도를 반환합니다.
          * @return 거리당 안개 밀도이며 기본값은 0.02입니다.
          */
-        float GetFogDensity() const;
+        Core::FInverseLength GetFogDensity() const;
 
         /**
          * @brief 0~10 범위의 유한한 안개 밀도를 설정하고 장면 프록시를 갱신합니다.
          * @param[in] Density 안개 기준 높이에 적용할 유한한 0~10 밀도입니다.
          * @return 유효한 값을 적용하면 true이며 범위를 벗어나면 기존 값을 유지하고 false입니다.
          */
-        bool SetFogDensity(float Density);
+        bool SetFogDensity(Core::FInverseLength Density);
 
         /**
          * @brief 높이에 따른 안개 밀도의 지수 감쇠 계수를 반환합니다.
          * @return 높이 감쇠 계수이며 0이면 높이에 따라 밀도가 변하지 않습니다.
          */
-        float GetFogHeightFalloff() const;
+        Core::FInverseLength GetFogHeightFalloff() const;
 
         /**
          * @brief 0~100 범위의 유한한 높이 감쇠 계수를 적용하고 장면을 동기화합니다.
          * @param[in] Falloff 밀도의 높이 감쇠에 사용할 유한한 0~100 계수입니다.
          * @return 유효한 값을 적용하면 true이며 유효하지 않으면 false입니다.
          */
-        bool SetFogHeightFalloff(float Falloff);
+        bool SetFogHeightFalloff(Core::FInverseLength Falloff);
 
         /**
          * @brief 카메라에서 안개 적분을 시작하는 거리를 반환합니다.
          * @return 0 이상의 월드 거리입니다.
          */
-        float GetStartDistance() const;
+        Core::FLength GetStartDistance() const;
 
         /**
          * @brief 0 이상의 유한한 안개 시작 거리를 설정하고 장면 프록시를 갱신합니다.
          * @param[in] Distance 0 이상의 유한한 월드 거리입니다.
          * @return 값을 적용하면 true이며 음수 또는 비유한 값이면 false입니다.
          */
-        bool SetStartDistance(float Distance);
+        bool SetStartDistance(Core::FLength Distance);
 
         /**
          * @brief 안개를 적분할 최대 거리를 반환합니다.
          * @return 적분 종료 거리이며 0이면 종료 거리 제한이 없습니다.
          */
-        float GetEndDistance() const;
+        Core::FLength GetEndDistance() const;
 
         /**
          * @brief 안개 적분의 종료 거리를 설정하며 0이면 거리 상한을 해제합니다.
          * @param[in] Distance 0 이상의 유한한 월드 거리입니다.
          * @return 0 이상의 유한한 값을 적용하면 true이며 그렇지 않으면 false입니다.
          */
-        bool SetEndDistance(float Distance);
+        bool SetEndDistance(Core::FLength Distance);
 
         /**
          * @brief 먼 표면을 안개 적용에서 제외하는 경계 거리를 반환합니다.
          * @return 적용 제외 경계 거리이며 0이면 거리로 제외하지 않습니다.
          */
-        float GetFogCutoffDistance() const;
+        Core::FLength GetFogCutoffDistance() const;
 
         /**
          * @brief 이 거리보다 먼 표면의 안개를 생략하도록 설정하며 0이면 제한을 해제합니다.
          * @param[in] Distance 0 이상의 유한한 월드 거리입니다.
          * @return 0 이상의 유한한 값을 적용하면 true이며 그렇지 않으면 false입니다.
          */
-        bool SetFogCutoffDistance(float Distance);
+        bool SetFogCutoffDistance(Core::FLength Distance);
 
         /**
          * @brief 안개 불투명도의 상한을 반환합니다.
@@ -172,43 +173,43 @@ namespace Engine {
         /**
          * @brief 기준 높이의 안개 밀도이며 유한한 0~10 범위를 허용합니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetFogDensity, Setter = SetFogDensity)
-        float mFogDensity{0.02f};
+        UPROPERTY(Edit, Serialize, Category = "Fog", Getter = GetFogDensity, Setter = SetFogDensity)
+        Core::FInverseLength mFogDensity{};
 
         /**
          * @brief 높이에 따른 지수 밀도 감쇠 계수이며 0~100 범위를 허용합니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetFogHeightFalloff, Setter = SetFogHeightFalloff)
-        float mFogHeightFalloff{0.2f};
+        UPROPERTY(Edit, Serialize, Category = "Fog", Getter = GetFogHeightFalloff, Setter = SetFogHeightFalloff)
+        Core::FInverseLength mFogHeightFalloff{};
 
         /**
          * @brief 카메라부터 안개 적분을 시작하는 월드 거리입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetStartDistance, Setter = SetStartDistance)
-        float mStartDistance{};
+        UPROPERTY(Edit, Serialize, Category = "Fog", Getter = GetStartDistance, Setter = SetStartDistance)
+        Core::FLength mStartDistance{};
 
         /**
          * @brief 안개 적분을 종료하는 월드 거리이며 0이면 거리 제한을 두지 않습니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetEndDistance, Setter = SetEndDistance)
-        float mEndDistance{1000.0f};
+        UPROPERTY(Edit, Serialize, Category = "Fog", Getter = GetEndDistance, Setter = SetEndDistance)
+        Core::FLength mEndDistance{};
 
         /**
          * @brief 이 거리보다 먼 물체의 안개를 생략하며 0이면 거리 제한이 없습니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetFogCutoffDistance, Setter = SetFogCutoffDistance)
-        float mFogCutoffDistance{};
+        UPROPERTY(Edit, Serialize, Category = "Fog", Getter = GetFogCutoffDistance, Setter = SetFogCutoffDistance)
+        Core::FLength mFogCutoffDistance{};
 
         /**
          * @brief 최종 안개 불투명도의 0~1 상한입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetFogMaxOpacity, Setter = SetFogMaxOpacity)
+        UPROPERTY(Edit, Serialize, Category = "Fog", Getter = GetFogMaxOpacity, Setter = SetFogMaxOpacity)
         float mFogMaxOpacity{1.0f};
 
         /**
          * @brief 장면 색상과 혼합할 기본 산란 색상이며 각 RGBA 채널은 0~1 범위입니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = GetFogInscatteringColor, Setter = SetFogInscatteringColor)
+        UPROPERTY(Edit, Serialize, Category = "Fog", Getter = GetFogInscatteringColor, Setter = SetFogInscatteringColor)
         FVector4 mFogInscatteringColor{0.65f, 0.75f, 0.85f, 1.0f};
 
         /**

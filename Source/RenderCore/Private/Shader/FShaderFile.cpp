@@ -6,6 +6,7 @@
 
 #include "FShaderFile.h"
 #include "Core/FilePath.h"
+#include "Core/Types.h"
 
 #include <Windows.h>
 #include <bcrypt.h>
@@ -37,7 +38,7 @@ namespace RenderCore {
                 return {};
             }
 
-            std::array<wchar_t, 32768> Path{};
+            Core::TStaticArray<wchar_t, 32768> Path{};
             const DWORD Length{GetModuleFileNameW(Module, Path.data(), static_cast<DWORD>(Path.size()))};
 
             if (Length == 0 || Length >= Path.size()) {
@@ -170,7 +171,7 @@ namespace RenderCore {
             return {};
         }
 
-        std::array<Uint8, 32> Digest{};
+        Core::TStaticArray<Uint8, 32> Digest{};
         const NTSTATUS Status{BCryptHash(Algorithm, nullptr, 0, const_cast<PUCHAR>(Data.data()), static_cast<ULONG>(Data.size()), Digest.data(), static_cast<ULONG>(Digest.size()))};
 
         BCryptCloseAlgorithmProvider(Algorithm, 0);

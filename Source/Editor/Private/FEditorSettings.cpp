@@ -5,6 +5,7 @@
  */
 
 #include "FEditorSettings.h"
+#include "Core/Literals/AngleFunctions.h"
 #include "Editor/Widget/FEditorButtonWidget.h"
 #include "Editor/Widget/FEditorSliderWidget.h"
 #include "Editor/Widget/FEditorCheckBoxWidget.h"
@@ -26,6 +27,7 @@
 #include "Platform/Window.h"
 #include "RenderCore/IRendererModule.h"
 #include "Serialization/JsonArchive.h"
+#include "Core/Types.h"
 #include <imgui_internal.h>
 #include <commdlg.h>
 #include <algorithm>
@@ -33,6 +35,8 @@
 #include <cmath>
 #include <cstring>
 #include <utility>
+
+using namespace Core::Literals;
 
 using namespace Editor;
 
@@ -43,29 +47,31 @@ namespace {
     /**
      * @brief 뷰포트 설정 UI와 직렬화에서 공유하는 표시 이름·ShowFlag 멤버 포인터 목록입니다.
      */
-    const std::array<std::pair<const char*, bool Engine::FEngineShowFlags::*>, 13> ShowOptions{{{"Primitives", &Engine::FEngineShowFlags::mPrimitives},
+    const Core::TStaticArray<std::pair<const char*, bool Engine::FEngineShowFlags::*>, 15> ShowOptions{{{"Primitives", &Engine::FEngineShowFlags::mPrimitives},
         {"Sprites", &Engine::FEngineShowFlags::mSprites},
         {"Text", &Engine::FEngineShowFlags::mText},
         {"Shadows", &Engine::FEngineShowFlags::mShadows},
         {"Sky", &Engine::FEngineShowFlags::mSky},
         {"Fog", &Engine::FEngineShowFlags::mFog},
+        {"Depth of Field", &Engine::FEngineShowFlags::mDepthOfField},
         {"FXAA", &Engine::FEngineShowFlags::mFXAA},
         {"Fog Icons", &Engine::FEngineShowFlags::mFogIcons},
         {"Light Icons", &Engine::FEngineShowFlags::mLightIcons},
         {"Light Visualizers", &Engine::FEngineShowFlags::mLightVisualizers},
         {"Bounds", &Engine::FEngineShowFlags::mBounds},
+        {"Collision", &Engine::FEngineShowFlags::mCollision},
         {"Grid", &Engine::FEngineShowFlags::mGrid},
         {"Axes", &Engine::FEngineShowFlags::mAxes}}};
 
     /**
      * @brief 버퍼 시각화를 제외한 컬러 조명·와이어프레임 표시 모드 목록입니다.
      */
-    const std::array<Engine::EViewMode, 5> ViewModes{Engine::EViewMode::Lit_Gouraud, Engine::EViewMode::Lit_Lambert, Engine::EViewMode::Lit_Phong, Engine::EViewMode::Unlit, Engine::EViewMode::Wireframe};
+    const Core::TStaticArray<Engine::EViewMode, 6> ViewModes{Engine::EViewMode::Lit_Gouraud, Engine::EViewMode::Lit_Lambert, Engine::EViewMode::Lit_Phong, Engine::EViewMode::Unlit, Engine::EViewMode::Wireframe, Engine::EViewMode::PhysicsBodies};
 
     /**
      * @brief 컬러 표시 모드 목록과 같은 순서로 보여 줄 설정 UI 이름입니다.
      */
-    const std::array<const char*, 5> ViewModeNames{"Lit - Gouraud", "Lit - Lambert", "Lit - Phong", "Unlit", "Wireframe"};
+    const Core::TStaticArray<const char*, ViewModes.size()> ViewModeNames{"Lit - Gouraud", "Lit - Lambert", "Lit - Phong", "Unlit", "Wireframe", "Physics Bodies"};
 
     /**
      * @brief 카메라 조작·표시·변환 스냅·통계 그룹 설정을 뷰포트별로 저장하거나 복원합니다.
@@ -74,7 +80,7 @@ namespace {
      * @param[in,out] Statistics 저장하거나 복원할 뷰포트 통계 그룹 설정입니다.
      */
     void SerializeViewport(Serialization::FJsonArchive& Archive, Editor::FEditorViewportClient& Client, Editor::FViewportStatistics& Statistics) {
-        float Speed{Client.GetCameraSpeed()};
+        Core::FSpeed Speed{Client.GetCameraSpeed()};
         float Sensitivity{Client.GetCameraSensitivity()};
         float Spacing{Client.GetGridSpacing()};
         float Thickness{Client.GetLineThickness()};
@@ -101,7 +107,7 @@ namespace {
         Archive.Serialize("RotationSnap", Gizmo.mRotationSnap);
         Archive.Serialize("ScaleSnap", Gizmo.mScaleSnap);
         Archive.Serialize("TranslationStep", Gizmo.mTranslationStep);
-        Archive.Serialize("RotationStep", Gizmo.mRotationStep);
+        Archive.Serialize("RotationStep", Gizmo.mRotationStep, Core::QuantityUnits::Degree);
         Archive.Serialize("ScaleStep", Gizmo.mScaleStep);
         Archive.Serialize("GizmoSize", Gizmo.mSize);
         Archive.Serialize("TransformMode", TransformMode);
@@ -136,8 +142,8 @@ namespace {
         Client.SetViewMode(static_cast<Engine::EViewMode>(ColorMode));
         Client.SetViewMode(static_cast<Engine::EViewMode>(Mode));
         Client.SetShowFlags(Flags);
-        Client.SetGizmoSetting(Editor::EGizmoSetting::TranslationStep, Gizmo.mTranslationStep);
-        Client.SetGizmoSetting(Editor::EGizmoSetting::RotationStep, Gizmo.mRotationStep);
+        Client.SetTranslationSnapStep(Gizmo.mTranslationStep);
+        Client.SetRotationSnapStep(Gizmo.mRotationStep);
         Client.SetGizmoSetting(Editor::EGizmoSetting::ScaleStep, Gizmo.mScaleStep);
         Client.SetGizmoSetting(Editor::EGizmoSetting::Size, Gizmo.mSize);
 
@@ -147,7 +153,7 @@ namespace {
             }
         }
 
-        const std::array<Editor::EViewportCommand, 4> Commands{Editor::EViewportCommand::Translate, Editor::EViewportCommand::Rotate, Editor::EViewportCommand::Scale, Editor::EViewportCommand::Select};
+        const Core::TStaticArray<Editor::EViewportCommand, 4> Commands{Editor::EViewportCommand::Translate, Editor::EViewportCommand::Rotate, Editor::EViewportCommand::Scale, Editor::EViewportCommand::Select};
 
         if (TransformMode >= 0 && static_cast<size_t>(TransformMode) < Commands.size()) {
             Client.ExecuteCommand(Commands[TransformMode]);
@@ -222,26 +228,31 @@ void FEditorSettings::InitializeInputWidgets() {
     RegisterCheckBox("Keyboard Navigation", &FEditorSettings::IsKeyboardNavigationEnabled, &FEditorSettings::SetKeyboardNavigationEnabled);
     RegisterCheckBox("Move Windows from Title Bar Only", &FEditorSettings::IsTitleBarMoveOnly, &FEditorSettings::SetTitleBarMoveOnly);
 
-    RegisterInputSlider("Double Click Time", &ImGuiIO::MouseDoubleClickTime, 0.1f, 1.0f, "%.2f s");
+    RegisterInputSlider("Double Click Time", &ImGuiIO::MouseDoubleClickTime, (0.1_s).GetBase(), (1.0_s).GetBase(), "%.2f s");
     RegisterInputSlider("Mouse Drag Threshold", &ImGuiIO::MouseDragThreshold, 1.0f, 20.0f, "%.0f px");
 
-    RegisterInputSlider("Key Repeat Delay", &ImGuiIO::KeyRepeatDelay, 0.1f, 1.0f, "%.2f s");
-    RegisterInputSlider("Key Repeat Rate", &ImGuiIO::KeyRepeatRate, 0.02f, 0.3f, "%.2f s");
+    RegisterInputSlider("Key Repeat Delay", &ImGuiIO::KeyRepeatDelay, (0.1_s).GetBase(), (1.0_s).GetBase(), "%.2f s");
+    RegisterInputSlider("Key Repeat Rate", &ImGuiIO::KeyRepeatRate, (0.02_s).GetBase(), (0.3_s).GetBase(), "%.2f s");
 }
 
 void FEditorSettings::InitializeViewportWidgets() {
     RegisterSlider("Horizontal Split", 0.1f, 0.9f, &FEditorSettings::GetHorizontalSplit, &FEditorSettings::SetHorizontalSplit, "%.2f");
     RegisterSlider("Vertical Split", 0.1f, 0.9f, &FEditorSettings::GetVerticalSplit, &FEditorSettings::SetVerticalSplit, "%.2f");
 
-    RegisterViewportSlider("Movement Speed", 0.1f, 128.0f, &FEditorViewportClient::GetCameraSpeed, &FEditorViewportClient::SetCameraSpeed, "%.2f", 0.01f);
-    RegisterViewportSlider("Mouse Sensitivity", 0.01f, 2.0f, &FEditorViewportClient::GetCameraSensitivity, &FEditorViewportClient::SetCameraSensitivity, "%.3f", 0.001f);
-    RegisterViewportSlider("Orthographic Width", 0.01f, 100000.0f, &FEditorViewportClient::GetOrthographicWidth, &FEditorViewportClient::SetOrthographicWidth, "%.2f", 0.001f);
+    RegisterSlider("Movement Speed", (0.1_mps).GetBase(), (128_mps).GetBase(), [this]() {
+        return GetSettingsClient().GetCameraSpeed().GetBase();
+    }, [this](float Value) {
+        GetSettingsClient().SetCameraSpeed(Core::FSpeed::FromBase(Value));
+    }, "%.2f m/s", 0.01f);
 
-    RegisterSlider("Field of View", 1.0f, 179.0f, &FEditorSettings::GetFieldOfView, &FEditorSettings::SetFieldOfView, "%.1f degrees");
-    RegisterSlider("Near Clip", 0.001f, 999999.0f, &FEditorSettings::GetNearClip, &FEditorSettings::SetNearClip, "%.3f", 0.01f);
-    RegisterSlider("Far Clip", 0.002f, 1000000.0f, &FEditorSettings::GetFarClip, &FEditorSettings::SetFarClip, "%.1f", 10.0f);
+    RegisterViewportSlider("Mouse Sensitivity", Core::Math::ToDegrees(0.01_deg), Core::Math::ToDegrees(2_deg), &FEditorViewportClient::GetCameraSensitivity, &FEditorViewportClient::SetCameraSensitivity, "%.3f", 0.001f);
+    RegisterViewportSlider("Orthographic Width", (0.01_m).GetBase(), (100000_m).GetBase(), &FEditorViewportClient::GetOrthographicWidth, &FEditorViewportClient::SetOrthographicWidth, "%.2f", 0.001f);
 
-    RegisterViewportSlider("Grid Spacing", 0.01f, 1000.0f, &FEditorViewportClient::GetGridSpacing, &FEditorViewportClient::SetGridSpacing, "%.2f", 0.001f);
+    RegisterSlider("Field of View", Core::Math::ToDegrees(1_deg), Core::Math::ToDegrees(179_deg), &FEditorSettings::GetFieldOfView, &FEditorSettings::SetFieldOfView, "%.1f degrees");
+    RegisterSlider("Near Clip", (0.001_m).GetBase(), (999999_m).GetBase(), &FEditorSettings::GetNearClip, &FEditorSettings::SetNearClip, "%.3f", 0.01f);
+    RegisterSlider("Far Clip", (0.002_m).GetBase(), (1000000_m).GetBase(), &FEditorSettings::GetFarClip, &FEditorSettings::SetFarClip, "%.1f", 10.0f);
+
+    RegisterViewportSlider("Grid Spacing", (0.01_m).GetBase(), (1000_m).GetBase(), &FEditorViewportClient::GetGridSpacing, &FEditorViewportClient::SetGridSpacing, "%.2f", 0.001f);
     RegisterViewportSlider("Line Thickness", 0.5f, 10.0f, &FEditorViewportClient::GetLineThickness, &FEditorViewportClient::SetLineThickness, "%.1f px", 0.05f);
 
     for (const auto& [Name, Member] : ShowOptions) {
@@ -254,11 +265,11 @@ void FEditorSettings::InitializeGizmoWidgets() {
         RegisterCheckBox(Label, Label, std::bind_front(&FEditorSettings::IsViewportCommandChecked, this, Command), std::bind_front(&FEditorSettings::SetViewportCommandChecked, this, Command));
     }
 
-    RegisterGizmoSlider("Translation Step", &FGizmoSettings::mTranslationStep, EGizmoSetting::TranslationStep, 0.001f, 10000.0f, "%.3f", 0.01f);
-    RegisterGizmoSlider("Rotation Step", &FGizmoSettings::mRotationStep, EGizmoSetting::RotationStep, 0.001f, 360.0f, "%.3f degrees", 0.1f);
+    RegisterGizmoSlider("Translation Step", EGizmoSetting::TranslationStep, (0.001_m).GetBase(), (10000_m).GetBase(), "%.3f", (0.01_m).GetBase());
+    RegisterGizmoSlider("Rotation Step", EGizmoSetting::RotationStep, Core::Math::ToDegrees(0.001_deg), Core::Math::ToDegrees(360_deg), "%.3f degrees", Core::Math::ToDegrees(0.1_deg));
 
-    RegisterGizmoSlider("Scale Step", &FGizmoSettings::mScaleStep, EGizmoSetting::ScaleStep, 0.001f, 100.0f, "%.3f", 0.01f);
-    RegisterGizmoSlider("Gizmo Size", &FGizmoSettings::mSize, EGizmoSetting::Size, 0.5f, 2.0f, "%.2fx");
+    RegisterGizmoSlider("Scale Step", EGizmoSetting::ScaleStep, 0.001f, 100.0f, "%.3f", 0.01f);
+    RegisterGizmoSlider("Gizmo Size", EGizmoSetting::Size, 0.5f, 2.0f, "%.2fx");
 }
 
 void FEditorSettings::InitializeRenderingWidgets() {
@@ -326,8 +337,8 @@ void FEditorSettings::RegisterViewportSlider(Core::FString Label, float Minimum,
     RegisterSlider(std::move(Label), Minimum, Maximum, std::bind_front(&FEditorSettings::GetViewportFloat, this, Getter), std::bind_front(&FEditorSettings::SetViewportFloat, this, Setter), std::move(Format), DragSpeed);
 }
 
-void FEditorSettings::RegisterGizmoSlider(Core::FString Label, FGizmoFloat Member, Editor::EGizmoSetting Setting, float Minimum, float Maximum, Core::FString Format, float DragSpeed) {
-    RegisterSlider(std::move(Label), Minimum, Maximum, std::bind_front(&FEditorSettings::GetGizmoFloat, this, Member), std::bind_front(&FEditorSettings::SetGizmoFloat, this, Setting), std::move(Format), DragSpeed);
+void FEditorSettings::RegisterGizmoSlider(Core::FString Label, Editor::EGizmoSetting Setting, float Minimum, float Maximum, Core::FString Format, float DragSpeed) {
+    RegisterSlider(std::move(Label), Minimum, Maximum, std::bind_front(&FEditorSettings::GetGizmoFloat, this, Setting), std::bind_front(&FEditorSettings::SetGizmoFloat, this, Setting), std::move(Format), DragSpeed);
 }
 
 void FEditorSettings::RegisterStatisticsWidget(const Core::FString& Group) {
@@ -487,43 +498,43 @@ void FEditorSettings::SetViewportFloat(FViewportFloatSetter Setter, float Value)
 }
 
 float FEditorSettings::GetFieldOfView() const {
-    return GetSettingsClient().GetPerspectiveCamera().GetFieldOfView();
+    return Core::Math::ToDegrees(GetSettingsClient().GetPerspectiveCamera().GetFieldOfView());
 }
 
 void FEditorSettings::SetFieldOfView(float Value) {
     Engine::FEditorCameraState Camera{GetSettingsClient().GetPerspectiveCamera()};
 
-    if (Camera.Set(Camera.GetLocation(), Camera.GetRotation(), Value, Camera.GetNearClip(), Camera.GetFarClip())) {
+    if (Camera.Set(Camera.GetLocation(), Camera.GetRotation(), Value * 1_deg, Camera.GetNearClip(), Camera.GetFarClip())) {
         GetSettingsClient().SetPerspectiveCamera(Camera);
     }
 }
 
 float FEditorSettings::GetNearClip() const {
-    return GetSettingsClient().GetPerspectiveCamera().GetNearClip();
+    return GetSettingsClient().GetPerspectiveCamera().GetNearClip().GetBase();
 }
 
 void FEditorSettings::SetNearClip(float Value) {
     Engine::FEditorCameraState Camera{GetSettingsClient().GetPerspectiveCamera()};
 
-    if (Camera.Set(Camera.GetLocation(), Camera.GetRotation(), Camera.GetFieldOfView(), std::min(Value, Camera.GetFarClip() - 0.001f), Camera.GetFarClip())) {
+    if (Camera.Set(Camera.GetLocation(), Camera.GetRotation(), Camera.GetFieldOfView(), std::min(Core::FLength::FromBase(Value), Camera.GetFarClip() - 0.001_m), Camera.GetFarClip())) {
         GetSettingsClient().SetPerspectiveCamera(Camera);
     }
 }
 
 float FEditorSettings::GetFarClip() const {
-    return GetSettingsClient().GetPerspectiveCamera().GetFarClip();
+    return GetSettingsClient().GetPerspectiveCamera().GetFarClip().GetBase();
 }
 
 void FEditorSettings::SetFarClip(float Value) {
     Engine::FEditorCameraState Camera{GetSettingsClient().GetPerspectiveCamera()};
 
-    if (Camera.Set(Camera.GetLocation(), Camera.GetRotation(), Camera.GetFieldOfView(), Camera.GetNearClip(), std::max(Value, Camera.GetNearClip() + 0.001f))) {
+    if (Camera.Set(Camera.GetLocation(), Camera.GetRotation(), Camera.GetFieldOfView(), Camera.GetNearClip(), std::max(Core::FLength::FromBase(Value), Camera.GetNearClip() + 0.001_m))) {
         GetSettingsClient().SetPerspectiveCamera(Camera);
     }
 }
 
-float FEditorSettings::GetGizmoFloat(FGizmoFloat Member) const {
-    return GetSettingsClient().GetGizmoSettings()->*Member;
+float FEditorSettings::GetGizmoFloat(Editor::EGizmoSetting Setting) const {
+    return GetSettingsClient().GetGizmoSettingValue(Setting);
 }
 
 void FEditorSettings::SetGizmoFloat(EGizmoSetting Setting, float Value) {
@@ -613,7 +624,7 @@ void FEditorSettings::ApplyAppearance() {
 void FEditorSettings::Tick(float DeltaTime) {
     if (mSettingsDirty) {
         mSettingsSaveDelay += DeltaTime;
-        if (mSettingsSaveDelay >= 2.0f) {
+        if (mSettingsSaveDelay >= (2_s).GetBase()) {
             SaveSettings();
             mSettingsSaveDelay = 0.0f;
         }
@@ -637,7 +648,7 @@ void FEditorSettings::InitializeSettings() {
     mThemeFilter.fill('\0');
     strncpy_s(mStartupScene.data(), mStartupScene.size(), mContext->GetProject()->GetStartupScene().c_str(), _TRUNCATE);
 
-    std::array<wchar_t, 32768> Executable{};
+    Core::TStaticArray<wchar_t, 32768> Executable{};
     const DWORD Length{GetModuleFileNameW(nullptr, Executable.data(), static_cast<DWORD>(Executable.size()))};
     std::filesystem::path Bundled{Length > 0 && Length < Executable.size() ? std::filesystem::path{Executable.data()}.parent_path() / "Templates/Project/Editor/ImThemes/themes.toml" : std::filesystem::path{}};
     std::error_code Code{};
@@ -816,10 +827,10 @@ void FEditorSettings::SerializeSettings(Serialization::FJsonArchive& Archive) {
         mWorkspace.SetLayoutVersion(LayoutVersion);
         Input.ConfigFlags = KeyboardNavigation ? Input.ConfigFlags | ImGuiConfigFlags_NavEnableKeyboard : Input.ConfigFlags & ~ImGuiConfigFlags_NavEnableKeyboard;
         Input.ConfigWindowsMoveFromTitleBarOnly = TitleBarOnly;
-        Input.MouseDoubleClickTime = std::isfinite(DoubleClickTime) ? std::clamp(DoubleClickTime, 0.1f, 1.0f) : 0.3f;
+        Input.MouseDoubleClickTime = std::isfinite(DoubleClickTime) ? std::clamp(DoubleClickTime, (0.1_s).GetBase(), (1_s).GetBase()) : (0.3_s).GetBase();
         Input.MouseDragThreshold = std::isfinite(DragThreshold) ? std::clamp(DragThreshold, 1.0f, 20.0f) : 6.0f;
-        Input.KeyRepeatDelay = std::isfinite(RepeatDelay) ? std::clamp(RepeatDelay, 0.1f, 1.0f) : 0.275f;
-        Input.KeyRepeatRate = std::isfinite(RepeatRate) ? std::clamp(RepeatRate, 0.02f, 0.3f) : 0.05f;
+        Input.KeyRepeatDelay = std::isfinite(RepeatDelay) ? std::clamp(RepeatDelay, (0.1_s).GetBase(), (1_s).GetBase()) : (0.275_s).GetBase();
+        Input.KeyRepeatRate = std::isfinite(RepeatRate) ? std::clamp(RepeatRate, (0.02_s).GetBase(), (0.3_s).GetBase()) : (0.05_s).GetBase();
     }
 
     mDrawers.SerializeSettings(Archive);
@@ -914,7 +925,7 @@ void FEditorSettings::DrawSettings() {
             if (mSettingsSection == 0) {
                 DrawInterfaceSettings();
             } else if (mSettingsSection == 1 || mSettingsSection == 2 || mSettingsSection == 4) {
-                const std::array<const char*, 4> Names{"Viewport 1", "Viewport 2", "Viewport 3", "Viewport 4"};
+                const Core::TStaticArray<const char*, 4> Names{"Viewport 1", "Viewport 2", "Viewport 3", "Viewport 4"};
                 Int32 Selected{static_cast<Int32>(mSettingsViewport)};
 
                 if (ImGui::Combo("Viewport", &Selected, Names.data(), static_cast<int>(Names.size()))) {
@@ -1053,7 +1064,8 @@ void FEditorSettings::DrawViewportSettings() {
     ImGui::TextWrapped("Camera projection is stored with the scene when you save it.");
     ImGui::SeparatorText("Display");
 
-    const auto Current{std::find(ViewModes.begin(), ViewModes.end(), Client.GetColorViewMode())};
+    const Engine::EViewMode ActiveMode{Client.GetViewMode() == Engine::EViewMode::PhysicsBodies ? Engine::EViewMode::PhysicsBodies : Client.GetColorViewMode()};
+    const auto Current{std::find(ViewModes.begin(), ViewModes.end(), ActiveMode)};
     int Mode{Current == ViewModes.end() ? 2 : static_cast<int>(Current - ViewModes.begin())};
 
     if (ImGui::Combo("View Mode", &Mode, ViewModeNames.data(), static_cast<int>(ViewModeNames.size()))) {
@@ -1064,11 +1076,25 @@ void FEditorSettings::DrawViewportSettings() {
     const auto& BufferNames{Editor::BufferVisualization::Names};
     const auto& BufferModes{Editor::BufferVisualization::Modes};
     const auto SelectedBuffer{std::find(BufferModes.begin(), BufferModes.end(), Client.GetViewMode())};
-    int Buffer{SelectedBuffer == BufferModes.end() ? 0 : static_cast<int>(SelectedBuffer - BufferModes.begin())};
+    const Index_t Buffer{SelectedBuffer == BufferModes.end() ? 0u : static_cast<Index_t>(SelectedBuffer - BufferModes.begin())};
 
-    if (ImGui::Combo("Buffer Visualization", &Buffer, BufferNames.data(), static_cast<int>(BufferNames.size()))) {
-        Client.SetViewMode(Buffer == 0 ? Client.GetColorViewMode() : BufferModes[Buffer]);
-        MarkDirty();
+    if (ImGui::BeginCombo("Buffer Visualization", BufferNames[Buffer])) {
+        for (Index_t Index{}; Index < BufferModes.size(); ++Index) {
+            ImGui::BeginDisabled(!Client.SupportsViewMode(BufferModes[Index]));
+
+            if (ImGui::Selectable(BufferNames[Index], Index == Buffer)) {
+                Client.SetViewMode(Index == 0 ? Client.GetColorViewMode() : BufferModes[Index]);
+                MarkDirty();
+            }
+
+            ImGui::EndDisabled();
+
+            if (Index == Buffer) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+
+        ImGui::EndCombo();
     }
 
     DrawWidget("Grid Spacing");
@@ -1142,6 +1168,10 @@ void FEditorSettings::DrawPanelSettings() {
 
 void FEditorSettings::DrawProjectSettings() {
     Engine::FProject& Project{*mContext->GetProject()};
+    const bool ActiveForwardShading{mContext->GetRenderer()->UsesForwardShading()};
+    const char* ShadingPaths[]{"Deferred", "Forward"};
+    int ShadingPath{Project.UsesForwardShading() ? 1 : 0};
+
     ImGui::TextWrapped("Project: %s", Project.GetName().c_str());
     ImGui::TextWrapped("Location: %s", Core::FilePath::ToUtf8(Project.GetFilePath()).c_str());
     ImGui::SeparatorText("Startup Scene");
@@ -1149,13 +1179,29 @@ void FEditorSettings::DrawProjectSettings() {
     DrawWidget("Content Path");
     DrawWidget("Save Startup Scene");
     ImGui::EndDisabled();
+    ImGui::SeparatorText("Rendering");
+
+    if (ImGui::Combo("Shading Path", &ShadingPath, ShadingPaths, static_cast<int>(std::size(ShadingPaths)))) {
+        Core::FString Error{};
+
+        mSettingsStatus = Project.SetForwardShading(ShadingPath == 1, Error) ? "Shading path saved" : Error;
+    }
+
+    if (Project.UsesForwardShading() != ActiveForwardShading) {
+        ImGui::TextWrapped("Reopen the project to apply this change. Active path: %s", ShadingPaths[ActiveForwardShading ? 1 : 0]);
+    }
+
+    if (Project.UsesForwardShading() || ActiveForwardShading) {
+        ImGui::TextWrapped("Decals and GBuffer visualizations require Deferred shading.");
+    }
+
     ImGui::SeparatorText("Preferences");
     ImGui::TextWrapped("Settings: %s", Core::FilePath::ToUtf8(mSettingsPath).c_str());
     ImGui::TextWrapped("Custom themes: %s", Core::FilePath::ToUtf8(mSettingsPath.parent_path() / "Themes").c_str());
 }
 
 void FEditorSettings::ImportTheme() {
-    std::array<wchar_t, 32768> Filename{};
+    Core::TStaticArray<wchar_t, 32768> Filename{};
     OPENFILENAMEW Dialog{};
     Dialog.lStructSize = sizeof(Dialog);
     Dialog.hwndOwner = mPlatform->GetWindowHandle();
@@ -1220,10 +1266,10 @@ void FEditorSettings::ResetSettings() {
     ImGuiIO& Input{ImGui::GetIO()};
     Input.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     Input.ConfigWindowsMoveFromTitleBarOnly = false;
-    Input.MouseDoubleClickTime = 0.3f;
+    Input.MouseDoubleClickTime = (0.3_s).GetBase();
     Input.MouseDragThreshold = 6.0f;
-    Input.KeyRepeatDelay = 0.275f;
-    Input.KeyRepeatRate = 0.05f;
+    Input.KeyRepeatDelay = (0.275_s).GetBase();
+    Input.KeyRepeatRate = (0.05_s).GetBase();
 
     mViewportLayout.SetPreset(EEditorViewportLayoutPreset::Single);
     mViewportLayout.SetSplitRatios(0.5f, 0.5f);
@@ -1231,15 +1277,15 @@ void FEditorSettings::ResetSettings() {
     for (Index_t Index{}; Index < 4; ++Index) {
         Editor::FEditorViewport* Viewport{mViewportLayout.GetViewport(Index)};
         Editor::FEditorViewportClient& Client{*Viewport->GetClient()};
-        Client.SetCameraSpeed(4.0f);
-        Client.SetCameraSensitivity(0.2f);
-        Client.SetGridSpacing(1.0f);
+        Client.SetCameraSpeed(4_mps);
+        Client.SetCameraSensitivity(Core::Math::ToDegrees(0.2_deg));
+        Client.SetGridSpacing((1_m).GetBase());
         Client.SetLineThickness(1.5f);
-        Client.SetOrthographicWidth(20.0f);
+        Client.SetOrthographicWidth((20_m).GetBase());
         Client.SetViewMode(Engine::EViewMode::Lit_Phong);
         Client.SetShowFlags(Engine::FEngineShowFlags{});
-        Client.SetGizmoSetting(Editor::EGizmoSetting::TranslationStep, 1.0f);
-        Client.SetGizmoSetting(Editor::EGizmoSetting::RotationStep, 15.0f);
+        Client.SetTranslationSnapStep(1_m);
+        Client.SetRotationSnapStep(15_deg);
         Client.SetGizmoSetting(Editor::EGizmoSetting::ScaleStep, 0.1f);
         Client.SetGizmoSetting(Editor::EGizmoSetting::Size, 1.0f);
 

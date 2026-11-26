@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "Core/Literals/QuantityTypes.h"
+
 #include "Core/ReflectionMacros.h"
 #include "Core/Types.h"
 
@@ -193,12 +195,13 @@ public:
      * @return 연산을 적용한 새 값입니다.
      */
     FVector2 Rotated(float Degrees) const;
+    FVector2 Rotated(Core::FAngle Angle) const;
 
     /**
      * @brief 유효한 성분을 원래 순서의 일반 배열로 반환합니다.
      * @return 연산을 적용한 새 값입니다.
      */
-    std::array<float, 2> ToArray() const;
+    Core::TStaticArray<float, 2> ToArray() const;
 
     /**
      * @brief 성분의 제곱합을 반환합니다.

@@ -8,7 +8,7 @@
 
 #include "Core/ReflectionMacros.h"
 #include "Core/Math/FMatrix.h"
-#include <array>
+#include "Core/Types.h"
 #include <cstddef>
 #include <type_traits>
 
@@ -29,12 +29,12 @@ namespace Renderer {
         /**
          * @brief 에디터 메시 픽셀 셰이더에 전달할 RGB 색상과 알파 값입니다.
          */
-        std::array<float, 4> mColor{};
+        Core::TStaticArray<float, 4> mColor{};
 
         /**
          * @brief 에디터 메시의 조명·표면 셰이딩 파라미터입니다.
          */
-        std::array<float, 4> mShading{};
+        Core::TStaticArray<float, 4> mShading{};
     };
 
     static_assert(std::is_standard_layout_v<Renderer::FEditorMeshConstants> && std::is_trivially_copyable_v<Renderer::FEditorMeshConstants> && sizeof(Renderer::FEditorMeshConstants) == 96);

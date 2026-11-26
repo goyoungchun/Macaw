@@ -339,7 +339,7 @@ namespace Asset {
         /**
          * @brief 픽셀을 sRGB 색 공간으로 해석하는지 나타냅니다.
          */
-        UPROPERTY(Edit, Serialize, Getter = IsSRGB, Setter = SetSRGB)
+        UPROPERTY(Edit, Serialize, Category = "Settings", Getter = IsSRGB, Setter = SetSRGB)
         bool mSRGB{true};
 
         /**
