@@ -88,6 +88,22 @@ namespace Engine {
         return true;
     }
 
+    Engine::EShadowBiasMode Engine::ULightComponent::GetShadowBiasMode() const {
+        return mShadowBiasMode;
+    }
+
+    bool Engine::ULightComponent::SetShadowBiasMode(Engine::EShadowBiasMode Mode) {
+        if (Mode != Engine::EShadowBiasMode::Manual && Mode != Engine::EShadowBiasMode::Auto) {
+            return false;
+        }
+
+        mShadowBiasMode = Mode;
+
+        SynchronizeLight();
+
+        return true;
+    }
+
     Engine::EShadowBiasPreset Engine::ULightComponent::GetShadowBiasPreset() const {
         return mShadowBiasPreset;
     }
@@ -172,6 +188,7 @@ namespace Engine {
         Proxy.mCastShadows = mCastShadows;
         Proxy.mShadowResolution = mShadowResolution;
         Proxy.mShadowResolutionScale = mShadowResolutionScale;
+        Proxy.mShadowBiasMode = mShadowBiasMode;
         Proxy.mShadowBiasPreset = mShadowBiasPreset;
         Proxy.mShadowSlopeBiasPreset = mShadowSlopeBiasPreset;
         Proxy.mShadowSharpen = mShadowSharpen;

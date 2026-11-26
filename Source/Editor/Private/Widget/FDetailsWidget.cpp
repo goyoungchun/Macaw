@@ -1339,6 +1339,7 @@ namespace Editor {
         }
 
         const bool LuaScript{Row.mProperty->GetName() == "ScriptPath" && Row.mProperty == Engine::ULuaScriptComponent::StaticClass()->FindClassProperty("ScriptPath")};
+        const bool ManualShadowBias{Row.mProperty->GetNativeType() == CoreUObject::GetNativeType<Engine::EShadowBiasPreset>()};
         CoreUObject::FPropertyValue Value{Row.mProperty->ReadValue(Object)};
         Core::TArray<std::pair<CoreUObject::TObjectRef<CoreUObject::UObject>, CoreUObject::FPropertyValue>> Defaults{};
         bool Mixed{};
@@ -1354,6 +1355,11 @@ namespace Editor {
             const CoreUObject::FPropertyValue CurrentValue{Target == First ? Value : Row.mProperty->ReadValue(Current)};
             Mixed = Mixed || !EqualValues(Value, CurrentValue);
             Editable = Editable && Context->CanEditProperty(Target, Row.mProperty);
+
+            if (ManualShadowBias) {
+                const auto* Light{CoreUObject::Cast<Engine::ULightComponent>(Current)};
+                Editable = Editable && (Light == nullptr || Light->GetShadowBiasMode() == Engine::EShadowBiasMode::Manual);
+            }
 
             if (auto Default{GetDefaultValue(Current->GetClass(), Row.mProperty)}; Default.has_value() && !EqualValues(CurrentValue, *Default)) {
                 Defaults.emplace_back(Target, std::move(*Default));

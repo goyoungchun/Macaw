@@ -74,6 +74,9 @@ namespace Engine {
          */
         bool SetShadowResolutionScale(float Scale);
 
+        Engine::EShadowBiasMode GetShadowBiasMode() const;
+        bool SetShadowBiasMode(Engine::EShadowBiasMode Mode);
+
         /**
          * @brief 그림자 깊이 바이어스 프리셋을 반환합니다.
          * @return 현재 깊이 바이어스 단계입니다.
@@ -152,6 +155,9 @@ namespace Engine {
          */
         UPROPERTY(Edit, Serialize, Category = "Light", Getter = GetShadowResolutionScale, Setter = SetShadowResolutionScale)
         float mShadowResolutionScale{1.0f};
+
+        UPROPERTY(Edit, Serialize, Category = "Light", Getter = GetShadowBiasMode, Setter = SetShadowBiasMode)
+        Engine::EShadowBiasMode mShadowBiasMode{Engine::EShadowBiasMode::Manual};
 
         /**
          * @brief 그림자 깊이 바이어스 단계입니다.

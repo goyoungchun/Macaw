@@ -80,6 +80,58 @@ namespace Renderer {
         Engine::EShadowBiasPreset ValidBiasPreset(Engine::EShadowBiasPreset Preset) {
             return static_cast<Uint32>(Preset) < Engine::ShadowBiasPresetCount ? Preset : Engine::DefaultShadowBiasPreset;
         }
+
+        Engine::EShadowBiasPreset QuantizeBiasPreset(float Bias, float Step) {
+            if (!std::isfinite(Bias)) {
+                return Engine::DefaultShadowBiasPreset;
+            }
+
+            const float MaximumLevel{static_cast<float>(Engine::ShadowBiasPresetCount - 1)};
+            const float Level{std::round(std::clamp(Bias / Step, 0.0f, MaximumLevel))};
+
+            return static_cast<Engine::EShadowBiasPreset>(Level);
+        }
+
+        Engine::EShadowBiasPreset SelectDepthBiasPreset(const Renderer::FGpuShadow& Map, Uint32 Resolution) {
+            constexpr float DepthUnits{static_cast<float>((1u << 24) - 1u)};
+            constexpr float MinimumOffset{(0.25_mm).GetBase()};
+            constexpr float MaximumOffset{(3_mm).GetBase()};
+            constexpr float ReferenceDepthFraction{0.25f};
+            constexpr float TexelFraction{0.25f};
+            const float NearPlane{Map.mSoftness.z};
+            const float FarPlane{Map.mSoftness.w};
+            const float DepthRange{FarPlane - NearPlane};
+            float WorldTexelSize{1.0f / (Map.mSoftness.y * static_cast<float>(Resolution))};
+            float DepthScale{1.0f / DepthRange};
+
+            if (NearPlane > 0.0f) {
+                const float ReferenceDepth{NearPlane + DepthRange * ReferenceDepthFraction};
+                WorldTexelSize *= ReferenceDepth;
+                DepthScale *= (NearPlane / ReferenceDepth) * (FarPlane / ReferenceDepth);
+            }
+
+            const float WorldOffset{std::clamp(WorldTexelSize * TexelFraction, MinimumOffset, MaximumOffset)};
+
+            return QuantizeBiasPreset(WorldOffset * DepthScale * DepthUnits, static_cast<float>(Engine::ShadowDepthBiasStep));
+        }
+
+        Engine::EShadowBiasPreset SelectSlopeBiasPreset(const Renderer::FGpuShadow& Map, const Renderer::FGpuShadow* NextCascade, const RenderCore::FShadowSettings& Settings) {
+            float FilterRadius{};
+
+            if (Settings.mFilter == RenderCore::EShadowFilter::PCF) {
+                FilterRadius = static_cast<float>(Settings.mPCFSize / 2);
+
+                if (NextCascade != nullptr) {
+                    const float TexelRatio{std::clamp((Map.mSoftness.y * Map.mAtlasRectangle.z) / (NextCascade->mSoftness.y * NextCascade->mAtlasRectangle.z), 1.0f, 4.0f)};
+                    FilterRadius *= std::midpoint(1.0f, TexelRatio);
+                }
+            } else if (Settings.mFilter == RenderCore::EShadowFilter::PCSS) {
+                const float RepresentativeRadius{Map.mSoftness.x > 0.0f ? 3.0f : 1.0f};
+                FilterRadius = std::min(RepresentativeRadius, Settings.mPCSSMaxFilterTexels);
+            }
+
+            return QuantizeBiasPreset(0.5f + FilterRadius, Engine::ShadowSlopeBiasStep);
+        }
     }
 
     static_assert(sizeof(Renderer::FGpuShadow) == 128);
@@ -306,8 +358,10 @@ namespace Renderer {
             const float FarDistance{std::max(CameraNear + (0.01_m).GetBase(), std::min(CameraFar, Light.mShadowDistance.GetBase()))};
             float PreviousSplit{CameraNear};
             float PreviousBlend{CameraNear};
+            const bool AutomaticBias{Light.mShadowBiasMode == Engine::EShadowBiasMode::Auto};
             const Engine::EShadowBiasPreset BiasPreset{ValidBiasPreset(Light.mShadowBiasPreset)};
             const Engine::EShadowBiasPreset SlopeBiasPreset{ValidBiasPreset(Light.mShadowSlopeBiasPreset)};
+            const Index_t FirstMap{mMaps.size()};
 
             for (Index_t Face{}; Face < Count; ++Face) {
                 const Renderer::FShadowAtlasBlock& Block{Blocks[Face]};
@@ -350,6 +404,17 @@ namespace Renderer {
                 mTiles.push_back({Light.mId, {static_cast<float>(Block.mX) / AtlasSize, static_cast<float>(Block.mY) / AtlasSize, static_cast<float>(Block.mSize) / AtlasSize, static_cast<float>(Block.mSize) / AtlasSize}, Face, Resolution});
 
                 Stats.mShadowAllocatedBytes += static_cast<std::size_t>(Block.mSize) * Block.mSize * 4;
+            }
+
+            if (AutomaticBias) {
+                for (Index_t Index{FirstMap}; Index < mMaps.size(); ++Index) {
+                    const Renderer::FGpuShadow& Map{mMaps[Index]};
+                    const bool HasCascadeBlend{Index + 1 < mMaps.size() && Map.mCascade.z < Map.mCascade.y};
+                    const Renderer::FGpuShadow* NextCascade{HasCascadeBlend ? &mMaps[Index + 1] : nullptr};
+                    FTileDepth& Tile{mTileDepths[Index]};
+                    Tile.mBiasPreset = SelectDepthBiasPreset(Map, mTiles[Index].mResolution);
+                    Tile.mSlopeBiasPreset = SelectSlopeBiasPreset(Map, NextCascade, mSettings);
+                }
             }
         }
 

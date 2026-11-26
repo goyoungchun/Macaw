@@ -112,6 +112,8 @@ namespace Engine {
          */
         float mShadowResolutionScale{1.0f};
 
+        Engine::EShadowBiasMode mShadowBiasMode{Engine::EShadowBiasMode::Manual};
+
         /**
          * @brief 그림자 깊이 바이어스 단계입니다.
          */

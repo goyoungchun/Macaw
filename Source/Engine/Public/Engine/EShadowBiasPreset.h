@@ -12,6 +12,12 @@
 
 namespace Engine {
 
+    UENUM()
+    enum class EShadowBiasMode : Uint8 {
+        Manual,
+        Auto
+    };
+
     /**
      * @brief 깊이와 경사 바이어스를 단계별로 선택하는 그림자 프리셋입니다.
      * @ingroup Engine
