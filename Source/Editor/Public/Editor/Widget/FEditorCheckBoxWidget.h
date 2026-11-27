@@ -9,6 +9,8 @@ namespace Editor {
         ~FEditorCheckBoxWidget() override;
 
     public:
+        static bool EditValue(const char* Label, bool& Value);
+
         FVector2 ComputeDesiredSize() const override;
 
     private:

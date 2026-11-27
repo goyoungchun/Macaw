@@ -6,6 +6,10 @@
 
 #include "Core/Types.h"
 #include "Editor/FMeshViewer.h"
+#include "Editor/Widget/FEditorButtonWidget.h"
+#include "Editor/Widget/FEditorCheckBoxWidget.h"
+#include "Editor/Widget/FEditorComboWidget.h"
+#include "Editor/Widget/FEditorSliderWidget.h"
 #include "Viewer/FMeshViewerContent.h"
 #include "Core/FilePath.h"
 #include "Core/Math/FRay.h"
@@ -149,6 +153,7 @@ namespace Editor {
             const float Max{Field.mMax * Scale};
             // 0~1처럼 좁은 범위는 슬라이더로 위치를 보여 주고, 아주 작은 값을 다루는 칸은 끌기 칸으로 둡니다.
             const bool UseSlider{Field.mMin >= 0.0f && (Field.mMax - Field.mMin) * Scale <= 1.0f && Field.mSpeed >= 0.001f};
+            const float DragSpeed{UseSlider ? 0.0f : Field.mSpeed};
             const ImGuiSliderFlags Flags{ImGuiSliderFlags_AlwaysClamp};
             bool Committed{};
 
@@ -161,7 +166,7 @@ namespace Editor {
 
             if (Field.HasScalarValue()) {
                 float Display{Field.GetScalarValue(Config) * Scale};
-                const bool Edited{UseSlider ? ImGui::SliderFloat("##Value", &Display, Min, Max, Field.mFormat, Flags) : ImGui::DragFloat("##Value", &Display, Field.mSpeed, Min, Max, Field.mFormat, Flags)};
+                const bool Edited{FEditorSliderWidget::EditValue("##Value", Display, Min, Max, Field.mFormat, DragSpeed, Flags)};
 
                 if (Edited) {
                     Field.SetScalarValue(Config, std::clamp(Display / Scale, Field.mMin, Field.mMax));
@@ -169,7 +174,7 @@ namespace Editor {
             } else {
                 FVector* const Value{Field.mGetVector(Config)};
                 float Display[3]{Value->x * Scale, Value->y * Scale, Value->z * Scale};
-                const bool Edited{UseSlider ? ImGui::SliderFloat3("##Value", Display, Min, Max, Field.mFormat, Flags) : ImGui::DragFloat3("##Value", Display, Field.mSpeed, Min, Max, Field.mFormat, Flags)};
+                const bool Edited{FEditorSliderWidget::EditValue("##Value", Display, Min, Max, Field.mFormat, DragSpeed, Flags)};
 
                 if (Edited) {
                     *Value = FVector{std::clamp(Display[0] / Scale, Field.mMin, Field.mMax), std::clamp(Display[1] / Scale, Field.mMin, Field.mMax), std::clamp(Display[2] / Scale, Field.mMin, Field.mMax)};
@@ -181,7 +186,7 @@ namespace Editor {
             ShowFieldTooltip(Field);
 
             if (ImGui::BeginPopupContextItem("Reset")) {
-                if (ImGui::MenuItem("Reset to Default", nullptr, false, Changed)) {
+                if (FEditorButtonWidget::Press("Reset to Default", EEditorButtonStyle::MenuItem, false, Changed)) {
                     ResetToDefault(Field, Config);
                     Committed = true;
                 }
@@ -235,7 +240,7 @@ namespace Editor {
             if (Changed) {
                 ImGui::PushID(Field.mKey);
 
-                if (ImGui::SmallButton("Reset")) {
+                if (FEditorButtonWidget::Press("Reset", EEditorButtonStyle::Small)) {
                     ResetToDefault(Field, Config);
                     Committed = true;
                 }
@@ -375,14 +380,14 @@ namespace Editor {
             // 미리 보기에서 천을 움직일지 고르고, 처음 모양에서 다시 시작하게 합니다.
             ImGui::BeginDisabled(mClothingSystem == nullptr);
 
-            if (ImGui::Checkbox("Simulate in Preview", &mClothSimulate)) {
+            if (FEditorCheckBoxWidget::EditValue("Simulate in Preview", mClothSimulate)) {
                 mClothPreviewStale = true;
             }
 
             ShowTextTooltip("미리 보기에서 천을 움직임. 값을 바꾸면 바로 반영");
             ImGui::SameLine();
 
-            if (ImGui::Button("Restart")) {
+            if (FEditorButtonWidget::Press("Restart")) {
                 mClothPreviewStale = true;
             }
 
@@ -448,7 +453,7 @@ namespace Editor {
         // 바꾼 것이 있을 때만 저장할 수 있게 해 저장 상태를 한눈에 알 수 있게 합니다.
         ImGui::BeginDisabled(!mClothUnsaved);
 
-        if (ImGui::Button("Save Mesh")) {
+        if (FEditorButtonWidget::Press("Save Mesh")) {
             Core::FString Error{};
 
             // 뼈를 파일 안에 넣은 예전 메시는 새 형식으로 저장하면 뼈가 사라지므로 막습니다.
@@ -520,7 +525,7 @@ namespace Editor {
                 const Index_t NumParticles{ClothingAsset.mLodData.empty() ? 0 : ClothingAsset.mLodData[0].mPhysicalMeshData.mVertices.size()};
                 const Core::FString Label{"Cloth " + std::to_string(AssetIndex) + "  (" + std::to_string(NumParticles) + " particles)"};
 
-                if (ImGui::Selectable(Label.c_str(), AssetIndex == mClothSelectedAsset)) {
+                if (FEditorButtonWidget::Press(Label.c_str(), EEditorButtonStyle::Selectable, AssetIndex == mClothSelectedAsset)) {
                     mClothSelectedAsset = AssetIndex;
                 }
 
@@ -532,7 +537,7 @@ namespace Editor {
             ImGui::TableSetColumnIndex(3);
 
             if (HasCloth) {
-                if (ImGui::SmallButton("Rebuild")) {
+                if (FEditorButtonWidget::Press("Rebuild", EEditorButtonStyle::Small)) {
                     Core::FString Error{};
 
                     if (Editor::ClothEditing::RebuildSectionMapping(Mesh, SubMeshIndex, Error)) {
@@ -546,7 +551,7 @@ namespace Editor {
             } else {
                 ImGui::BeginDisabled(mSkeleton == nullptr);
 
-                if (ImGui::SmallButton("Create Cloth")) {
+                if (FEditorButtonWidget::Press("Create Cloth", EEditorButtonStyle::Small)) {
                     // 메시가 쓰는 물리 에셋과 부딪히게 만들고, 저장한 물리 에셋이면 경로도 남깁니다.
                     Core::FString Error{};
                     PhysicsRuntime::UPhysicsAsset* PhysicsAsset{Mesh.GetPhysicsAssetPath().empty() ? Mesh.GetGeneratedPhysicsAsset(*mSkeleton.Get()) : mAssets->LoadPhysicsAsset(Core::FilePath::FromUtf8(Mesh.GetPhysicsAssetPath()), Error)};
@@ -641,7 +646,7 @@ namespace Editor {
                 const char* const Methods[]{"Legacy", "Accurate"};
                 int Method{Config.mClothingWindMethod == PhysicsRuntime::EClothingWindMethodNv::Accurate ? 1 : 0};
 
-                if (ImGui::Combo("Wind Method", &Method, Methods, 2)) {
+                if (FEditorComboWidget::EditIndex("Wind Method", Method, Methods)) {
                     Config.mClothingWindMethod = Method == 1 ? PhysicsRuntime::EClothingWindMethodNv::Accurate : PhysicsRuntime::EClothingWindMethodNv::Legacy;
                     Committed = true;
                 }
@@ -666,7 +671,7 @@ namespace Editor {
                 ShowTextTooltip("켜면 아래 Gravity 값을 중력으로 씀");
                 ImGui::TableSetColumnIndex(1);
 
-                if (ImGui::Checkbox("##OverrideGravity", &Config.mUseGravityOverride)) {
+                if (FEditorCheckBoxWidget::EditValue("##OverrideGravity", Config.mUseGravityOverride)) {
                     Committed = true;
                 }
             }
@@ -690,7 +695,7 @@ namespace Editor {
 
         ImGui::Spacing();
 
-        if (ImGui::Button("Reset All to Defaults")) {
+        if (FEditorButtonWidget::Press("Reset All to Defaults")) {
             for (const ClothEditing::FClothConfigField& Field : Fields) {
                 ResetToDefault(Field, Config);
             }
@@ -716,30 +721,28 @@ namespace Editor {
      * @brief 칠하기 켜기, 대상, 도구, 값, 붓 크기, 색 범례를 그립니다.
      */
     void Editor::FMeshViewer::DrawClothPaintSettings(PhysicsRuntime::UClothingAssetCommon&) {
-        ImGui::Checkbox("Paint in Viewport", &mClothPaintEnabled);
+        FEditorCheckBoxWidget::EditValue("Paint in Viewport", mClothPaintEnabled);
         ShowTextTooltip("켜면 왼쪽 버튼으로 칠함. 회전은 오른쪽 버튼");
 
-        ImGui::Checkbox("Cull Back Faces", &mClothCullBackFaces);
+        FEditorCheckBoxWidget::EditValue("Cull Back Faces", mClothCullBackFaces);
         ShowTextTooltip("뒤쪽 면 와이어프레임을 숨김");
         ImGui::SameLine();
-        ImGui::Checkbox("Front Facing Only", &mClothFrontFacingOnly);
+        FEditorCheckBoxWidget::EditValue("Front Facing Only", mClothFrontFacingOnly);
         ShowTextTooltip("카메라를 향한 입자만 칠함");
 
         const ClothEditing::FPaintTargetInfo& Info{ClothEditing::GetPaintTargetInfo(mClothPaintTarget)};
 
-        if (ImGui::BeginCombo("Target", Info.mName)) {
+        FEditorComboWidget::DrawPopup("Target", Info.mName, [&]() {
             for (int TargetIndex{}; TargetIndex < ClothEditing::NumPaintTargets; ++TargetIndex) {
                 const ClothEditing::FPaintTargetInfo& Candidate{ClothEditing::GetPaintTargetInfo(TargetIndex)};
 
-                if (ImGui::Selectable(Candidate.mName, TargetIndex == mClothPaintTarget)) {
+                if (FEditorButtonWidget::Press(Candidate.mName, EEditorButtonStyle::Selectable, TargetIndex == mClothPaintTarget)) {
                     mClothPaintTarget = TargetIndex;
                 }
 
                 ShowTextTooltip(Candidate.mTooltip);
             }
-
-            ImGui::EndCombo();
-        }
+        });
 
         ShowTextTooltip(Info.mTooltip);
 
@@ -751,27 +754,30 @@ namespace Editor {
                 ImGui::SameLine();
             }
 
-            ImGui::RadioButton(Tools[ToolIndex].mLabel, &mClothPaintTool, static_cast<int>(ToolIndex));
+            if (FEditorButtonWidget::Press(Tools[ToolIndex].mLabel, EEditorButtonStyle::Radio, mClothPaintTool == static_cast<int>(ToolIndex))) {
+                mClothPaintTool = static_cast<int>(ToolIndex);
+            }
+
             ShowLabelTooltip(Tools[ToolIndex]);
         }
 
         const auto Tool{static_cast<ClothEditing::EClothPaintTool>(mClothPaintTool)};
 
         if (Tool != ClothEditing::EClothPaintTool::Smooth) {
-            ImGui::DragFloat("Value", &mClothPaintValue, Info.mSpeed, 0.0f, Info.mMax, Info.mFormat, ImGuiSliderFlags_AlwaysClamp);
+            FEditorSliderWidget::EditValue("Value", mClothPaintValue, 0.0f, Info.mMax, Info.mFormat, Info.mSpeed, ImGuiSliderFlags_AlwaysClamp);
             ShowTextTooltip("칠할 값. 단위는 Target 설명 참고");
         } else {
-            ImGui::SliderFloat("Strength", &mClothSmoothStrength, 0.0f, 1.0f, "%.2f");
+            FEditorSliderWidget::EditValue("Strength", mClothSmoothStrength, 0.0f, 1.0f, "%.2f");
             ShowTextTooltip("다듬는 세기");
         }
 
         if (Tool == ClothEditing::EClothPaintTool::Fill) {
-            ImGui::DragFloat("Threshold", &mClothFillThreshold, Info.mSpeed, 0.0f, Info.mMax, Info.mFormat, ImGuiSliderFlags_AlwaysClamp);
+            FEditorSliderWidget::EditValue("Threshold", mClothFillThreshold, 0.0f, Info.mMax, Info.mFormat, Info.mSpeed, ImGuiSliderFlags_AlwaysClamp);
             ShowTextTooltip("시작 값과 이만큼 차이 나는 입자까지 채움");
         } else {
             float Radius{mClothPaintRadius.GetBase()};
 
-            if (ImGui::SliderFloat("Brush Radius", &Radius, 0.001f, 0.5f, "%.3f m", ImGuiSliderFlags_Logarithmic)) {
+            if (FEditorSliderWidget::EditValue("Brush Radius", Radius, 0.001f, 0.5f, "%.3f m", 0.0f, ImGuiSliderFlags_Logarithmic)) {
                 mClothPaintRadius = Core::FLength::FromBase(Radius);
             }
             ShowTextTooltip("붓 반지름(m). 가리킨 표면 둘레만 칠함\n아주 작아도 가장 가까운 입자 하나는 칠함");
@@ -819,10 +825,10 @@ namespace Editor {
 
         ImGui::BeginDisabled(mSkeleton == nullptr);
 
-        if (ImGui::BeginCombo("Physics Asset##Cloth", Current.empty() ? "None" : Current.c_str())) {
+        FEditorComboWidget::DrawPopup("Physics Asset##Cloth", Current.empty() ? "None" : Current.c_str(), [&]() {
             Core::FString ListError{};
 
-            if (ImGui::Selectable("None", Current.empty())) {
+            if (FEditorButtonWidget::Press("None", EEditorButtonStyle::Selectable, Current.empty())) {
                 ClothingAsset.SetPhysicsAsset(nullptr, Editor::ClothEditing::GetSkeletonBoneNames(*mSkeleton.Get()));
                 ClothingAsset.mPhysicsAssetPath.clear();
                 MarkClothChanged("The cloth no longer collides with a physics asset.");
@@ -837,7 +843,7 @@ namespace Editor {
 
                 const Core::FString Relative{Core::FilePath::ToGenericUtf8(Candidate)};
 
-                if (ImGui::Selectable(Relative.c_str(), Relative == Current)) {
+                if (FEditorButtonWidget::Press(Relative.c_str(), EEditorButtonStyle::Selectable, Relative == Current)) {
                     Core::FString LoadError{};
                     PhysicsRuntime::UPhysicsAsset* PhysicsAsset{mAssets->LoadPhysicsAsset(Candidate, LoadError)};
 
@@ -850,9 +856,7 @@ namespace Editor {
                     }
                 }
             }
-
-            ImGui::EndCombo();
-        }
+        });
 
         ImGui::EndDisabled();
         ShowTextTooltip("이 물리 에셋의 구·캡슐이 천을 밀어냄 (각 최대 32개)");

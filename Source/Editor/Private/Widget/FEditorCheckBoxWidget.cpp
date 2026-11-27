@@ -14,6 +14,19 @@ FEditorCheckBoxWidget::FEditorCheckBoxWidget(Core::FString Id, Core::FString Lab
 
 FEditorCheckBoxWidget::~FEditorCheckBoxWidget() = default;
 
+bool FEditorCheckBoxWidget::EditValue(const char* Label, bool& Value) {
+    bool Changed{};
+    FEditorCheckBoxWidget CheckBox{Label, Label, [&Value]() {
+        return Value;
+    }, [&Value, &Changed](bool Edited) {
+        Value = Edited;
+        Changed = true;
+    }};
+    CheckBox.Draw(0.0f);
+
+    return Changed;
+}
+
 FVector2 FEditorCheckBoxWidget::ComputeDesiredSize() const {
     return {ImGui::GetFrameHeight() + ImGui::GetStyle().ItemInnerSpacing.x + ImGui::CalcTextSize(mLabel.c_str(), nullptr, true).x, ImGui::GetFrameHeight()};
 }
