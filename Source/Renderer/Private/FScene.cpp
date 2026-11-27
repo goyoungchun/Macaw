@@ -48,19 +48,15 @@ namespace Renderer {
         } else {
             mHeightFogs.push_back(Proxy);
         }
-
-        ++mRevision;
     }
 
     /**
      * @brief 지정한 GUID의 높이 안개 프록시를 렌더 장면에서 제거합니다.
      */
     void Renderer::FScene::RemoveHeightFog(const Core::FGuid& Id) {
-        if (std::erase_if(mHeightFogs, [&Id](const Engine::FHeightFogSceneProxy& Fog) {
+        std::erase_if(mHeightFogs, [&Id](const Engine::FHeightFogSceneProxy& Fog) {
             return Fog.mId == Id;
-        }) > 0) {
-            ++mRevision;
-        }
+        });
     }
 
     /**
@@ -80,16 +76,12 @@ namespace Renderer {
         } else {
             mSkyAtmospheres.push_back(Proxy);
         }
-
-        ++mRevision;
     }
 
     void Renderer::FScene::RemoveSkyAtmosphere(const Core::FGuid& Id) {
-        if (std::erase_if(mSkyAtmospheres, [&Id](const Engine::FSkyAtmosphereSceneProxy& Atmosphere) {
+        std::erase_if(mSkyAtmospheres, [&Id](const Engine::FSkyAtmosphereSceneProxy& Atmosphere) {
             return Atmosphere.mId == Id;
-        }) > 0) {
-            ++mRevision;
-        }
+        });
     }
 
     const Engine::FSkyAtmosphereSceneProxy* Renderer::FScene::GetSkyAtmosphere() const {
@@ -118,16 +110,12 @@ namespace Renderer {
         } else {
             mSkyDomes.push_back(Proxy);
         }
-
-        ++mRevision;
     }
 
     void Renderer::FScene::RemoveSkyDome(const Core::FGuid& Id) {
-        if (std::erase_if(mSkyDomes, [&Id](const Engine::FSkyDomeSceneProxy& SkyDome) {
+        std::erase_if(mSkyDomes, [&Id](const Engine::FSkyDomeSceneProxy& SkyDome) {
             return SkyDome.mId == Id;
-        }) > 0) {
-            ++mRevision;
-        }
+        });
     }
 
     const Engine::FSkyDomeSceneProxy* Renderer::FScene::GetSkyDome() const {
@@ -210,8 +198,6 @@ namespace Renderer {
         if (CasterChanged) {
             mCasterRevision = Core::FRevision::Next();
         }
-
-        ++mRevision;
     }
 
     /**
@@ -238,8 +224,6 @@ namespace Renderer {
         if (IsShadowCaster(Primitive.mProxy)) {
             mCasterRevision = Core::FRevision::Next();
         }
-
-        ++mRevision;
     }
 
     /**
@@ -265,8 +249,6 @@ namespace Renderer {
 
         mPrimitives.pop_back();
         mIndices.erase(Position);
-
-        ++mRevision;
     }
 
     /**
@@ -274,13 +256,6 @@ namespace Renderer {
      */
     std::size_t Renderer::FScene::GetPrimitiveCount() const {
         return mPrimitives.size();
-    }
-
-    /**
-     * @brief 프리미티브 추가, 제거 또는 변환 갱신 시 증가하는 장면 개정 번호를 반환합니다.
-     */
-    Uint64 Renderer::FScene::GetRevision() const {
-        return mRevision;
     }
 
     /**
@@ -502,8 +477,6 @@ namespace Renderer {
         } else {
             mLights[Position->second] = Proxy;
         }
-
-        ++mRevision;
     }
 
     /**
@@ -525,8 +498,6 @@ namespace Renderer {
 
         mLights.pop_back();
         mLightIndices.erase(Position);
-
-        ++mRevision;
     }
 
     /**

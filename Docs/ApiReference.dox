@@ -236,6 +236,9 @@ Windows 창과 메시지 처리입니다.
 LuaJIT 컴파일, 실행 환경과 코루틴입니다.
 \defgroup NativeIDE NativeIDE
 Lua와 HLSL 소스 편집기, 언어 서버 연동과 빌드 메시지입니다.
+\defgroup TGL TGL
+노드 그래프 문서, 도메인 스키마, 편집 요청 및 공용 캔버스입니다.
+TGL::FGraphSchema는 연결 미리보기와 편집 적용에 같은 연결 검사를 사용합니다. 각 그래프는 추가 규칙과 원본 변경 방식을 정의합니다.
 \defgroup Editor Editor
 에디터 엔진, 뷰포트, 기즈모와 패널입니다.
 \defgroup App App

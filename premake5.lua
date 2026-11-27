@@ -174,6 +174,11 @@ Configure("NativeIDE", "StaticLib")
     end
     links(Modules.NativeIDE.Private)
 
+Configure("TGL", "StaticLib")
+    files { "Source/TGL/Public/**.h", "Source/TGL/Private/**.h", "Source/TGL/Private/**.cpp" }
+    AddIncludes("TGL", {})
+    links { "imgui-node-editor" }
+
 Configure("Shaders", "Utility")
     files { "Engine/Shaders/**.hlsl", "Engine/Shaders/**.hlsli" }
     vpaths { ["*"] = "Engine/Shaders" }

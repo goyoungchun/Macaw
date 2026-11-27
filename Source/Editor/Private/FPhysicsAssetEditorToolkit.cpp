@@ -35,7 +35,6 @@
 #include "PhysicsRuntime/UPhysicsAsset.h"
 
 #include <imgui.h>
-#include <imgui_node_editor.h>
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -420,15 +419,9 @@ FPhysicsAssetEditorToolkit::FPhysicsAssetEditorToolkit(FEditorContext* Context, 
     }
 }
 
-FPhysicsAssetEditorToolkit::~FPhysicsAssetEditorToolkit() {
-    if (mGraphEditor != nullptr) {
-        ax::NodeEditor::DestroyEditor(mGraphEditor);
-    }
-}
+FPhysicsAssetEditorToolkit::~FPhysicsAssetEditorToolkit() = default;
 
 void FPhysicsAssetEditorToolkit::DrawGraph() {
-    namespace ed = ax::NodeEditor;
-
     PhysicsRuntime::UPhysicsAsset* PhysicsAsset{GetPhysicsAsset()};
 
     if (PhysicsAsset == nullptr || mSkeleton == nullptr || mContent == nullptr || !mContent->IsReady()) {
@@ -468,15 +461,13 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     // 같은 바디가 다른 구역에도 나올 수 있으므로 구역 번호가 ID에 들어간다.
     enum EGraphId : std::uintptr_t {
         BodyNode,
+        RelatedBodyNode,
         ConstraintNode,
-        BodyPin,
-        ConstraintLeftPin,
-        ConstraintRightPin,
         LeftLink,
         RightLink
     };
     constexpr std::uintptr_t KindCount{8};
-    constexpr std::uintptr_t IndexStride{100000};
+    constexpr std::uintptr_t IndexStride{std::uintptr_t{1} << 32};
     const auto MakeId{[](EGraphId Kind, Index_t Index, Index_t Section) {
         return (static_cast<std::uintptr_t>(Section) * IndexStride + Index) * KindCount + Kind + 1;
     }};
@@ -489,10 +480,7 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     }};
 
     if (mGraphEditor == nullptr) {
-        ed::Config Config{};
-
-        Config.SettingsFile = nullptr;
-        mGraphEditor = ed::CreateEditor(&Config);
+        mGraphEditor = std::make_unique<TGL::FGraphEditor>();
     }
 
     // 중심 바디마다 별개의 구역을 만든다. 구역은 그 바디의 뼈가 양 끝 중 하나인 관절과 반대편 바디로 이루어진다.
@@ -529,118 +517,101 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     if (Relayout) {
         mGraphLaidOutFocus = Focus;
         mGraphFitFrames = 3;
+        mGraphEditor->ResetLayout();
     }
 
-    ed::SetCurrentEditor(mGraphEditor);
-    ed::Begin("PhysicsAssetGraph", ImGui::GetContentRegionAvail());
-
-    // 노드 크기(글꼴 크기에 따라 가로 약 300px, 세로 약 90px)보다 넉넉하게 간격을 둔다.
-    const float RowHeight{115.0f};
-    const float SectionGap{70.0f};
-    const float ConstraintX{270.0f};
-    const float OtherBodyX{680.0f};
-
-    // 바디 노드는 이름과 항목 수를 보여 주고, 핀은 관절과 잇는 쪽에 둔다.
-    const auto DrawBodyNode{[&](Index_t BodyIndex, Index_t Section, float X, float Y, bool PinOnRight) {
-        const PhysicsRuntime::UBodySetup& Setup{*PhysicsAsset->mSkeletalBodySetups[BodyIndex]};
-        const ed::NodeId Id{MakeId(BodyNode, BodyIndex, Section)};
-
-        if (Relayout) {
-            ed::SetNodePosition(Id, {X, Y});
-        }
-
-        ed::PushStyleColor(ed::StyleColor_NodeBg, ImColor{150, 100, 90, 230});
-        ed::BeginNode(Id);
-
-        if (!PinOnRight) {
-            ed::BeginPin(ed::PinId{MakeId(BodyPin, BodyIndex, Section)}, ed::PinKind::Output);
-            ImGui::TextUnformatted("o");
-            ed::EndPin();
-            ImGui::SameLine();
-        }
-
-        ImGui::TextUnformatted("Body");
-
-        if (PinOnRight) {
-            ImGui::SameLine();
-            ed::BeginPin(ed::PinId{MakeId(BodyPin, BodyIndex, Section)}, ed::PinKind::Output);
-            ImGui::TextUnformatted("o");
-            ed::EndPin();
-        }
-
-        ImGui::TextUnformatted(Setup.GetBoneName().c_str());
-        ImGui::Text("%zu shape(s)", PhysicsAssetEditing::GetTotalShapeCount(Setup));
-        ed::EndNode();
-        ed::PopStyleColor();
+    const ImU32 Tint{ImGui::ColorConvertFloat4ToU32(TGL::Canvas::ConnectionColor(TGL::Canvas::EConnectionRole::Relationship))};
+    const auto GetConstraintTitle{[](const PhysicsRuntime::FConstraintInstance& Instance) {
+        return Instance.mConstraintBone1 + " : " + Instance.mConstraintBone2;
     }};
+    float BodyWidth{160.0f};
+    float ConstraintWidth{160.0f};
 
-    // 그려진 노드를 모아 두고 선택 동기화에 쓴다. (바디 노드는 바디 번호, 관절 노드는 관절 번호와 함께)
+    for (Index_t Section{}; Section < Focus.size(); ++Section) {
+        const auto& Body{*PhysicsAsset->mSkeletalBodySetups[Focus[Section]]};
+        BodyWidth = std::max(BodyWidth, ImGui::CalcTextSize(Body.GetBoneName().c_str()).x + 12.0f);
+
+        for (const FGraphLink& Link : Sections[Section]) {
+            const Core::FString Title{GetConstraintTitle(PhysicsAsset->mConstraintSetup[Link.mConstraint]->mDefaultInstance)};
+            ConstraintWidth = std::max(ConstraintWidth, ImGui::CalcTextSize(Title.c_str()).x + 12.0f);
+        }
+    }
+
+    // 노드 크기보다 넉넉하게 간격을 둔다.
+    const TGL::Canvas::Style Style{};
+    const ImVec4 Padding{Style.mNodePadding};
+    const float ColumnGap{95.0f + Padding.x + Padding.z};
+    const float RowHeight{std::max(144.0f, ImGui::GetTextLineHeightWithSpacing() * 5.0f + Padding.y + Padding.w + 38.0f)};
+    const float SectionGap{70.0f};
+    const float ConstraintX{BodyWidth + ColumnGap};
+    const float OtherBodyX{ConstraintX + ConstraintWidth + ColumnGap};
+    const TGL::FPinId LeftPin{1};
+    const TGL::FPinId RightPin{2};
+    std::vector<TGL::FNodeView> Nodes{};
+    std::vector<TGL::FLinkView> Links{};
     Core::TArray<std::pair<std::uintptr_t, Index_t>> DrawnBodyNodes{};
     Core::TArray<std::pair<std::uintptr_t, Index_t>> DrawnConstraintNodes{};
+
+    // 바디 노드는 이름과 항목 수를 보여 주고, 핀은 관절과 잇는 쪽에 둔다.
+    const auto AddBodyNode{[&](Index_t BodyIndex, Index_t Section, TGL::FPoint Position, bool Center) {
+        const PhysicsRuntime::UBodySetup& Setup{*PhysicsAsset->mSkeletalBodySetups[BodyIndex]};
+        const TGL::FNodeId Id{MakeId(Center ? BodyNode : RelatedBodyNode, BodyIndex, Section)};
+        TGL::FNodeView Node{Id, Position, Setup.GetBoneName(), {}, "Body"};
+        Node.mDeletable = false;
+        Node.mPins.push_back({Center ? RightPin : LeftPin, Center ? TGL::EPinDirection::Output : TGL::EPinDirection::Input, "Constraint", "Constraint", {}, Tint});
+        Node.mProperties.push_back({"Shapes", "Shapes", static_cast<std::int64_t>(PhysicsAssetEditing::GetTotalShapeCount(Setup)), {}, true});
+        Nodes.push_back(std::move(Node));
+        DrawnBodyNodes.push_back({Id.Get(), BodyIndex});
+
+        return Id;
+    }};
+
     float SectionY{};
 
     for (Index_t Section{}; Section < Focus.size(); ++Section) {
-        const Core::TArray<FGraphLink>& Links{Sections[Section]};
-        const float CenterY{SectionY + (static_cast<float>(std::max<Index_t>(Links.size(), 1)) - 1.0f) * RowHeight * 0.5f};
-
-        DrawBodyNode(Focus[Section], Section, 0.0f, CenterY, true);
-        DrawnBodyNodes.push_back({MakeId(BodyNode, Focus[Section], Section), Focus[Section]});
-
+        const auto& SectionLinks{Sections[Section]};
+        const float CenterY{SectionY + (static_cast<float>(std::max<Index_t>(SectionLinks.size(), 1)) - 1.0f) * RowHeight * 0.5f};
+        const TGL::FNodeId Center{AddBodyNode(Focus[Section], Section, {0.0f, CenterY}, true)};
         Core::TArray<Index_t> DrawnOthers{};
 
-        for (Index_t Row{}; Row < Links.size(); ++Row) {
-            const auto [ConstraintIndex, OtherBody] = Links[Row];
-            const PhysicsRuntime::FConstraintInstance& Instance{PhysicsAsset->mConstraintSetup[ConstraintIndex]->mDefaultInstance};
-            const ed::NodeId Id{MakeId(ConstraintNode, ConstraintIndex, Section)};
+        for (Index_t Row{}; Row < SectionLinks.size(); ++Row) {
+            const auto [ConstraintIndex, OtherBody] = SectionLinks[Row];
+            const auto& Instance{PhysicsAsset->mConstraintSetup[ConstraintIndex]->mDefaultInstance};
+            const TGL::FNodeId Id{MakeId(ConstraintNode, ConstraintIndex, Section)};
             const float Y{SectionY + static_cast<float>(Row) * RowHeight};
-
-            if (Relayout) {
-                ed::SetNodePosition(Id, {ConstraintX, Y});
-            }
+            const bool FromChild{PhysicsAsset->mSkeletalBodySetups[Focus[Section]]->GetBoneName() == Instance.mConstraintBone1};
 
             // 관절 노드의 제목은 UE처럼 "자식 : 부모"이다.
-            ed::PushStyleColor(ed::StyleColor_NodeBg, ImColor{150, 140, 80, 230});
-            ed::BeginNode(Id);
-            ed::BeginPin(ed::PinId{MakeId(ConstraintLeftPin, ConstraintIndex, Section)}, ed::PinKind::Input);
-            ImGui::TextUnformatted("o");
-            ed::EndPin();
-            ImGui::SameLine();
-            ImGui::TextUnformatted("Constraint");
-            ImGui::SameLine();
-            ed::BeginPin(ed::PinId{MakeId(ConstraintRightPin, ConstraintIndex, Section)}, ed::PinKind::Output);
-            ImGui::TextUnformatted("o");
-            ed::EndPin();
-            ImGui::Text("%s : %s", Instance.mConstraintBone1.c_str(), Instance.mConstraintBone2.c_str());
-            ed::EndNode();
-            ed::PopStyleColor();
+            TGL::FNodeView Node{Id, {ConstraintX, Y}, GetConstraintTitle(Instance), {}, "Constraint"};
+            Node.mDeletable = false;
+            Node.mPins.push_back({LeftPin, TGL::EPinDirection::Input, FromChild ? "Child" : "Parent", "Constraint", {}, Tint});
+            Node.mPins.push_back({RightPin, TGL::EPinDirection::Output, FromChild ? "Parent" : "Child", "Constraint", {}, Tint});
+            Nodes.push_back(std::move(Node));
             DrawnConstraintNodes.push_back({Id.Get(), ConstraintIndex});
-
-            ed::Link(ed::LinkId{MakeId(LeftLink, ConstraintIndex, Section)}, ed::PinId{MakeId(BodyPin, Focus[Section], Section)}, ed::PinId{MakeId(ConstraintLeftPin, ConstraintIndex, Section)}, ImVec4{0.85f, 0.85f, 0.85f, 1.0f}, 2.0f);
+            Links.push_back({{MakeId(LeftLink, ConstraintIndex, Section)}, TGL::FPinRef{Center, RightPin}, TGL::FPinRef{Id, LeftPin}, {}, {}, Tint, false, false});
 
             if (!IsValidBody(OtherBody)) {
                 continue;
             }
 
             // 같은 바디에 관절이 여러 개 걸려도 구역 안에서 바디 노드는 한 번만 그린다.
-            if (std::find(DrawnOthers.begin(), DrawnOthers.end(), OtherBody) == DrawnOthers.end()) {
+            if (std::ranges::find(DrawnOthers, OtherBody) == DrawnOthers.end()) {
                 DrawnOthers.push_back(OtherBody);
-                DrawBodyNode(OtherBody, Section, OtherBodyX, Y, false);
-                DrawnBodyNodes.push_back({MakeId(BodyNode, OtherBody, Section), OtherBody});
+                AddBodyNode(OtherBody, Section, {OtherBodyX, Y}, false);
             }
 
-            ed::Link(ed::LinkId{MakeId(RightLink, ConstraintIndex, Section)}, ed::PinId{MakeId(ConstraintRightPin, ConstraintIndex, Section)}, ed::PinId{MakeId(BodyPin, OtherBody, Section)}, ImVec4{0.85f, 0.85f, 0.85f, 1.0f}, 2.0f);
+            const TGL::FNodeId Other{MakeId(RelatedBodyNode, OtherBody, Section)};
+            Links.push_back({{MakeId(RightLink, ConstraintIndex, Section)}, TGL::FPinRef{Id, RightPin}, TGL::FPinRef{Other, LeftPin}, {}, {}, Tint, false, false});
         }
 
-        SectionY += static_cast<float>(std::max<Index_t>(Links.size(), 1)) * RowHeight + SectionGap;
+        SectionY += static_cast<float>(std::max<Index_t>(SectionLinks.size(), 1)) * RowHeight + SectionGap;
     }
+
+    mGraphDocument.Replace(std::move(Nodes), std::move(Links));
 
     // 툴킷의 선택과 노드 에디터의 선택을 맞춘다. 바깥에서 선택이 바뀌면 노드를 고르고, 노드를 직접 누르면 툴킷의 선택을 바꾼다.
     // 같은 바디나 관절이 여러 구역에 그려져 있으면 모두 고른다.
     // 노드가 아닌 빈 공간을 누르면 선택을 모두 푼다. (그래프의 중심은 그대로 둔다.)
-    if (ed::IsBackgroundClicked()) {
-        ClearSelection();
-    }
-
     Core::TArray<std::uintptr_t> Ours{};
 
     for (const auto& [Id, ConstraintIndex] : DrawnConstraintNodes) {
@@ -660,22 +631,40 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     std::sort(Ours.begin(), Ours.end());
 
     if (Ours != mGraphSyncedKeys || Relayout) {
-        ed::ClearSelection();
+        std::vector<TGL::FSelectionItem> Items{};
 
         for (const std::uintptr_t Id : Ours) {
-            ed::SelectNode(ed::NodeId{Id}, true);
+            Items.emplace_back(TGL::FNodeId{Id});
         }
 
+        mGraphEditor->SetSelection(Items);
         mGraphSyncedKeys = Ours;
-    } else {
+    }
+
+    if (mGraphFitFrames > 0) {
+        mGraphEditor->Fit();
+    }
+
+    const TGL::FGraphEvents Events{mGraphEditor->Draw("PhysicsAssetGraph", mGraphDocument, mGraphSchema)};
+
+    if (!Events.mVisible) {
+        return;
+    }
+
+    if (mGraphFitFrames > 0) {
+        --mGraphFitFrames;
+    }
+
+    if (Events.mBackgroundClicked) {
+        ClearSelection();
+    } else if (Events.mSelectionChanged) {
         // 노드 에디터에서 사용자가 선택을 바꿨으면 툴킷의 선택에 반영한다. (Ctrl+클릭으로 여러 노드도 고를 수 있다.)
-        constexpr int MaxPicked{64};
-        ed::NodeId PickedNodes[MaxPicked]{};
-        const int PickedCount{ed::GetSelectedNodes(PickedNodes, MaxPicked)};
         Core::TArray<std::uintptr_t> Picked{};
 
-        for (int Index{}; Index < PickedCount; ++Index) {
-            Picked.push_back(PickedNodes[Index].Get());
+        for (const TGL::FSelectionItem& Item : mGraphEditor->GetSelection()) {
+            if (const auto* Node{std::get_if<TGL::FNodeId>(&Item)}; Node != nullptr && TGL::FindNode(mGraphDocument.ReadView(), *Node) != nullptr) {
+                Picked.push_back(Node->Get());
+            }
         }
 
         std::sort(Picked.begin(), Picked.end());
@@ -693,7 +682,7 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
 
                 DecodeId(Id, Kind, Index);
 
-                if (Kind == BodyNode && IsValidBody(Index)) {
+                if ((Kind == BodyNode || Kind == RelatedBodyNode) && IsValidBody(Index)) {
                     if (std::find(PickedBodies.begin(), PickedBodies.end(), Index) == PickedBodies.end()) {
                         PickedBodies.push_back(Index);
                     }
@@ -723,25 +712,19 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     }
 
     // 바디 노드를 더블클릭하면 그 바디를 그래프의 새 중심 하나로 삼는다.
-    if (const std::uintptr_t Double{ed::GetDoubleClickedNode().Get()}; Double != 0) {
+    const auto* Activated{Events.mActivated ? std::get_if<TGL::FNodeId>(&*Events.mActivated) : nullptr};
+
+    if (Activated != nullptr && TGL::FindNode(mGraphDocument.ReadView(), *Activated) != nullptr) {
         std::uintptr_t Kind{};
         Index_t Index{};
 
-        DecodeId(Double, Kind, Index);
+        DecodeId(Activated->Get(), Kind, Index);
 
-        if (Kind == BodyNode && IsValidBody(Index)) {
+        if ((Kind == BodyNode || Kind == RelatedBodyNode) && IsValidBody(Index)) {
             mGraphFocus = {Index};
             SelectBody(Index, PhysicsAssetEditing::FShapeRef{}, false);
         }
     }
-
-    if (mGraphFitFrames > 0) {
-        ed::NavigateToContent(0.0f);
-        --mGraphFitFrames;
-    }
-
-    ed::End();
-    ed::SetCurrentEditor(nullptr);
 }
 
 void FPhysicsAssetEditorToolkit::UpdateEditor(float) {

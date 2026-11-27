@@ -104,11 +104,20 @@ namespace Editor {
 
     private:
         /**
+         * @brief 지정한 콘텐츠 폴더를 순회해 에셋과 폴더 목록을 채웁니다.
+         * @param[in] Root 순회를 시작할 콘텐츠 폴더입니다.
+         * @param[in] Engine 엔진 콘텐츠 경로를 /Engine 아래에 등록할 때 true입니다.
+         * @param[out] Error 에셋 타입을 읽거나 폴더를 순회하는 중 발생한 오류입니다.
+         * @param[in] ShaderSources true이면 .masset 타입 검사를 생략하고 엔진의 HLSL 원본을 포함합니다.
+         * @return 폴더 순회 오류가 없으면 true입니다.
+         */
+        bool ScanContent(const std::filesystem::path& Root, bool Engine, Core::FString& Error, bool ShaderSources = false);
+
+        /**
          * @brief 비교용 경로 키를 만듭니다.
          * @param Path Content 기준 경로입니다.
          * @return 대소문자를 정규화한 경로 키입니다.
          */
-        bool ScanContent(const std::filesystem::path& Root, bool Engine, Core::FString& Error, bool ShaderSources = false);
         static Core::FString MakeKey(const std::filesystem::path& Path);
 
     private:

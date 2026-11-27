@@ -29,6 +29,10 @@ namespace Engine {
 
     UAnimGraphInstance::~UAnimGraphInstance() = default;
 
+    Core::FRevision UAnimGraphInstance::GetCompiledGraphRevision() const {
+        return mGraphRevision;
+    }
+
     const Core::FString& UAnimGraphInstance::GetAnimGraph() const {
         return mAnimGraph;
     }

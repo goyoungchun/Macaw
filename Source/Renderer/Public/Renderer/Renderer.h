@@ -299,8 +299,9 @@ namespace Renderer {
 
         /**
          * @brief 프로젝트 콘텐츠의 셰이더 경로와 컴파일 캐시 경로를 설정합니다.
-         * @param[in] ContentRoot 프로젝트 에셋 경로의 기준 콘텐츠 폴더입니다.
+         * @param[in] Assets 셰이더 원본 경로를 제공하는 프로젝트 에셋 관리자입니다.
          * @param[in] CacheDirectory 컴파일된 셰이더의 캐시 파일을 보관할 폴더입니다.
+         * @param[in] ForwardShading true이면 포워드 셰이딩을 사용합니다.
          */
         void SetProjectPaths(const Asset::FAssetManager& Assets, const std::filesystem::path& CacheDirectory, bool ForwardShading = false);
         bool UsesForwardShading() const override;

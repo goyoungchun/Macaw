@@ -155,7 +155,7 @@ namespace Renderer {
          * @brief 그림자 맵 하나의 깊이 내용을 결정하는 현재 입력 스탬프를 만듭니다.
          * @param[in] Index GetMaps 기준 그림자 맵 인덱스입니다.
          * @param[in] DepthShaderRevision 깊이를 그릴 깊이 전용 정점 셰이더의 리비전입니다.
-         * @return 블록·광원 행렬·캐스터·아틀라스·셰이더 리비전과 바이어스 프리셋을 묶은 스탬프입니다.
+         * @return 블록, 광원 행렬, 캐스터와 셰이더의 리비전, 바이어스 프리셋을 묶은 스탬프입니다.
          */
         Renderer::FShadowTileStamp MakeTileStamp(Index_t Index, Uint64 DepthShaderRevision) const;
 
@@ -299,11 +299,6 @@ namespace Renderer {
          * @brief Prepare가 그림자 맵을 구성할 때의 장면 캐스터 리비전입니다.
          */
         Core::FRevision mCasterRevision{};
-
-        /**
-         * @brief 아틀라스 텍스처를 만들 때마다 새로 받는 리비전입니다.
-         */
-        Core::FRevision mAtlasRevision{};
 
         /**
          * @brief 아틀라스 타일마다 마지막으로 그린 입력을 기억해 같은 입력이면 다시 그리지 않게 하는 캐시입니다.

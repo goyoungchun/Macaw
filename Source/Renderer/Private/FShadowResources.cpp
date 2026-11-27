@@ -248,7 +248,7 @@ namespace Renderer {
 
         mAtlas = std::move(Atlas);
         mPreview = std::move(Preview);
-        mAtlasRevision = Core::FRevision::Next();
+        mTileCache.Clear();
         mPreviewDirty = true;
 
         return true;
@@ -523,7 +523,7 @@ namespace Renderer {
     Renderer::FShadowTileStamp Renderer::FShadowResources::MakeTileStamp(Index_t Index, Uint64 DepthShaderRevision) const {
         const FTileDepth& Tile{mTileDepths[Index]};
 
-        return {Tile.mBlock, mMaps[Index].mViewProjection, mCasterRevision, mAtlasRevision, DepthShaderRevision, Tile.mBiasPreset, Tile.mSlopeBiasPreset};
+        return {Tile.mBlock, mMaps[Index].mViewProjection, mCasterRevision, DepthShaderRevision, Tile.mBiasPreset, Tile.mSlopeBiasPreset};
     }
 
     /**

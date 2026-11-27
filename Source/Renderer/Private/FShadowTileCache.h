@@ -95,11 +95,6 @@ namespace Renderer {
         Core::FRevision mCasters{};
 
         /**
-         * @brief 깊이를 기록한 아틀라스 텍스처의 생성 리비전입니다.
-         */
-        Core::FRevision mAtlas{};
-
-        /**
          * @brief 깊이를 기록한 깊이 전용 정점 셰이더의 리비전입니다.
          */
         Uint64 mDepthShader{};
