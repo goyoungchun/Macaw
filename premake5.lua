@@ -138,6 +138,15 @@ for _, Name in ipairs(ModuleNames) do
         defines { "DIRECTX_TEX_IMPORT" }
     end
 
+    if Name == "Editor" then
+        local ImageEditor = "Source/Editor/ThirdParty/ImGuiImageEditor"
+        local TextureInspector = "Source/Editor/ThirdParty/ImGuiTexInspect"
+        files { ImageEditor .. "/**.h", ImageEditor .. "/addons/imguiyesaddons/imguiimageeditor.cpp", TextureInspector .. "/**.h", TextureInspector .. "/**.cpp" }
+        filter ("files:" .. ImageEditor .. "/addons/imguiyesaddons/imguiimageeditor.cpp")
+            defines { "IMGUIIMAGEEDITOR_ENABLE_NON_STB_PLUGINS" }
+        filter {}
+    end
+
     if Name == "Engine" then
         includedirs { "vcpkg_installed/x64-windows/include/luajit" }
         defines { "SOL_ALL_SAFETIES_ON=1" }
