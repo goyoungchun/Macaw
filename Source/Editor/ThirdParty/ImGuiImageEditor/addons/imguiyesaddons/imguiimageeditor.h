@@ -252,6 +252,8 @@ public:
         ImVec2 mUVMin{};
         ImVec2 mUVMax{};
         bool mHovered{};
+        const unsigned char* mStrokePixels{};
+        ImVec4 mStrokeBounds{};
     };
 
     enum class ECanvasZoom {
@@ -283,12 +285,12 @@ public:
         int mTool{};
         bool mReadOnly{};
         bool mPan{};
-        bool mSample{};
         bool mErase{};
         int mVisibleChannel{-1};
         bool mWrap{};
         bool mZoomTool{};
         bool mSnapZoom{};
+        bool mDrawComposite{};
     };
 
     IMGUI_API ImageEditor();
@@ -316,8 +318,10 @@ public:
     IMGUI_API bool RenderCanvas(const ImVec2& Size, const FCanvasOptions& Options);
     IMGUI_API void RenderBrushSizeControl(bool Enabled);
     IMGUI_API void RenderToolControls(int Tool, bool Erasing = false);
-    IMGUI_API void RenderImageControls();
+    IMGUI_API void RenderImageControls(bool FixedCanvas = false);
     IMGUI_API void CopyPaintSettingsFrom(const ImageEditor& Source);
+    IMGUI_API void SetPaintColor(const ImVec4& Color);
+    IMGUI_API void CopyCanvasViewFrom(const ImageEditor& Source);
     IMGUI_API bool CanExecuteSelectionCommand(ESelectionCommand Command) const;
     IMGUI_API bool ExecuteSelectionCommand(ESelectionCommand Command);
     IMGUI_API bool CanEditSelection() const;
@@ -325,8 +329,8 @@ public:
     IMGUI_API bool HasFloatingPaste() const;
     IMGUI_API bool CommitFloatingPaste();
     IMGUI_API bool CancelFloatingPaste();
-    IMGUI_API bool Undo();
-    IMGUI_API bool Redo();
+    IMGUI_API bool Undo(bool FixedCanvas = false);
+    IMGUI_API bool Redo(bool FixedCanvas = false);
     void render() {render(ImVec2(0,0));}
 
     IMGUI_API void destroy();         // clears instance textures and frees memory

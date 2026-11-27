@@ -20,7 +20,8 @@ namespace Asset {
 		  mHeight{Texture.GetSizeY()},
 		  mFormat{static_cast<Uint32>(Texture.GetFormat())},
 		  mSRGB{Texture.IsSRGB()},
-		  mDDS{!Texture.GetDDSData().empty()} {
+		  mDDS{!Texture.GetDDSData().empty()},
+		  mEditorLayerData{Texture.GetEditorLayerData()} {
         const auto& Data{mDDS ? Texture.GetDDSData() : Texture.GetPixels()};
 
         if (!Data.empty()) {
@@ -38,6 +39,9 @@ namespace Asset {
         Archive.Serialize("SRGB", mSRGB);
         Archive.Serialize("DDS", mDDS);
         Archive.Serialize("ImageData", mImageData);
+        if (Archive.IsLoading() ? Archive.GetRemainingBytes() != 0 : !mEditorLayerData.empty()) {
+            Archive.Serialize("EditorLayerData", mEditorLayerData);
+        }
     }
 
     /**
@@ -61,6 +65,7 @@ namespace Asset {
             return false;
         }
 
+        Texture.SetEditorLayerData(mEditorLayerData);
         return true;
     }
 

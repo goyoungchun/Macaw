@@ -46,6 +46,14 @@ namespace Asset {
         return mDDSData;
     }
 
+    const Core::FString& Asset::UTexture2D::GetEditorLayerData() const {
+        return mEditorLayerData;
+    }
+
+    void Asset::UTexture2D::SetEditorLayerData(Core::FString Data) {
+        mEditorLayerData = std::move(Data);
+    }
+
     /**
      * @brief 이미지 파일을 디코딩하여 텍스처 크기·형식·픽셀 데이터를 설정합니다.
      */
@@ -97,7 +105,11 @@ namespace Asset {
             }
         }
 
-        return SUCCEEDED(Result) && SetImageData(SourceImage, SRGB);
+        if (FAILED(Result) || !SetImageData(SourceImage, SRGB)) {
+            return false;
+        }
+        mEditorLayerData.clear();
+        return true;
     }
 
     /**
@@ -122,6 +134,7 @@ namespace Asset {
         mSRGB = SRGB;
         mPixels = Core::TArray<Uint8>{};
         mDDSData = Core::TArray<Uint8>{};
+        mEditorLayerData.clear();
         mExternalResource = false;
 
         return true;
@@ -150,12 +163,31 @@ namespace Asset {
         mFormat = Format;
         mPixels = std::move(Pixels);
         mDDSData = Core::TArray<Uint8>{};
+        mEditorLayerData.clear();
         mSRGB = SRGB;
         mExternalResource = false;
 
         ReleaseResources();
 
         return true;
+    }
+
+    void Asset::UTexture2D::SwapImageData(Asset::UTexture2D& Other) {
+        std::swap(mSizeX, Other.mSizeX);
+        std::swap(mSizeY, Other.mSizeY);
+        std::swap(mMipLevels, Other.mMipLevels);
+        std::swap(mFormat, Other.mFormat);
+        mPixels.swap(Other.mPixels);
+        mDDSData.swap(Other.mDDSData);
+        mEditorLayerData.swap(Other.mEditorLayerData);
+        std::swap(mSRGB, Other.mSRGB);
+        std::swap(mUsage, Other.mUsage);
+        mTexture.Swap(Other.mTexture);
+        mShaderResourceView.Swap(Other.mShaderResourceView);
+        mRenderTargetView.Swap(Other.mRenderTargetView);
+        mDepthStencilView.Swap(Other.mDepthStencilView);
+        std::swap(mExternalResource, Other.mExternalResource);
+        std::swap(mResourceBytes, Other.mResourceBytes);
     }
 
     /**
@@ -428,6 +460,7 @@ namespace Asset {
         mSRGB = SRGB;
         mPixels = Core::TArray<Uint8>{};
         mDDSData = Core::TArray<Uint8>{};
+        mEditorLayerData.clear();
         mExternalResource = true;
         mResourceBytes = static_cast<std::size_t>(mSizeX) * mSizeY * GetBytesPerPixel(mFormat);
 

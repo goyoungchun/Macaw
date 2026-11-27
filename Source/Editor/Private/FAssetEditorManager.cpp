@@ -646,7 +646,7 @@ void FAssetEditorManager::OpenContentAsset(const std::filesystem::path& Path, As
         }
     } else if (Type == Asset::EAssetType::Texture) {
         if (Asset::UTexture2D* Texture{Assets->LoadTexture(Path, Error)}; Texture != nullptr && Texture->CreateResources(static_cast<ID3D11Device*>(mContext->GetRenderer()->GetNativeDevice()))) {
-            Toolkit = std::make_unique<FTextureEditorToolkit>(mContext, Path, Texture);
+            Toolkit = std::make_unique<FTextureEditorToolkit>(mContext, Path, Texture, mMessages);
         }
     } else if (Type == Asset::EAssetType::Mesh || Type == Asset::EAssetType::SkeletalMesh) {
         auto Content{std::make_unique<FMeshViewer>(mContext->GetRenderer(), Assets)};

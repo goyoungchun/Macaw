@@ -3853,14 +3853,14 @@ class UndoStack : protected ImVector<StbImageBuffer*> {
         //if (stack[stack_cur-1]== null) Console.WriteLine ("\tStackPush(): Error: stack[stack_cur-1]==null with: stack_cur={0}, stack_max={1}", stack_cur, stack_max);
         //Console.WriteLine ("\tStackPush(): stack_cur={0}, stack_max={1}", stack_cur, stack_max);
     }
-    const ItemType* undo(const unsigned char* im,int w,int h,int c) //,const ImRect* sel=NULL)
+    const ItemType* undo(const unsigned char* im,int w,int h,int c,bool FixedCanvas = false) //,const ImRect* sel=NULL)
     {
         //fprintf(stderr,"StackUndo(): stack_cur=%d, stack_max=%d\n", stack_cur, stack_max);
         //IM_ASSERT(sel==NULL);   // if this works we can remove last arg
         if (stack_cur<0) {//Console.WriteLine ("StackUndo(): Error: stack_cur<0, with stack_cur = "+stack_cur);
             stack_cur=0;return NULL;}
         if (stack_cur<1) return NULL;
-        if (!Data[stack_cur-1]->isValid() /*|| stack[stack_cur-1]==image*/) {
+        if (!Data[stack_cur-1]->isValid() /*|| stack[stack_cur-1]==image*/ || (FixedCanvas && (Data[stack_cur-1]->W != w || Data[stack_cur-1]->H != h))) {
             //fprintf(stderr,"StackUndo(): Error: stack [stack_cur - 1] == null, with stack_cur = %d\n",stack_cur);
             return NULL;
         }
@@ -3873,9 +3873,9 @@ class UndoStack : protected ImVector<StbImageBuffer*> {
         return Data[stack_cur];
     }
 
-    const ItemType* redo(const unsigned char* im,int w,int h,int c)    {
+    const ItemType* redo(const unsigned char* im,int w,int h,int c,bool FixedCanvas = false)    {
         //Console.WriteLine ("StackRedo(): stack_cur={0}, stack_max={1}", stack_cur, stack_max);
-        if (stack_cur+1<stack_max && !Data[stack_cur+1]->isValid()) {
+        if (stack_cur+1<stack_max && (!Data[stack_cur+1]->isValid() || (FixedCanvas && (Data[stack_cur+1]->W != w || Data[stack_cur+1]->H != h)))) {
             //Console.WriteLine ("StackRedo(): Nothing to do: 'stack_cur+1<stack_max && stack[stack_cur+1]==null' with: stack_cur={0}, stack_max={1}", stack_cur, stack_max);
             return NULL;
         }
@@ -4463,7 +4463,10 @@ struct StbImage {
 #       endif //IMGUI_FILESYSTEM_H_
         filePathName = ImGetFileNameReference(filePath);
         ImStrAllocateFileExtension(fileExt,filePathName);
-        fileExtCanBeSaved = (strstr(ImGuiIE::SupportedSaveExtensions[c],fileExt)!=NULL);
+        if (!fileExt) {
+            ImStrAllocate(fileExt, "");
+        }
+        fileExtCanBeSaved = fileExt[0] != '\0' && strstr(ImGuiIE::SupportedSaveExtensions[c], fileExt) != nullptr;
 #       if (defined(IMGUI_USE_MINIZIP) && defined(IMGUI_FILESYSTEM_H_) && !defined(IMGUIFS_NO_EXTRA_METHODS))
         if (ImGuiFs::PathIsInsideAZipFile(path)) fileExtCanBeSaved = false;
 #       endif // IMGUI_USE_MINIZIP
@@ -4536,9 +4539,9 @@ struct StbImage {
     }
 
     void pushImage(const ImRect* pSel=NULL) {undoStack.push(image,w,h,c,pSel,true);}
-    bool undo() //const ImRect* pSel=NULL)
+    bool undo(bool FixedCanvas = false) //const ImRect* pSel=NULL)
     {
-        const ImGuiIE::StbImageBuffer* buffer = undoStack.undo(image,w,h,c);//,pSel);
+        const ImGuiIE::StbImageBuffer* buffer = undoStack.undo(image,w,h,c,FixedCanvas);//,pSel);
         if (buffer) {
             const int oldW = w;
             const int oldH = h;
@@ -4572,8 +4575,8 @@ struct StbImage {
         }
         return false;
     }
-    bool redo() {
-        const ImGuiIE::StbImageBuffer* buffer = undoStack.redo(image,w,h,c);
+    bool redo(bool FixedCanvas = false) {
+        const ImGuiIE::StbImageBuffer* buffer = undoStack.redo(image,w,h,c,FixedCanvas);
         if (buffer) {
             const int oldW = w;
             const int oldH = h;
@@ -5743,7 +5746,7 @@ struct StbImage {
 
     }
 
-    void renderLeftPanel(MyRenderStruct& mrs) {
+    void renderLeftPanel(MyRenderStruct& mrs, bool FixedCanvas = false) {
         const ImGui::ImageEditor::Style& ies(ImGui::ImageEditor::Style::Get());
         const ImGuiStyle& style(ImGui::GetStyle());
 
@@ -5877,10 +5880,12 @@ struct StbImage {
             resizeWidth = ImClamp(resizeWidth, 1, ImGuiIE::MaxImageDimension);
             resizeHeight = ImClamp(resizeHeight, 1, ImGuiIE::MaxImageDimension);
             if (resizeWidth>0 && resizeHeight>0)    {
+                ImGui::BeginDisabled(FixedCanvas);
                 if (ImGui::Button("Clip") && clipImage(resizeWidth,resizeHeight)) {assignModified(true);}
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s","Set new size without\nresizing the image");
                 ImGui::SameLine();
                 if (ImGui::Button("Resize") && resizeImage(resizeWidth,resizeHeight,(ImGuiIE::ResizeFilter)resizeFilter)) {assignModified(true);}
+                ImGui::EndDisabled();
             }
             ImGui::PopID();
         }
@@ -5943,8 +5948,10 @@ struct StbImage {
             ImGui::EndGroup();
             ImGui::SameLine();
             ImGui::BeginGroup();
+            ImGui::BeginDisabled(FixedCanvas && w != h && !(chbShiftImageSelection && hasImageSelection));
             if (ImGui::SmallButton("RotateCCW") && rotateImageCCW90Deg((chbShiftImageSelection && hasImageSelection) ? &imageSelection : NULL)) {assignModified(true);}
             if (ImGui::SmallButton("RotateCW") && rotateImageCW90Deg((chbShiftImageSelection && hasImageSelection) ? &imageSelection : NULL)) {assignModified(true);}
+            ImGui::EndDisabled();
             ImGui::EndGroup();
             ImGui::EndGroup();  // Parent
             isShiftPixelsAreaHovered = ImGui::IsItemHovered();
@@ -6020,46 +6027,54 @@ struct StbImage {
             IM_ASSERT(selectedTopItem>=0 && selectedTopItem<3);
             if (selectedTopItem==0) {
                 bool mustDisplaySelectionSizeTooltip = false;
-                if (ImGui::TreeNode("Adjust Selection:"))  {
-                    if (hasSelection && ImGui::IsItemHovered()) mustDisplaySelectionSizeTooltip = true;
-                    ImGui::TreePop();
+                if (Hosted || ImGui::TreeNode("Adjust Selection:"))  {
+                    if (!Hosted) {
+                        if (hasSelection && ImGui::IsItemHovered()) mustDisplaySelectionSizeTooltip = true;
+                        ImGui::TreePop();
+                    }
                     const float step = 1.f;
                     const float stepFast = 2.f;
                     const char* precision = "%.0f";
                     const float windowWidth = ImGui::GetWindowWidth();
                     const float itemSize = windowWidth*0.35f;
-                    ImGui::BeginGroup();
-                    ImGui::PushItemWidth(itemSize);
-                    if (ImGui::InputFloat("X0##sel",&imageSelection.Min.x,step,stepFast,precision))    {
+                    if (!Hosted) {
+                        ImGui::BeginGroup();
+                        ImGui::PushItemWidth(itemSize);
+                    }
+                    if (ImGui::InputFloat(FieldLabel("X0##sel", "##SelectionX0"),&imageSelection.Min.x,step,stepFast,precision))    {
                         if (imageSelection.Min.x>=(float)w) imageSelection.Min.x=(float)(w-1);
                         else if (imageSelection.Min.x<0) imageSelection.Min.x=0;
                         if (imageSelection.Min.x>imageSelection.Max.x) imageSelection.Min.x=imageSelection.Max.x;
                     }
-                    if (ImGui::InputFloat("Y0##sel",&imageSelection.Min.y,step,stepFast,precision))    {
+                    if (ImGui::InputFloat(FieldLabel("Y0##sel", "##SelectionY0"),&imageSelection.Min.y,step,stepFast,precision))    {
                         if (imageSelection.Min.y>=(float)h) imageSelection.Min.y=(float)(h-1);
                         else if (imageSelection.Min.y<0) imageSelection.Min.y=0;
                         if (imageSelection.Min.y>imageSelection.Max.y) imageSelection.Min.y=imageSelection.Max.y;
                     }
-                    ImGui::PopItemWidth();
-                    ImGui::EndGroup();
-                    ImGui::SameLine();
-                    ImGui::BeginGroup();
-                    ImGui::PushItemWidth(itemSize);
-                    if (ImGui::InputFloat("X1##sel",&imageSelection.Max.x,step,stepFast,precision))    {
+                    if (!Hosted) {
+                        ImGui::PopItemWidth();
+                        ImGui::EndGroup();
+                        ImGui::SameLine();
+                        ImGui::BeginGroup();
+                        ImGui::PushItemWidth(itemSize);
+                    }
+                    if (ImGui::InputFloat(FieldLabel("X1##sel", "##SelectionX1"),&imageSelection.Max.x,step,stepFast,precision))    {
                         if (imageSelection.Max.x>(float)w) imageSelection.Max.x=(float)(w);
                         else if (imageSelection.Max.x<0) imageSelection.Max.x=0;
                         if (imageSelection.Min.x>imageSelection.Max.x) imageSelection.Min.x=imageSelection.Max.x;
                     }
-                    if (ImGui::InputFloat("Y1##sel",&imageSelection.Max.y,step,stepFast,precision))    {
+                    if (ImGui::InputFloat(FieldLabel("Y1##sel", "##SelectionY1"),&imageSelection.Max.y,step,stepFast,precision))    {
                         if (imageSelection.Max.y>(float)h) imageSelection.Max.y=(float)(h);
                         else if (imageSelection.Max.y<0) imageSelection.Max.y=0;
                         if (imageSelection.Min.y>imageSelection.Max.y) imageSelection.Min.y=imageSelection.Max.y;
                     }
-                    ImGui::PopItemWidth();
-                    ImGui::EndGroup();
-                    const float buttonTextWidth = ImGui::CalcTextSize(hasSelection ? "Clear Select All" : "Select All").x+(hasSelection ? 4.f : 2.f)*(style.FramePadding.x+style.ItemSpacing.x)+style.WindowPadding.x;
-                    ImGui::Text("%s","");
-                    ImGui::SameLine(0,(windowWidth-buttonTextWidth)*0.5f);
+                    if (!Hosted) {
+                        ImGui::PopItemWidth();
+                        ImGui::EndGroup();
+                        const float buttonTextWidth = ImGui::CalcTextSize(hasSelection ? "Clear Select All" : "Select All").x+(hasSelection ? 4.f : 2.f)*(style.FramePadding.x+style.ItemSpacing.x)+style.WindowPadding.x;
+                        ImGui::Text("%s","");
+                        ImGui::SameLine(0,(windowWidth-buttonTextWidth)*0.5f);
+                    }
                     if (hasSelection)   {
                         if (ImGui::SmallButton("Clear")) {imageSelection.Min.x=imageSelection.Min.y=imageSelection.Max.x=imageSelection.Max.y=0.f;}
                         if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s","clear selection");
@@ -6205,7 +6220,11 @@ struct StbImage {
             }
 
             if (hasSelection)   {
-                ImGui::SameLine();
+                const float Right{ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x};
+                const float SelectionWidth{ImGui::CalcTextSize("Selection").x + 2.0f * style.FramePadding.x};
+                if (!Hosted || ImGui::GetItemRectMax().x + style.ItemSpacing.x + SelectionWidth <= Right) {
+                    ImGui::SameLine();
+                }
                 mrs.CheckButton("Selection",chbSelectionLimit,true);
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s","Limit most of the operations\nin this panel to selection");
             }
@@ -6993,7 +7012,7 @@ struct StbImage {
         const bool Solo{VisibleChannel >= 0 && VisibleChannel <= 3};
         if (Solo) {
             const bool Alpha{VisibleChannel == 3};
-            const bool AffectsChannel{Erasing ? (c == 1 ? !Alpha : Alpha) : (!Alpha || c == 4)};
+            const bool AffectsChannel{!Alpha || c == 4 || (Erasing && c == 3)};
             if (!AffectsChannel || (!Erasing && c != 1 && penOverlayMode && PenColor.w < 1.0f)) {
                 return;
             }
@@ -7084,7 +7103,7 @@ struct StbImage {
         //ImGui::SetTooltip("%d points\nmin(%d,%d) max(%d,%d)\nimage size(%d,%d)\n mousePos (%1.f,%1.f)",numPoints,(int)penSelection.Min.x,(int)penSelection.Min.y,(int)penSelection.Max.x,(int)penSelection.Max.y,w,h,io.MousePos.x,io.MousePos.y);
     }
 
-    void CommitBrushStroke(const ImRect& Editable, bool Erasing) {
+    void CommitBrushStroke(const ImRect& Editable, bool Erasing, unsigned char* Preview = nullptr) {
         if (penPointsInImageCoords.empty() || !isImageSelectionValid(penSelection)) {
             return;
         }
@@ -7108,12 +7127,12 @@ struct StbImage {
         int SelectionY{static_cast<int>(penSelection.Min.y)};
         int SelectionWidth{static_cast<int>(penSelection.GetWidth())};
         int SelectionHeight{static_cast<int>(penSelection.GetHeight())};
-        auto* Original{Blend ? ImGuiIE::ExtractImage(SelectionX, SelectionY, SelectionWidth, SelectionHeight, image, w, h, c) : nullptr};
+        auto* Original{Blend && !Preview ? ImGuiIE::ExtractImage(SelectionX, SelectionY, SelectionWidth, SelectionHeight, image, w, h, c) : nullptr};
         ImGuiIE::ImageScopedDeleter OriginalStorage{Original};
-        if (Blend && !Original) {
+        if (Blend && !Original && !Preview) {
             return;
         }
-        if (!Erasing) {
+        if (!Erasing && !Preview) {
             pushImage(&penSelection);
         }
 
@@ -7123,6 +7142,7 @@ struct StbImage {
         const float Radius{penWidth * 0.5f};
         const float RadiusSquared{ImGuiIE::round(Radius * Radius)};
         const unsigned char Channels[]{static_cast<unsigned char>(Color.x * 255.0f), static_cast<unsigned char>(Color.y * 255.0f), static_cast<unsigned char>(Color.z * 255.0f), static_cast<unsigned char>(Color.w * 255.0f)};
+        constexpr unsigned char ClearPixel[4]{};
         bool Changed{AddAlpha};
         for (const ImVec2& Point : penPointsInImageCoords) {
             ImRect Stamp{GetPenStamp(Point)};
@@ -7136,17 +7156,19 @@ struct StbImage {
                         continue;
                     }
 
-                    auto* Pixel{image + (Y * w + X) * c};
+                    const int SelectionOffset{((Y - SelectionY) * SelectionWidth + X - SelectionX) * c};
+                    auto* CanvasPixel{image + (Y * w + X) * c};
+                    auto* Pixel{Preview ? Preview + SelectionOffset : CanvasPixel};
                     if (Erasing) {
-                        if (Pixel[c - 1] == 0) {
+                        if (memcmp(Pixel, ClearPixel, c) == 0) {
                             continue;
                         }
-                        if (!Changed) {
+                        if (!Changed && !Preview) {
                             pushImage(&penSelection);
                         }
-                        Pixel[c - 1] = 0;
+                        memset(Pixel, 0, c);
                     } else if (Blend) {
-                        const auto* Source{Original + ((Y - SelectionY) * SelectionWidth + X - SelectionX) * c};
+                        const auto* Source{Preview ? CanvasPixel : Original + SelectionOffset};
                         const float Brush[]{Color.x, Color.y, Color.z};
                         for (int Index{0}; Index < 3; ++Index) {
                             Pixel[Index] = static_cast<unsigned char>((Source[Index] / 255.0f * (1.0f - Color.w) + Brush[Index] * Color.w) * 255.0f);
@@ -7164,7 +7186,7 @@ struct StbImage {
             }
         }
 
-        if (Changed) {
+        if (Changed && !Preview) {
             mustInvalidateTexID = true;
             assignModified(true);
         }
@@ -7341,15 +7363,44 @@ struct StbImage {
             }
         }
 
+        const bool CompositeBrush{Options && Options->mDrawComposite && Options->mTool == 2 && !Reference && !Options->mReadOnly && !Pan && !Options->mZoomTool && !PlacingPaste && !ConsumePasteClick};
+        ImRect BrushBounds{{}, {static_cast<float>(w), static_cast<float>(h)}};
+        if (chbSelectionLimit && isImageSelectionValid()) {
+            BrushBounds = {ImFloor(imageSelection.Min), ImFloor(imageSelection.Min) + ImFloor(imageSelection.GetSize())};
+        }
+        FPasteBuffer Stroke{nullptr, stbi_image_free};
+        if (CompositeBrush) {
+            if ((ItemHeld || (mPenSelectionStarted && ImGui::IsMouseReleased(ImGuiMouseButton_Left))) && ImGui::IsMousePosValid()) {
+                TraceHostedBrush(mouseToImageCoords(io.MousePos), BrushBounds);
+            }
+            if (ItemHeld && !penPointsInImageCoords.empty() && isImageSelectionValid(penSelection) && !(Options->mErase && c == 3)) {
+                int X{static_cast<int>(penSelection.Min.x)};
+                int Y{static_cast<int>(penSelection.Min.y)};
+                int Width{static_cast<int>(penSelection.GetWidth())};
+                int Height{static_cast<int>(penSelection.GetHeight())};
+                Stroke.reset(ImGuiIE::ExtractImage(X, Y, Width, Height, image, w, h, c));
+                if (Stroke) {
+                    CommitBrushStroke(BrushBounds, Options->mErase, Stroke.get());
+                }
+            } else if (!ItemHeld && mPenSelectionStarted) {
+                mPenSelectionStarted = false;
+                CommitBrushStroke(BrushBounds, Options->mErase);
+                if (mustInvalidateTexID && PrepareImage()) {
+                    Texture = texID;
+                }
+            }
+        }
+
         const ImVec2 CheckersRepeatFactor{Options ? (endPos - startPos) / 16.0f : ImVec2{24.0f, 24.0f}};
-        if ((Reference || c==4) && CheckersTexID) {
+        if ((Reference || c==4 || (Options && Options->mDrawComposite)) && CheckersTexID) {
             //window->DrawList->AddImage(CheckersTexID, startPos, endPos, uv0*m, uv1*m);
             const ImVec2 BackgroundMin{Wrap ? bb.Min : startPos};
             const ImVec2 BackgroundMax{Wrap ? bb.Max : endPos};
             const ImVec2 Repeat{Options ? (BackgroundMax - BackgroundMin) / 16.0f : CheckersRepeatFactor};
             ImGuiIE::DrawImage(window->DrawList, CheckersTexID, BackgroundMin, BackgroundMax, ImVec2(0,0), Repeat);
         }
-        const ImageEditor::FCanvasView View{Texture, TextureSize, bb.Min, bb.Max, startPos, endPos, uv0, uv1, itemHovered};
+        const ImVec4 StrokeBounds{Stroke ? ImVec4{penSelection.Min.x, penSelection.Min.y, penSelection.GetWidth(), penSelection.GetHeight()} : ImVec4{}};
+        const ImageEditor::FCanvasView View{Texture, TextureSize, bb.Min, bb.Max, startPos, endPos, uv0, uv1, itemHovered, Stroke.get(), StrokeBounds};
         if (!Options || !Options->mDrawImage || !Options->mDrawImage(Options->mUserData, View)) {
             ImGuiIE::DrawImage(window->DrawList, Texture, startPos, endPos, uv0, uv1);
         }
@@ -7362,11 +7413,7 @@ struct StbImage {
             return rv;
         }
 
-        if (Reference || (Options && (Options->mReadOnly || Pan || Options->mSample || Options->mZoomTool))) {
-            if (Options && !Options->mReadOnly && !Pan && Options->mSample && itemHovered && ImRect{startPos, endPos}.Contains(io.MousePos) && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-                getImageColorAtMousePosition(io.MousePos, penColor);
-            }
-
+        if (Reference || (Options && (Options->mReadOnly || Pan || Options->mZoomTool))) {
             mMouseSelectionStarted = false;
             mPenSelectionStarted = false;
             ImGui::PopID();
@@ -7453,7 +7500,10 @@ struct StbImage {
             }
 
             // DRAW tool
-            if (modifyImageTopToolbar.getSelectedButtonIndex()==2) {
+            if (CompositeBrush && itemHovered) {
+                DrawBrushCursor(window->DrawList, bb, io.MousePos, BrushBounds);
+            }
+            if (modifyImageTopToolbar.getSelectedButtonIndex()==2 && !CompositeBrush) {
                 //----------------------------------------------------------------------------------------------------                
                 const bool Erasing{Options && Options->mErase};
                 const int VisibleChannel{Options ? Options->mVisibleChannel : -1};
@@ -7828,14 +7878,15 @@ void ImageEditor::RenderBrushSizeControl(bool Enabled) {
     ImGui::AlignTextToFramePadding();
     ImGui::TextUnformatted("Size");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImMin(ImGui::GetContentRegionAvail().x, ImGui::GetFontSize() * 11.0f));
+    ImGui::SetNextItemWidth(-1.0f);
     ImGui::SliderInt("##BrushSize", &is->penWidth, 1, ImGuiIE::MaxHostedBrushWidth, "%d px", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
     ImGui::SetItemTooltip("Drag, Ctrl+click to type, or use [ and ].");
     ImGui::EndDisabled();
 
     if (CanChange) {
-        const bool Smaller{ImGui::Shortcut(ImGuiKey_LeftBracket, ImGuiInputFlags_Repeat)};
-        const bool Larger{ImGui::Shortcut(ImGuiKey_RightBracket, ImGuiInputFlags_Repeat)};
+        constexpr ImGuiInputFlags Flags{ImGuiInputFlags_Repeat | ImGuiInputFlags_RouteFocused | ImGuiInputFlags_RouteFromRootWindow};
+        const bool Smaller{ImGui::Shortcut(ImGuiKey_LeftBracket, Flags)};
+        const bool Larger{ImGui::Shortcut(ImGuiKey_RightBracket, Flags)};
         const int Step{ImMax(1, is->penWidth / 10)};
         is->penWidth = ImClamp(is->penWidth + (static_cast<int>(Larger) - static_cast<int>(Smaller)) * Step, 1, ImGuiIE::MaxHostedBrushWidth);
     }
@@ -7851,10 +7902,10 @@ void ImageEditor::RenderToolControls(int Tool, bool Erasing) {
     }
 }
 
-void ImageEditor::RenderImageControls() {
+void ImageEditor::RenderImageControls(bool FixedCanvas) {
     if (is && is->PrepareImage()) {
         StbImage::MyRenderStruct State{};
-        is->renderLeftPanel(State);
+        is->renderLeftPanel(State, FixedCanvas);
         is->RenderAdjustments(State);
     }
 }
@@ -7872,6 +7923,21 @@ void ImageEditor::CopyPaintSettingsFrom(const ImageEditor& Source) {
     is->tolAlpha = Source.is->tolAlpha;
     is->chbMirrorX = Source.is->chbMirrorX;
     is->chbMirrorY = Source.is->chbMirrorY;
+}
+
+void ImageEditor::CopyCanvasViewFrom(const ImageEditor& Source) {
+    if (is && Source.is) {
+        is->zoom = Source.is->zoom;
+        is->zoomCenter = Source.is->zoomCenter;
+        is->mHostedZoomPreset = Source.is->mHostedZoomPreset;
+        is->mHostedPixelScale = Source.is->mHostedPixelScale;
+    }
+}
+
+void ImageEditor::SetPaintColor(const ImVec4& Color) {
+    if (is) {
+        is->penColor = Color;
+    }
 }
 
 bool ImageEditor::CanExecuteSelectionCommand(ESelectionCommand Command) const {
@@ -7966,12 +8032,12 @@ bool ImageEditor::CancelFloatingPaste() {
     return is && is->FinishFloatingPaste(false);
 }
 
-bool ImageEditor::Undo() {
-    return CancelFloatingPaste() || (is && is->undo());
+bool ImageEditor::Undo(bool FixedCanvas) {
+    return CancelFloatingPaste() || (is && is->undo(FixedCanvas));
 }
 
-bool ImageEditor::Redo() {
-    return is && !is->mFloatingPaste && is->redo();
+bool ImageEditor::Redo(bool FixedCanvas) {
+    return is && !is->mFloatingPaste && is->redo(FixedCanvas);
 }
 
 const char* ImageEditor::getImageFilePath() const   {return is ? NULL : is->filePath;}

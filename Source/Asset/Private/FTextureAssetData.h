@@ -78,6 +78,7 @@ namespace Asset {
          * @brief 길이가 보존되는 바이너리 이미지 바이트입니다.
          */
         Core::FString mImageData{};
+        Core::FString mEditorLayerData{};
     };
 
 }
