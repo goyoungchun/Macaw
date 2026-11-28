@@ -217,10 +217,10 @@ namespace Engine {
     /**
      * @brief Sprite 텍스처, 크기, 색상과 카메라 정렬 설정을 담은 렌더 프록시를 생성합니다.
      */
-    Engine::FPrimitiveSceneProxy Engine::UBillboardComponent::CreateSceneProxy() const {
-        Engine::FPrimitiveSceneProxy Proxy{Engine::UPrimitiveComponent::CreateSceneProxy()};
-        Proxy.mBounds = GetWorldBounds();
-        Proxy.mSprite = Engine::FDrawSprite{GetTexture(), mSize, mColor, mScreenAligned};
+    std::unique_ptr<Engine::FPrimitiveSceneProxy> Engine::UBillboardComponent::CreateSceneProxy() const {
+        auto Proxy{Engine::UPrimitiveComponent::CreateSceneProxy()};
+        Proxy->mBounds = GetWorldBounds();
+        Proxy->mSprite = Engine::FDrawSprite{GetTexture(), mSize, mColor, mScreenAligned};
 
         return Proxy;
     }

@@ -10,20 +10,18 @@
 
 #include "Core/ReflectionMacros.h"
 #include "Core/Guid.h"
-#include "Core/FRevision.h"
 #include "Core/Math/FMatrix.h"
 #include "Core/Math/FBox.h"
 #include "Engine/EPrimitiveType.h"
+#include "Engine/EVertexFactoryType.h"
 #include "Engine/FDrawText.h"
 #include "Engine/FDrawSprite.h"
-#include "PhysicsRuntime/FClothSimulData.h"
 
 #include <memory>
 #include <optional>
 
 namespace Asset {
     class UStaticMesh;
-    class USkeletalMesh;
     class UMaterial;
 }
 
@@ -39,6 +37,10 @@ namespace Engine {
      */
     struct FPrimitiveSceneProxy {
     public:
+        virtual ~FPrimitiveSceneProxy();
+
+    public:
+        virtual Engine::EVertexFactoryType GetVertexFactoryType() const;
 
         /**
          * @brief 렌더 프리미티브의 영속 식별자입니다.
@@ -64,36 +66,6 @@ namespace Engine {
          * @brief 공통 드로에 사용할 형상이며 스켈레탈 메시에서는 바인드 형상입니다.
          */
         CoreUObject::TObjectRef<Asset::UStaticMesh> mMesh{};
-
-        /**
-         * @brief 스키닝할 공유 에셋이며 mMesh는 이 에셋의 바인드 형상을 가리킵니다.
-         */
-        CoreUObject::TObjectRef<Asset::USkeletalMesh> mSkeletalMesh{};
-
-        /**
-         * @brief 이 객체의 바인드 위치를 현재 메시 공간 위치로 옮기는 본 행렬입니다.
-         */
-        Core::TArray<FMatrix> mSkinMatrices{};
-
-        /**
-         * @brief 월드 행렬이 같아도 포즈 업로드와 그림자 무효화를 구분하는 개정입니다.
-         */
-        Core::FRevision mPoseRevision{};
-
-        /**
-         * @brief 천 에셋 번호별 마지막 천 시뮬레이션 결과이며, 천이 없으면 비어 있습니다.
-         */
-        Core::TMap<Index_t, PhysicsRuntime::FClothSimulData> mClothSimData{};
-
-        /**
-         * @brief 천 섹션 정점을 스키닝 위치와 시뮬레이션 위치 사이에서 섞는 비율이며 1이면 시뮬레이션 위치만 씁니다.
-         */
-        float mClothBlendWeight{};
-
-        /**
-         * @brief 천 결과가 같으면 입자 버퍼 업로드를 건너뛰도록 구분하는 개정입니다.
-         */
-        Core::FRevision mClothRevision{};
 
         /**
          * @brief 텍스트 컴포넌트가 그릴 텍스트 요청이며, 텍스트가 없는 프리미티브는 비어 있습니다.

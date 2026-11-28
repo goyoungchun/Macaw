@@ -1,4 +1,5 @@
 #include "Engine/Landscape/ALandscape.h"
+#include "Engine/Landscape/FLandscapeComponentSceneProxy.h"
 
 #include "CoreUObject/Reflection/Cast.h"
 #include "CoreUObject/Reflection/NewObject.h"
@@ -46,6 +47,14 @@ namespace Engine {
 
         if (ComponentCount > MaxComponents) {
             Error = "Landscape exceeds the build limit of " + std::to_string(MaxComponents) + " components.";
+
+            return false;
+        }
+
+        // 기존 프록시를 교체하기 전에 공유 격자를 확보해 생성에 실패해도 기존 지형을 보존합니다.
+        const auto RenderResources{Engine::FLandscapeRenderResources::Acquire(static_cast<Uint32>(GetQuadsPerComponentSide()))};
+        if (RenderResources == nullptr) {
+            Error = "Could not build Landscape render grid. The limit is 1024 quads per component side.";
 
             return false;
         }
@@ -183,6 +192,7 @@ namespace Engine {
             for (Int32 X{ StartX }; X < StartX + SizeX; ++X) {
                 auto Component{ CoreUObject::NewObject<Engine::ULandscapeComponent>() };
                 Component->SetSections(Sections);
+                Component->SetQuadsPerSide(static_cast<Uint32>(GetQuadsPerComponentSide()));
 
                 if (!Component->SetName("LandscapeComponent_" + std::to_string(X) + "_" + std::to_string(Y)) || !Component->SetTileX(X) || !Component->SetTileY(Y) || !Proxy.AddComponent(std::move(Component))) {
                     return false;

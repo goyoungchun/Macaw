@@ -101,7 +101,7 @@ namespace Engine {
          * @brief 컴포넌트의 현재 상태를 복사한 프리미티브 프록시를 만듭니다.
          * @return 현재 상태를 담은 프록시입니다.
          */
-        Engine::FPrimitiveSceneProxy CreateSceneProxy() const override;
+        std::unique_ptr<Engine::FPrimitiveSceneProxy> CreateSceneProxy() const override;
 
         /**
          * @brief 월드 공간의 축 정렬 경계 상자를 반환합니다.

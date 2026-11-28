@@ -20,7 +20,8 @@
 #include "CoreUObject/Reflection/NewObject.h"
 #include "CoreUObject/Reflection/Cast.h"
 #include "Engine/FSceneInterface.h"
-#include "Engine/FPrimitiveSceneProxy.h"
+#include "Engine/FSkeletalMeshSceneProxy.h"
+#include "Engine/FStaticMeshSceneProxy.h"
 #include "Engine/FPrimitiveDrawInterface.h"
 #include "Engine/PrimitiveMesh.h"
 #include "Engine/EditorMesh.h"
@@ -211,33 +212,33 @@ void FMeshViewerContent::Synchronize() {
         return;
     }
 
-    Engine::FPrimitiveSceneProxy Proxy{};
-    Proxy.mId = mPrimitiveId;
-    Proxy.mMesh = mMesh;
-    Proxy.mBounds = mPose.GetRevision().IsValid() ? mPose.GetMeshData().GetBounds() : mMesh->GetBounds();
-    Proxy.mMaterial = mMaterial;
-    Proxy.mMaterials = mMaterials;
-
-    if (mMaterial != nullptr) {
-        Proxy.mWorld = mMaterialPreviewTransform;
-        Proxy.mBounds = Proxy.mBounds.Transformed(Proxy.mWorld);
-    }
-
-    if (mPose.GetRevision().IsValid()) {
-        Proxy.mSkeletalMesh = mSkeletalMesh;
-        Proxy.mSkinMatrices = mPose.GetSkinMatrices();
-        Proxy.mPoseRevision = mPose.GetRevision();
+    std::unique_ptr<Engine::FPrimitiveSceneProxy> Proxy{};
+    if (mSkeletalMesh != nullptr) {
+        auto SkeletalProxy{std::make_unique<Engine::FSkeletalMeshSceneProxy>(mSkeletalMesh, mPose.GetSkinMatrices(), mPose.GetRevision())};
 
         // 천 섹션은 렌더러가 이 결과의 입자 위치로 정점을 옮겨 그립니다.
-        if (!mClothSimData.empty()) {
-            Proxy.mClothSimData = mClothSimData;
-            Proxy.mClothBlendWeight = 1.0f;
-            Proxy.mClothRevision = mClothRevision;
+        if (mPose.GetRevision().IsValid() && !mClothSimData.empty()) {
+            SkeletalProxy->SetClothData(mClothSimData, 1.0f, mClothRevision);
         }
+
+        Proxy = std::move(SkeletalProxy);
+    } else {
+        Proxy = std::make_unique<Engine::FStaticMeshSceneProxy>();
     }
 
-    mBounds = Proxy.mBounds;
-    mScene.GetScene()->AddPrimitive(Proxy);
+    Proxy->mId = mPrimitiveId;
+    Proxy->mMesh = mMesh;
+    Proxy->mBounds = mPose.GetRevision().IsValid() ? mPose.GetMeshData().GetBounds() : mMesh->GetBounds();
+    Proxy->mMaterial = mMaterial;
+    Proxy->mMaterials = mMaterials;
+
+    if (mMaterial != nullptr) {
+        Proxy->mWorld = mMaterialPreviewTransform;
+        Proxy->mBounds = Proxy->mBounds.Transformed(Proxy->mWorld);
+    }
+
+    mBounds = Proxy->mBounds;
+    mScene.GetScene()->AddPrimitive(std::move(Proxy));
     mScene.Synchronize();
 }
 

@@ -164,13 +164,13 @@ namespace Engine {
         Engine::FSceneInterface* Scene{GetWorld()->GetScene()};
 
         if (mRenderStateDirty || !mRenderStateCreated) {
+            // 씬에 소유권을 넘겨 등록 이후에도 Landscape 같은 프록시의 파생 타입을 유지합니다.
             Scene->AddPrimitive(CreateSceneProxy());
 
             mRenderStateCreated = true;
         } else if (mRenderTransformDirty) {
-            const Engine::FPrimitiveSceneProxy Proxy{CreateSceneProxy()};
-
-            Scene->UpdatePrimitiveTransform(Proxy.mId, Proxy.mWorld, Proxy.mBounds);
+            // 변환만 바뀌면 기존 프록시의 리소스를 재사용하고 월드 행렬과 경계만 갱신합니다.
+            Scene->UpdatePrimitiveTransform(GetGuid(), GetWorldMatrix(), GetWorldBounds());
         }
 
         mRenderStateDirty = false;
@@ -180,16 +180,24 @@ namespace Engine {
     /**
      * @brief 컴포넌트의 현재 상태를 복사한 프리미티브 프록시를 만듭니다.
      */
-    Engine::FPrimitiveSceneProxy Engine::UPrimitiveComponent::CreateSceneProxy() const {
-        const FMatrix World{GetWorldMatrix()};
-        Engine::FPrimitiveSceneProxy Proxy{GetGuid(), GetPrimitiveType(), World, GetWorldBounds(), GetStaticMesh()};
+    std::unique_ptr<Engine::FPrimitiveSceneProxy> Engine::UPrimitiveComponent::CreateSceneProxy() const {
+        auto Proxy{std::make_unique<Engine::FPrimitiveSceneProxy>()};
+        InitializeSceneProxy(*Proxy);
+
+        return Proxy;
+    }
+
+    void Engine::UPrimitiveComponent::InitializeSceneProxy(Engine::FPrimitiveSceneProxy& Proxy) const {
+        Proxy.mId = GetGuid();
+        Proxy.mPrimitive = GetPrimitiveType();
+        Proxy.mWorld = GetWorldMatrix();
+        Proxy.mBounds = GetWorldBounds();
+        Proxy.mMesh = GetStaticMesh();
         Proxy.mUVScale = mUVScale;
         Proxy.mUVOffset = mUVOffset;
         Proxy.mCastShadow = mCastShadow;
         Proxy.mReceiveShadow = mReceiveShadow;
         Proxy.mReceivesDecals = mReceivesDecals;
-
-        return Proxy;
     }
 
     /**

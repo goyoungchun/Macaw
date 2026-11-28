@@ -106,6 +106,8 @@ namespace Engine {
          */
         const PhysicsRuntime::UBodySetup* GetBodySetup() const override;
 
+        std::unique_ptr<Engine::FPrimitiveSceneProxy> CreateSceneProxy() const override;
+
     private:
         /**
          * @brief Content 상대 경로의 메시를 에셋 관리자에서 조회합니다.

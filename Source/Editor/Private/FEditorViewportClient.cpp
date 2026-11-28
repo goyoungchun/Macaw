@@ -1199,9 +1199,9 @@ namespace Editor {
                 }
 
                 if (Sprite != nullptr) {
-                    const Engine::FPrimitiveSceneProxy Proxy{Sprite->CreateSceneProxy()};
+                    const auto Proxy{Sprite->CreateSceneProxy()};
 
-                    if (mShowFlags.mSprites && Engine::RaycastMesh(&Engine::GetPrimitiveMesh(Engine::EPrimitiveType::Plane), Engine::MakeSpriteWorld(Proxy.mWorld, *Proxy.mSprite, View), Ray, Closest)) {
+                    if (mShowFlags.mSprites && Engine::RaycastMesh(&Engine::GetPrimitiveMesh(Engine::EPrimitiveType::Plane), Engine::MakeSpriteWorld(Proxy->mWorld, *Proxy->mSprite, View), Ray, Closest)) {
                         Result = {Engine::EHitProxyType::Object, CoreUObject::MakeObjectRef(Sprite)};
                     }
 
@@ -1251,9 +1251,9 @@ namespace Editor {
      */
     FBox Editor::FEditorViewportClient::CalcComponentBounds(const Engine::UPrimitiveComponent* Component, const Engine::FSceneView& View) const {
         if (auto* Sprite{CoreUObject::Cast<Engine::UBillboardComponent>(Component)}) {
-            const Engine::FPrimitiveSceneProxy Proxy{Sprite->CreateSceneProxy()};
+            const auto Proxy{Sprite->CreateSceneProxy()};
 
-            return FBox{{-(0.5_m).GetBase(), -(0.5_m).GetBase(), -(0.001_m).GetBase()}, {(0.5_m).GetBase(), (0.5_m).GetBase(), (0.001_m).GetBase()}}.Transformed(Engine::MakeSpriteWorld(Proxy.mWorld, *Proxy.mSprite, View));
+            return FBox{{-(0.5_m).GetBase(), -(0.5_m).GetBase(), -(0.001_m).GetBase()}, {(0.5_m).GetBase(), (0.5_m).GetBase(), (0.001_m).GetBase()}}.Transformed(Engine::MakeSpriteWorld(Proxy->mWorld, *Proxy->mSprite, View));
         }
 
         auto* Text{CoreUObject::Cast<Engine::UBillboardTextComponent>(Component)};

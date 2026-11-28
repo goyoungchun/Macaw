@@ -15,7 +15,6 @@
 #include "Core/Math/FVector.h"
 #include "Core/Math/FMatrix.h"
 #include "Asset/FMeshData.h"
-#include "Asset/USkeletalMesh.h"
 #include "Engine/FSceneInterface.h"
 #include "Engine/FRenderTarget.h"
 #include "Engine/FDrawLine.h"
@@ -38,6 +37,7 @@
 #include "FDecalPass.h"
 #include "FDeferredLightingPass.h"
 #include "FMaterialPipeline.h"
+#include "FVertexFactory.h"
 #include "FShaderInstance.h"
 #include "FLightingResources.h"
 #include "FShadowResources.h"
@@ -1308,9 +1308,12 @@ namespace Renderer {
     /**
      * @brief 머티리얼별 GPU 파이프라인을 반환합니다.
      */
-    Renderer::FMaterialPipeline* Renderer::FRenderer::GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode, bool Skinned, bool ReceiveShadows, bool Cloth, bool ParticleMesh) {
+    Renderer::FMaterialPipeline* Renderer::FRenderer::GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode, Engine::EVertexFactoryType FactoryType, bool ReceiveShadows, bool Cloth) {
+        const Renderer::FVertexFactory& VertexFactory{Renderer::FVertexFactory::Get(FactoryType)};
+        const bool Skinned{VertexFactory.IsSkinned()};
+        const bool Instanced{VertexFactory.IsInstanced()};
+        const bool ParticleMesh{FactoryType == Engine::EVertexFactoryType::Particle};
         Cloth = Cloth && Skinned;
-        ParticleMesh = ParticleMesh && !Skinned;
 
         if (Engine::IsBufferVisualization(Mode) && Mode != Engine::EViewMode::WorldNormal && Mode != Engine::EViewMode::SceneDepth) {
             Mode = Engine::EViewMode::Lit_Phong;
@@ -1334,9 +1337,9 @@ namespace Renderer {
         const bool NormalMap{Material.GetNormalMapTexture() != nullptr};
         const bool Translucent{Material.GetBlendMode() != Asset::EBlendMode::Opaque};
         const Renderer::EMeshPass Pass{Translucent ? Renderer::EMeshPass::TranslucencyMeshPass : Renderer::EMeshPass::OpaqueMeshPass};
-        const bool Instanced{!Skinned};
         const auto ShaderHandle{Shader->GetHandle()};
-        const Core::FString Key{Shader->GetGuid().ToString() + "|" + std::to_string(ShaderHandle.mIndex) + ":" + std::to_string(ShaderHandle.mGeneration) + "|" + ShaderPath + "|" + Shader->GetEntryPoint() + (Shader->WritesGBuffer() ? "|GBuffer" : "|Forward") + (Material.IsTwoSided() ? "|TwoSided" : "|OneSided") + "|" + std::to_string(static_cast<Uint32>(PixelMode)) + (NormalMap ? "|NormalMap" : "|VertexNormal") + (Skinned ? "|Skinned" : ParticleMesh ? "|ParticleMesh" : "|Static") + (Cloth ? "|Cloth" : "") + (Shadowed ? "|Shadowed" : "|Unshadowed") + (Translucent ? "|Translucent" : "|Opaque")};
+        // 같은 머티리얼도 정점 입력 방식이 다르면 별도의 파이프라인을 캐시합니다.
+        const Core::FString Key{Shader->GetGuid().ToString() + "|" + std::to_string(ShaderHandle.mIndex) + ":" + std::to_string(ShaderHandle.mGeneration) + "|" + ShaderPath + "|" + Shader->GetEntryPoint() + (Shader->WritesGBuffer() ? "|GBuffer" : "|Forward") + (Material.IsTwoSided() ? "|TwoSided" : "|OneSided") + "|" + std::to_string(static_cast<Uint32>(PixelMode)) + (NormalMap ? "|NormalMap" : "|VertexNormal") + "|" + VertexFactory.GetSurfaceShader() + (Cloth ? "|Cloth" : "") + (Shadowed ? "|Shadowed" : "|Unshadowed") + (Translucent ? "|Translucent" : "|Opaque")};
         const auto Existing{mMaterialPipelines.find(Key)};
 
         if (Existing != mMaterialPipelines.end()) {
@@ -1347,7 +1350,7 @@ namespace Renderer {
             return nullptr;
         }
 
-        const std::filesystem::path VertexSource{mShaderDirectory / (ParticleMesh ? "ParticleMesh.vs.hlsl" : Skinned ? "SkinnedMesh.vs.hlsl" : "StaticMesh.vs.hlsl")};
+        const std::filesystem::path VertexSource{mShaderDirectory / VertexFactory.GetSurfaceShader()};
         const bool OverridePixel{Mode == Engine::EViewMode::Unlit || Mode == Engine::EViewMode::WorldNormal};
         const bool WritesGBuffer{!mForwardShading && !Translucent && (Shader->WritesGBuffer() || OverridePixel)};
         Core::FString PathError{};
@@ -1429,7 +1432,7 @@ namespace Renderer {
         std::unique_ptr<Renderer::FMaterialPipeline> Pipeline{};
 
         if (Vertex != nullptr && Pixel != nullptr) {
-            Pipeline = std::make_unique<Renderer::FMaterialPipeline>(Pass, std::move(Vertex), std::move(Pixel), Material.IsTwoSided(), Instanced, Skinned, WritesGBuffer);
+            Pipeline = std::make_unique<Renderer::FMaterialPipeline>(Pass, std::move(Vertex), std::move(Pixel), Material.IsTwoSided(), VertexFactory, WritesGBuffer);
 
             Core::FString Diagnostics{};
 
@@ -1456,10 +1459,13 @@ namespace Renderer {
     /**
      * @brief 그림자 아틀라스 깊이 패스에 사용할 깊이 전용 파이프라인을 반환합니다.
      */
-    Renderer::FMaterialPipeline* Renderer::FRenderer::GetDepthPipeline(bool Skinned, bool Cloth) {
+    Renderer::FMaterialPipeline* Renderer::FRenderer::GetDepthPipeline(Engine::EVertexFactoryType FactoryType, bool Cloth) {
+        const Renderer::FVertexFactory& VertexFactory{Renderer::FVertexFactory::Get(FactoryType)};
+        const bool Skinned{VertexFactory.IsSkinned()};
+        const bool Instanced{VertexFactory.IsInstanced()};
         Cloth = Cloth && Skinned;
 
-        const Core::FString Key{Skinned ? (Cloth ? "shaders/depth.hlsl|depth|skinned|cloth" : "shaders/depth.hlsl|depth|skinned") : "shaders/depth.hlsl|depth"};
+        const Core::FString Key{Core::FString{VertexFactory.GetDepthShader()} + "|Depth" + (Skinned ? "|Skinned" : "") + (Cloth ? "|Cloth" : "")};
         const auto Existing{mMaterialPipelines.find(Key)};
 
         if (Existing != mMaterialPipelines.end()) {
@@ -1471,9 +1477,11 @@ namespace Renderer {
         }
 
         RenderCore::FShaderDescription Description{};
-        Description.mSourcePath = mShaderDirectory / "Depth.hlsl";
+        Description.mSourcePath = mShaderDirectory / VertexFactory.GetDepthShader();
         Description.mIncludeDirectories = {Description.mSourcePath.parent_path(), mShaderDirectory};
-        Description.mMacros.push_back({Skinned ? "MacawSkinned" : "MacawInstanced", "1"});
+        if (Skinned || Instanced) {
+            Description.mMacros.push_back({Skinned ? "MacawSkinned" : "MacawInstanced", "1"});
+        }
 
         if (Cloth) {
             Description.mMacros.push_back({"MacawCloth", "1"});
@@ -1487,11 +1495,11 @@ namespace Renderer {
         Description.mCompileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
 
-        std::shared_ptr<Renderer::FShaderInstance> Vertex{GetShaderInstance(Description, Renderer::EMeshPass::ShadowDepth, !Skinned, Skinned)};
+        std::shared_ptr<Renderer::FShaderInstance> Vertex{GetShaderInstance(Description, Renderer::EMeshPass::ShadowDepth, Instanced, Skinned)};
         std::unique_ptr<Renderer::FMaterialPipeline> Pipeline{};
 
         if (Vertex != nullptr) {
-            Pipeline = std::make_unique<Renderer::FMaterialPipeline>(Renderer::EMeshPass::ShadowDepth, std::move(Vertex), nullptr, true, !Skinned, Skinned);
+            Pipeline = std::make_unique<Renderer::FMaterialPipeline>(Renderer::EMeshPass::ShadowDepth, std::move(Vertex), nullptr, true, VertexFactory);
 
             Core::FString Diagnostics{};
 
@@ -1627,19 +1635,23 @@ namespace Renderer {
         const std::span<const Renderer::FGpuShadow> Maps{mShadowResources->GetMaps()};
         const Renderer::FMaterialPipeline* DepthPipeline{Maps.empty() ? nullptr : GetDepthPipeline()};
         bool HasSkinned{};
+        bool HasLandscape{};
 
         for (const Renderer::FScenePrimitive& Primitive : Scene.GetPrimitives()) {
-            if (Primitive.mProxy.mSkeletalMesh != nullptr) {
-                HasSkinned = true;
+            const Engine::EVertexFactoryType FactoryType{Primitive.mProxy->GetVertexFactoryType()};
+            HasSkinned |= FactoryType == Engine::EVertexFactoryType::Skinned;
+            HasLandscape |= FactoryType == Engine::EVertexFactoryType::Landscape;
 
+            if (HasSkinned && HasLandscape) {
                 break;
             }
         }
 
-        const Renderer::FMaterialPipeline* SkinDepthPipeline{!Maps.empty() && HasSkinned ? GetDepthPipeline(true) : nullptr};
+        const Renderer::FMaterialPipeline* SkinDepthPipeline{!Maps.empty() && HasSkinned ? GetDepthPipeline(Engine::EVertexFactoryType::Skinned) : nullptr};
+        const Renderer::FMaterialPipeline* LandscapeDepthPipeline{!Maps.empty() && HasLandscape ? GetDepthPipeline(Engine::EVertexFactoryType::Landscape) : nullptr};
 
-        // 두 깊이 셰이더 중 하나만 바뀌어도 이전 실루엣을 캐시에서 재사용하지 않습니다.
-        const Uint64 DepthShaderRevision{std::max(DepthPipeline != nullptr ? DepthPipeline->GetVertexRevision() : 0, SkinDepthPipeline != nullptr ? SkinDepthPipeline->GetVertexRevision() : 0)};
+        // 깊이 셰이더 중 하나가 바뀌면 이전 실루엣을 캐시에서 재사용하지 않습니다.
+        const Uint64 DepthShaderRevision{std::max({DepthPipeline != nullptr ? DepthPipeline->GetVertexRevision() : 0, SkinDepthPipeline != nullptr ? SkinDepthPipeline->GetVertexRevision() : 0, LandscapeDepthPipeline != nullptr ? LandscapeDepthPipeline->GetVertexRevision() : 0})};
 
         for (Index_t Index{}; Index < Maps.size(); ++Index) {
             const Renderer::FShadowTileStamp Stamp{mShadowResources->MakeTileStamp(Index, DepthShaderRevision)};
@@ -1719,7 +1731,7 @@ namespace Renderer {
         const bool TranslucencyPass{Pass == Renderer::EMeshPass::TranslucencyMeshPass};
         const bool SurfacePass{Pass != Renderer::EMeshPass::ShadowDepth};
         const auto ReceivesDecals{[](const Renderer::FMeshDrawCommand& Command) {
-            return Command.mParticleInstance == nullptr && Command.mPrimitive->mProxy.mReceivesDecals;
+            return Command.mParticleInstance == nullptr && Command.mPrimitive->mProxy->mReceivesDecals;
         }};
 
         if (std::any_of(Commands.begin(), Commands.end(), [](const Renderer::FMeshDrawCommand& Command) {
@@ -1779,25 +1791,12 @@ namespace Renderer {
                 }
             }
 
-            if (Command.mPipeline->IsSkinned()) {
-                // 같은 형상을 공유해도 객체마다 본 팔레트를 다시 바인딩합니다.
-                // 가중치 정점 버퍼는 5번 입력 슬롯, 본 팔레트는 정점 셰이더의 t10(Skinning.hlsl의 SkinBones)에 연결합니다.
-                Command.mPrimitive->mProxy.mSkeletalMesh->BindSkinWeights(mContext.Get(), 5);
-                Command.mPrimitive->mSkinBuffer.Bind(mContext.Get(), RenderCore::EShaderStage::Vertex, 10);
-            }
-
-            // 천 섹션은 정점별 입자 삼각형 정보(t11), 입자 위치와 법선(t12), 천 상수(b5)를 Cloth.hlsl에 연결합니다.
-            if (Command.mClothAssetIndex != InvalidIndex) {
-                const auto Resources{Command.mPrimitive->mClothResources.find(Command.mClothAssetIndex)};
-
-                if (Resources != Command.mPrimitive->mClothResources.end()) {
-                    Command.mPrimitive->mProxy.mSkeletalMesh->BindClothVertices(mContext.Get(), 11);
-                    Resources->second.mParticles.Bind(mContext.Get(), RenderCore::EShaderStage::Vertex, 12);
-                    Resources->second.mConstants.Bind(mContext.Get(), RenderCore::EShaderStage::Vertex, 5);
-                }
-            }
-
+            const Renderer::FVertexFactory& VertexFactory{Command.mPipeline->GetVertexFactory()};
             if (LastPipeline != Command.mPipeline) {
+                if (LastPipeline != nullptr && &LastPipeline->GetVertexFactory() != &VertexFactory) {
+                    LastPipeline->GetVertexFactory().UnbindResources(mContext.Get());
+                }
+
                 if (SurfacePass) {
                     Renderer::RendererStats::PipelineBinds.Add();
                 }
@@ -1850,6 +1849,12 @@ namespace Renderer {
             }
 
             const UINT FirstIndex{static_cast<UINT>(Command.mFirstIndex)};
+            // 프리미티브별 정점 리소스는 드로 직전에 바인딩하고 Vertex Factory가 바뀌거나 패스가 끝날 때 해제합니다.
+            if (!VertexFactory.BindResources(mContext.Get(), *Command.mPrimitive, Command.mClothAssetIndex)) {
+                First = End;
+
+                continue;
+            }
 
             if (Command.mPipeline->IsInstanced()) {
                 mContext->DrawIndexedInstanced(Command.mIndexCount, InstanceCount, FirstIndex, 0, static_cast<UINT>(First));
@@ -1868,12 +1873,10 @@ namespace Renderer {
         }
 
         mMeshInstanceBuffer.Unbind(mContext.Get(), 4);
-        Asset::USkeletalMesh::UnbindSkinWeights(mContext.Get(), 5);
-        Renderer::FScenePrimitive::FSkinBuffer::Unbind(mContext.Get(), RenderCore::EShaderStage::Vertex, 10);
-        Asset::USkeletalMesh::UnbindClothVertices(mContext.Get(), 11);
-        Renderer::FScenePrimitive::FClothParticleBuffer::Unbind(mContext.Get(), RenderCore::EShaderStage::Vertex, 12);
-        RenderCore::TConstantBuffer<Renderer::FClothConstants>::Unbind(mContext.Get(), RenderCore::EShaderStage::Vertex, 5);
 
+        if (LastPipeline != nullptr) {
+            LastPipeline->GetVertexFactory().UnbindResources(mContext.Get());
+        }
 
         if (SurfacePass) {
             ID3D11ShaderResourceView* Empty{};

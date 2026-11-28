@@ -130,7 +130,7 @@ namespace Engine {
          * @brief Sprite 텍스처, 크기, 색상과 카메라 정렬 설정을 담은 렌더 프록시를 생성합니다.
          * @return 현재 빌보드의 변환과 표시 정보를 복사한 프록시입니다.
          */
-        Engine::FPrimitiveSceneProxy CreateSceneProxy() const override;
+        std::unique_ptr<Engine::FPrimitiveSceneProxy> CreateSceneProxy() const override;
 
         /**
          * @brief 카메라 정렬 방향에 관계없이 빌보드를 포함하는 월드 경계를 계산합니다.

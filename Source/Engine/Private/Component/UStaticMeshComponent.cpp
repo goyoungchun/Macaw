@@ -8,6 +8,7 @@
 #include "Core/FilePath.h"
 #include "Core/Base/ErrorHandler.h"
 #include "Engine/EPrimitiveType.h"
+#include "Engine/FStaticMeshSceneProxy.h"
 #include "Engine/PrimitiveBodySetup.h"
 #include "Asset/FAssetManager.h"
 #include "Asset/UStaticMesh.h"
@@ -24,6 +25,13 @@ namespace Engine {
      * @brief 객체의 수명을 끝내고 소유한 리소스를 정리합니다.
      */
     Engine::UStaticMeshComponent::~UStaticMeshComponent() = default;
+
+    std::unique_ptr<Engine::FPrimitiveSceneProxy> Engine::UStaticMeshComponent::CreateSceneProxy() const {
+        auto Proxy{std::make_unique<Engine::FStaticMeshSceneProxy>()};
+        InitializeMeshSceneProxy(*Proxy);
+
+        return Proxy;
+    }
 
     /**
      * @brief 표시할 프리미티브 메시 종류를 반환합니다.

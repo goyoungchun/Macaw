@@ -9,6 +9,7 @@
 
 #include "FScene.h"
 #include "FScenePrimitive.h"
+#include "Engine/FSkeletalMeshSceneProxy.h"
 #include "Asset/UMaterial.h"
 #include "Asset/UStaticMesh.h"
 #include "Asset/USkeletalMesh.h"
@@ -65,7 +66,8 @@ namespace Renderer {
      * @brief SubMesh가 이번 프레임에 천 결과로 그려야 하는 천 섹션인지 검사합니다.
      */
     Index_t Renderer::FMeshPass::GetClothAssetIndex(const Renderer::FScenePrimitive& Primitive, Index_t SubMeshIndex) {
-        const Asset::USkeletalMesh* SkeletalMesh{Primitive.mProxy.mSkeletalMesh.Get()};
+        const auto* Skinned{Engine::FSkeletalMeshSceneProxy::FindSkinnedProxy(*Primitive.mProxy)};
+        const Asset::USkeletalMesh* SkeletalMesh{Skinned != nullptr ? Skinned->GetSkeletalMesh() : nullptr};
 
         if (SkeletalMesh == nullptr || Primitive.mClothResources.empty() || !SkeletalMesh->HasClothVertices()) {
             return InvalidIndex;
@@ -95,13 +97,15 @@ namespace Renderer {
         Commands.reserve(Scene.GetPrimitives().size());
 
         const auto AddPrimitive{[&](const Renderer::FScenePrimitive& Primitive) {
-            if (Primitive.mProxy.mText.has_value() || Primitive.mProxy.mSprite.has_value() || !Includes(Primitive, Family) || !IsVisible(ViewProjection, Primitive.mProxy.mBounds)) {
+            if (Primitive.mProxy->mText.has_value() || Primitive.mProxy->mSprite.has_value() || !Includes(Primitive, Family) || !IsVisible(ViewProjection, Primitive.mProxy->mBounds)) {
                 return;
             }
 
-            Asset::UStaticMesh* Mesh{Primitive.mProxy.mMesh != nullptr ? Primitive.mProxy.mMesh.Get() : (*mMeshes)[static_cast<Index_t>(Primitive.mProxy.mPrimitive)].get()};
+            Asset::UStaticMesh* Mesh{Primitive.mProxy->mMesh != nullptr ? Primitive.mProxy->mMesh.Get() : (*mMeshes)[static_cast<Index_t>(Primitive.mProxy->mPrimitive)].get()};
 
-            if (Primitive.mProxy.mSkeletalMesh != nullptr && (!Primitive.mSkinBuffer.IsCreated() || !Primitive.mProxy.mSkeletalMesh->CreateResources(mDevice))) {
+            const auto* Skinned{Engine::FSkeletalMeshSceneProxy::FindSkinnedProxy(*Primitive.mProxy)};
+            Asset::USkeletalMesh* SkeletalMesh{Skinned != nullptr ? Skinned->GetSkeletalMesh() : nullptr};
+            if (SkeletalMesh != nullptr && (!Primitive.mSkinBuffer.IsCreated() || !SkeletalMesh->CreateResources(mDevice))) {
                 return;
             }
 
@@ -118,7 +122,7 @@ namespace Renderer {
         }};
 
         for (const Renderer::FScenePrimitive& Primitive : Scene.GetPrimitives()) {
-            if (Primitive.mProxy.mParticles != nullptr) {
+            if (Primitive.mProxy->mParticles != nullptr) {
                 if (GetType() != Renderer::EMeshPass::ShadowDepth && Includes(Primitive, Family)) {
                     AddParticleCommands(Primitive, Family, ViewProjection, Commands, Primitives);
                 }
@@ -159,11 +163,11 @@ namespace Renderer {
     }
 
     Asset::UMaterial* Renderer::FMeshPass::ResolveMaterial(const Renderer::FScenePrimitive& Primitive, Index_t MaterialIndex, Asset::UMaterial* Default, const Engine::FParticleMeshBatch* ParticleBatch) {
-        if (ParticleBatch == nullptr && Primitive.mProxy.mMaterial != nullptr) {
-            return Primitive.mProxy.mMaterial.Get();
+        if (ParticleBatch == nullptr && Primitive.mProxy->mMaterial != nullptr) {
+            return Primitive.mProxy->mMaterial.Get();
         }
 
-        const auto& Slots{ParticleBatch != nullptr ? ParticleBatch->mMaterials : Primitive.mProxy.mMaterials};
+        const auto& Slots{ParticleBatch != nullptr ? ParticleBatch->mMaterials : Primitive.mProxy->mMaterials};
         Asset::UMaterial* SlotMaterial{MaterialIndex < Slots.size() ? Slots[MaterialIndex].Get() : nullptr};
 
         return SlotMaterial != nullptr ? SlotMaterial : Default;
@@ -175,7 +179,7 @@ namespace Renderer {
             return IsVisible(ViewProjection, Instance.mBounds);
         }};
 
-        for (const Engine::FParticleMeshBatch& Batch : Primitive.mProxy.mParticles->mMeshes) {
+        for (const Engine::FParticleMeshBatch& Batch : Primitive.mProxy->mParticles->mMeshes) {
             Asset::UStaticMesh* Mesh{Batch.mMesh.Get()};
             const auto First{std::ranges::find_if(Batch.mInstances, Visible)};
 

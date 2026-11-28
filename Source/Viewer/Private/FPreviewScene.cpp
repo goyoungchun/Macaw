@@ -14,7 +14,7 @@
 #include "Engine/UWorld.h"
 #include "Engine/FSceneInterface.h"
 #include "Engine/FLightSceneProxy.h"
-#include "Engine/FPrimitiveSceneProxy.h"
+#include "Engine/FStaticMeshSceneProxy.h"
 #include "Engine/FSceneViewFamily.h"
 #include "Engine/PrimitiveMesh.h"
 #include "RenderCore/IRendererModule.h"
@@ -136,16 +136,16 @@ void FPreviewScene::PrepareEnvironment(Engine::FSceneViewFamily& Family, const F
         mFloorMaterial->SetBaseColor({0.55f, 0.58f, 0.63f, 1.0f});
         mFloorMaterial->SetSpecularStrength(0.0f);
 
-        Engine::FPrimitiveSceneProxy Floor{};
-        Floor.mId = mFloorId;
-        Floor.mPrimitive = Engine::EPrimitiveType::Cube;
-        Floor.mWorld = Transform;
-        Floor.mBounds = FloorBounds;
-        Floor.mMaterial = mFloorMaterial.get();
-        Floor.mCastShadow = false;
-        Floor.mReceiveShadow = true;
-        Floor.mReceivesDecals = false;
-        Scene->AddPrimitive(Floor);
+        auto Floor{std::make_unique<Engine::FStaticMeshSceneProxy>()};
+        Floor->mId = mFloorId;
+        Floor->mPrimitive = Engine::EPrimitiveType::Cube;
+        Floor->mWorld = Transform;
+        Floor->mBounds = FloorBounds;
+        Floor->mMaterial = mFloorMaterial.get();
+        Floor->mCastShadow = false;
+        Floor->mReceiveShadow = true;
+        Floor->mReceivesDecals = false;
+        Scene->AddPrimitive(std::move(Floor));
     } else {
         Scene->UpdatePrimitiveTransform(mFloorId, Transform, FloorBounds);
     }

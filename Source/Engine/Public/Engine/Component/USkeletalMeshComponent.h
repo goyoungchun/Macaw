@@ -345,7 +345,7 @@ namespace Engine {
          * @brief 현재 포즈와 재질을 복사한 프록시를 생성합니다.
          * @return GPU 스키닝에 필요한 프록시입니다.
          */
-        Engine::FPrimitiveSceneProxy CreateSceneProxy() const override;
+        std::unique_ptr<Engine::FPrimitiveSceneProxy> CreateSceneProxy() const override;
 
         /**
          * @brief 에셋과 포즈가 준비되었는지 검사합니다.

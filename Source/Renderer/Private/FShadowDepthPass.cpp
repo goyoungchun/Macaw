@@ -68,15 +68,16 @@ namespace Renderer {
      * @brief 그림자를 드리우는 프리미티브만 대상으로 합니다.
      */
     bool Renderer::FShadowDepthPass::Includes(const Renderer::FScenePrimitive& Primitive, const Engine::FSceneViewFamily&) const {
-        return Primitive.mProxy.mCastShadow;
+        return Primitive.mProxy->mCastShadow;
     }
 
     /**
      * @brief SubMesh마다 머티리얼 없이 깊이 전용 파이프라인 드로를 추가합니다.
      */
     void Renderer::FShadowDepthPass::AddCommands(const Renderer::FScenePrimitive& Primitive, Asset::UStaticMesh& Mesh, const Engine::FSceneViewFamily&, Core::TArray<Renderer::FMeshDrawCommand>& Commands, const Engine::FParticleMeshBatch*) {
-        const bool Skinned{Primitive.mProxy.mSkeletalMesh != nullptr};
-        Renderer::FMaterialPipeline* SurfacePipeline{Skinned ? mRenderer->GetDepthPipeline(true) : mPipeline};
+        // 표면 패스와 같은 Vertex Factory를 사용해 그림자에 기록할 정점 위치를 맞춥니다.
+        const Engine::EVertexFactoryType FactoryType{Primitive.mProxy->GetVertexFactoryType()};
+        Renderer::FMaterialPipeline* SurfacePipeline{FactoryType == Engine::EVertexFactoryType::Static ? mPipeline : mRenderer->GetDepthPipeline(FactoryType)};
 
         if (SurfacePipeline == nullptr) {
             return;
@@ -94,7 +95,7 @@ namespace Renderer {
 
             // 천 섹션은 그림자도 입자 위치로 옮긴 모양으로 그립니다.
             const Index_t ClothAssetIndex{GetClothAssetIndex(Primitive, SubMeshIndex)};
-            Renderer::FMaterialPipeline* Pipeline{ClothAssetIndex != InvalidIndex ? mRenderer->GetDepthPipeline(true, true) : SurfacePipeline};
+            Renderer::FMaterialPipeline* Pipeline{ClothAssetIndex != InvalidIndex ? mRenderer->GetDepthPipeline(FactoryType, true) : SurfacePipeline};
 
             if (Pipeline == nullptr) {
                 continue;

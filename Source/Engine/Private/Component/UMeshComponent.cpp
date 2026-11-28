@@ -85,12 +85,12 @@ namespace Engine {
     }
 
     /**
-     * @brief 컴포넌트의 현재 상태를 복사한 프리미티브 프록시를 만듭니다.
+     * @brief 컴포넌트의 공통 상태와 머티리얼 슬롯을 메시 프록시에 복사합니다.
      */
-    Engine::FPrimitiveSceneProxy Engine::UMeshComponent::CreateSceneProxy() const {
+    void Engine::UMeshComponent::InitializeMeshSceneProxy(Engine::FPrimitiveSceneProxy& Proxy) const {
         Asset::UStaticMesh* Mesh{GetStaticMesh()};
 
-        Engine::FPrimitiveSceneProxy Proxy{Engine::UPrimitiveComponent::CreateSceneProxy()};
+        InitializeSceneProxy(Proxy);
         Proxy.mMaterial = mMaterial;
 
         if (Mesh != nullptr) {
@@ -98,8 +98,6 @@ namespace Engine {
                 Proxy.mMaterials.push_back(GetSlotMaterial(Slot));
             }
         }
-
-        return Proxy;
     }
 
     /**

@@ -14,7 +14,7 @@
 #include "Core/Literals/AngleFunctions.h"
 #include "Core/Base/ErrorHandler.h"
 #include "Engine/EPrimitiveType.h"
-#include "Engine/FPrimitiveSceneProxy.h"
+#include "Engine/FSkeletalMeshSceneProxy.h"
 #include "Engine/UWorld.h"
 #include "Engine/Animation/UAnimSingleNodeInstance.h"
 #include "Engine/Animation/UAnimGraphInstance.h"
@@ -1725,21 +1725,14 @@ namespace Engine {
     /**
      * @brief 현재 포즈와 재질을 복사한 프록시를 생성합니다.
      */
-    Engine::FPrimitiveSceneProxy Engine::USkeletalMeshComponent::CreateSceneProxy() const {
-        Engine::FPrimitiveSceneProxy Proxy{Engine::UMeshComponent::CreateSceneProxy()};
+    std::unique_ptr<Engine::FPrimitiveSceneProxy> Engine::USkeletalMeshComponent::CreateSceneProxy() const {
+        // 렌더러는 프록시에 복사한 스키닝 행렬만 읽으며, 개정이 같으면 FScene::UploadSkinning이 업로드를 건너뜁니다.
+        auto Proxy{std::make_unique<Engine::FSkeletalMeshSceneProxy>(mSkeletalMesh, mPose.GetSkinMatrices(), mPose.GetRevision())};
+        InitializeMeshSceneProxy(*Proxy);
 
-        if (mPose.GetRevision().IsValid()) {
-            // 렌더러는 프록시에 복사한 스키닝 행렬만 읽으며, 개정이 같으면 FScene::UploadSkinning이 업로드를 건너뜁니다.
-            Proxy.mSkeletalMesh = mSkeletalMesh;
-            Proxy.mSkinMatrices = mPose.GetSkinMatrices();
-            Proxy.mPoseRevision = mPose.GetRevision();
-
-            // 천 섹션은 렌더러가 이 결과의 입자 위치로 정점을 옮겨 그립니다.
-            if (mClothingSimulation != nullptr && !mCurrentSimulationData.empty()) {
-                Proxy.mClothSimData = mCurrentSimulationData;
-                Proxy.mClothBlendWeight = mClothBlendWeight;
-                Proxy.mClothRevision = mClothRevision;
-            }
+        // 천 섹션은 렌더러가 이 결과의 입자 위치로 정점을 옮겨 그립니다.
+        if (mPose.GetRevision().IsValid() && mClothingSimulation != nullptr && !mCurrentSimulationData.empty()) {
+            Proxy->SetClothData(mCurrentSimulationData, mClothBlendWeight, mClothRevision);
         }
 
         return Proxy;

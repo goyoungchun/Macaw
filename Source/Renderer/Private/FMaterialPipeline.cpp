@@ -7,6 +7,7 @@
 #include "FMaterialPipeline.h"
 
 #include "FShaderInstance.h"
+#include "FVertexFactory.h"
 
 #include <utility>
 
@@ -15,11 +16,10 @@ namespace Renderer {
     /**
      * @brief 전달된 설정과 기본값으로 FMaterialPipeline 객체를 생성합니다.
      */
-    Renderer::FMaterialPipeline::FMaterialPipeline(Renderer::EMeshPass Pass, std::shared_ptr<Renderer::FShaderInstance> VertexShader, std::shared_ptr<Renderer::FShaderInstance> PixelShader, bool TwoSided, bool Instanced, bool Skinned, bool WritesGBuffer)
+    Renderer::FMaterialPipeline::FMaterialPipeline(Renderer::EMeshPass Pass, std::shared_ptr<Renderer::FShaderInstance> VertexShader, std::shared_ptr<Renderer::FShaderInstance> PixelShader, bool TwoSided, const Renderer::FVertexFactory& VertexFactory, bool WritesGBuffer)
 		: mPass{Pass},
-		  mSkinned{Skinned},
+		  mVertexFactory{VertexFactory},
 		  mTwoSided{TwoSided},
-		  mInstanced{Instanced && !Skinned},
 		  mWritesGBuffer{WritesGBuffer},
 		  mVertexShader{std::move(VertexShader)},
 		  mPixelShader{std::move(PixelShader)} {
@@ -48,14 +48,11 @@ namespace Renderer {
      * @brief 메시 인스턴스 데이터를 사용하는 파이프라인인지 반환합니다.
      */
     bool Renderer::FMaterialPipeline::IsInstanced() const {
-        return mInstanced;
+        return mVertexFactory.IsInstanced();
     }
 
-    /**
-     * @brief 객체별 본 행렬을 사용하는지 반환합니다.
-     */
-    bool Renderer::FMaterialPipeline::IsSkinned() const {
-        return mSkinned;
+    const Renderer::FVertexFactory& Renderer::FMaterialPipeline::GetVertexFactory() const {
+        return mVertexFactory;
     }
 
     bool Renderer::FMaterialPipeline::WritesGBuffer() const {

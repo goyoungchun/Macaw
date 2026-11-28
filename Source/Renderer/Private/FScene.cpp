@@ -8,7 +8,7 @@
 #include "FScene.h"
 #include "Core/Math/FMatrix.h"
 #include "Core/Math/FBox.h"
-#include "Engine/FPrimitiveSceneProxy.h"
+#include "Engine/FSkeletalMeshSceneProxy.h"
 #include "Engine/EPrimitiveType.h"
 #include "Asset/UStaticMesh.h"
 #include "Asset/UMaterial.h"
@@ -16,6 +16,7 @@
 #include "Asset/USkeletalMesh.h"
 #include "FObjectConstants.h"
 #include "FScenePrimitive.h"
+#include "FVertexFactory.h"
 #include "Core/Base/ErrorHandler.h"
 
 #include <algorithm>
@@ -161,37 +162,51 @@ namespace Renderer {
     /**
      * @brief 프록시의 GUID로 렌더 장면에 프리미티브를 추가하거나 교체합니다.
      */
-    void Renderer::FScene::AddPrimitive(const Engine::FPrimitiveSceneProxy& Proxy) {
+    void Renderer::FScene::AddPrimitive(std::unique_ptr<Engine::FPrimitiveSceneProxy> Proxy) {
+        if (Proxy == nullptr) {
+            return;
+        }
+
         // 공유 형상 버퍼 외에 스킨 정점 버퍼도 같은 장치에서 준비합니다.
-        if (Proxy.mSkeletalMesh != nullptr && (Proxy.mMesh != Proxy.mSkeletalMesh->GetGeometry() || Proxy.mSkinMatrices.size() < Proxy.mSkeletalMesh->GetSkinMatrixCount() || !Proxy.mSkeletalMesh->CreateResources(mDevice))) {
+        const auto* Skinned{Engine::FSkeletalMeshSceneProxy::FindSkinnedProxy(*Proxy)};
+        Asset::USkeletalMesh* SkeletalMesh{Skinned != nullptr ? Skinned->GetSkeletalMesh() : nullptr};
+        if (SkeletalMesh != nullptr && (Proxy->mMesh != SkeletalMesh->GetGeometry() || Skinned->GetSkinMatrices().size() < SkeletalMesh->GetSkinMatrixCount() || !SkeletalMesh->CreateResources(mDevice))) {
             Core::ErrorHandler::Report("SkeletalMesh", "Cannot prepare skeletal mesh resources or pose", Core::ErrorHandler::EErrorLevel::Error);
 
             return;
         }
 
-        if (Proxy.mMesh != nullptr && !Proxy.mMesh->CreateResources(mDevice)) {
+        if (Proxy->mMesh != nullptr && !Proxy->mMesh->CreateResources(mDevice)) {
             Core::ErrorHandler::Report("Mesh", "Cannot create project mesh resources", Core::ErrorHandler::EErrorLevel::Error);
 
             return;
         }
 
-        const auto Position{mIndices.find(Proxy.mId)};
+        // 공유 메시 버퍼 외에 높이맵처럼 정점 처리 방식에 따라 필요한 GPU 리소스를 준비합니다.
+        if (!Renderer::FVertexFactory::Get(Proxy->GetVertexFactoryType()).CreateResources(mDevice, *Proxy)) {
+            Core::ErrorHandler::Report("Renderer", "Cannot create vertex factory resources", Core::ErrorHandler::EErrorLevel::Error);
 
-        bool CasterChanged{IsShadowCaster(Proxy)};
+            return;
+        }
+
+        const Core::FGuid Id{Proxy->mId};
+        const auto Position{mIndices.find(Id)};
+        bool CasterChanged{IsShadowCaster(*Proxy)};
 
         if (Position != mIndices.end()) {
             Renderer::FScenePrimitive& Primitive{mPrimitives[Position->second]};
 
-            CasterChanged = CasterChanged || IsShadowCaster(Primitive.mProxy);
-            Primitive.mProxy = Proxy;
+            // 같은 GUID의 프록시를 교체할 때 기존 렌더 항목의 GPU 버퍼를 재사용합니다.
+            CasterChanged = CasterChanged || IsShadowCaster(*Primitive.mProxy);
+            Primitive.mProxy = std::move(Proxy);
 
             Upload(Primitive);
         } else {
-            Renderer::FScenePrimitive Primitive{Proxy};
+            Renderer::FScenePrimitive Primitive{std::move(Proxy)};
 
             Upload(Primitive);
 
-            mIndices.emplace(Proxy.mId, mPrimitives.size());
+            mIndices.emplace(Id, mPrimitives.size());
             mPrimitives.push_back(std::move(Primitive));
         }
 
@@ -212,16 +227,16 @@ namespace Renderer {
 
         Renderer::FScenePrimitive& Primitive{mPrimitives[Position->second]};
 
-        if (Primitive.mProxy.mWorld == World) {
+        if (Primitive.mProxy->mWorld == World) {
             return;
         }
 
-        Primitive.mProxy.mWorld = World;
-        Primitive.mProxy.mBounds = Bounds;
+        Primitive.mProxy->mWorld = World;
+        Primitive.mProxy->mBounds = Bounds;
 
         Upload(Primitive);
 
-        if (IsShadowCaster(Primitive.mProxy)) {
+        if (IsShadowCaster(*Primitive.mProxy)) {
             mCasterRevision = Core::FRevision::Next();
         }
     }
@@ -238,13 +253,13 @@ namespace Renderer {
 
         const Index_t Index{static_cast<Index_t>(Position->second)};
 
-        if (IsShadowCaster(mPrimitives[Index].mProxy)) {
+        if (IsShadowCaster(*mPrimitives[Index].mProxy)) {
             mCasterRevision = Core::FRevision::Next();
         }
 
         if (Index + 1 != mPrimitives.size()) {
             mPrimitives[Index] = std::move(mPrimitives.back());
-            mIndices[mPrimitives[Index].mProxy.mId] = Index;
+            mIndices[mPrimitives[Index].mProxy->mId] = Index;
         }
 
         mPrimitives.pop_back();
@@ -285,14 +300,14 @@ namespace Renderer {
         }};
 
         for (const Renderer::FScenePrimitive& Primitive : mPrimitives) {
-            if (!IsShadowCaster(Primitive.mProxy)) {
+            if (!IsShadowCaster(*Primitive.mProxy)) {
                 continue;
             }
 
-            if (Primitive.mProxy.mMaterial != nullptr) {
-                IncludeMaterial(Primitive.mProxy.mMaterial.Get());
+            if (Primitive.mProxy->mMaterial != nullptr) {
+                IncludeMaterial(Primitive.mProxy->mMaterial.Get());
             } else {
-                for (const auto& Material : Primitive.mProxy.mMaterials) {
+                for (const auto& Material : Primitive.mProxy->mMaterials) {
                     IncludeMaterial(Material.Get());
                 }
             }
@@ -323,30 +338,31 @@ namespace Renderer {
      * @brief 프리미티브의 객체 상수 버퍼를 현재 프록시 값으로 갱신합니다.
      */
     void Renderer::FScene::Upload(Renderer::FScenePrimitive& Primitive) {
-        if (Primitive.mProxy.mParticles != nullptr) {
+        if (Primitive.mProxy->mParticles != nullptr) {
             Primitive.mObjectBuffer.Reset();
 
             return;
         }
 
-        if (Primitive.mProxy.mText.has_value() || Primitive.mProxy.mSprite.has_value()) {
+        if (Primitive.mProxy->mText.has_value() || Primitive.mProxy->mSprite.has_value()) {
             Primitive.mObjectBuffer.Reset();
 
             return;
         }
 
-        if (!UploadSkinning(Primitive)) {
+        const auto* Skinned{Engine::FSkeletalMeshSceneProxy::FindSkinnedProxy(*Primitive.mProxy)};
+        if (!UploadSkinning(Primitive, Skinned)) {
             Primitive.mObjectBuffer.Reset();
             Core::ErrorHandler::Report("SkeletalMesh", "Cannot upload skeletal pose", Core::ErrorHandler::EErrorLevel::Error);
 
             return;
         }
 
-        UploadCloth(Primitive);
+        UploadCloth(Primitive, Skinned);
 
         Renderer::FObjectConstants& Constants{Primitive.mObjectConstants};
-        Constants.mWorld = Primitive.mProxy.mWorld;
-        Constants.mUVTransform = {Primitive.mProxy.mUVScale.x, Primitive.mProxy.mUVScale.y, Primitive.mProxy.mUVOffset.x, Primitive.mProxy.mUVOffset.y};
+        Constants.mWorld = Primitive.mProxy->mWorld;
+        Constants.mUVTransform = {Primitive.mProxy->mUVScale.x, Primitive.mProxy->mUVScale.y, Primitive.mProxy->mUVOffset.x, Primitive.mProxy->mUVOffset.y};
 
         if (!Constants.mWorld.TryInverse(Constants.mWorldInverse)) {
             Core::ErrorHandler::Fatal("Renderer", "Singular render transform");
@@ -363,24 +379,24 @@ namespace Renderer {
         ++mTransformUpdates;
     }
 
-    bool Renderer::FScene::UploadSkinning(Renderer::FScenePrimitive& Primitive) {
-        if (Primitive.mProxy.mSkeletalMesh == nullptr) {
+    bool Renderer::FScene::UploadSkinning(Renderer::FScenePrimitive& Primitive, const Engine::FSkeletalMeshSceneProxy* Skinned) {
+        if (Skinned == nullptr) {
             Primitive.mSkinBuffer.Reset();
 
             return true;
         }
 
         // 프록시가 다시 만들어져도 포즈가 그대로이면 다시 올리지 않습니다.
-        if (Primitive.mSkinBuffer.IsCreated() && Primitive.mProxy.mPoseRevision.IsValid() && Primitive.mUploadedPoseRevision == Primitive.mProxy.mPoseRevision) {
+        if (Primitive.mSkinBuffer.IsCreated() && Primitive.mUploadedPoseRevision == Skinned->GetPoseRevision()) {
             return true;
         }
 
         // 각 본의 위치 변환과 법선 역전치를 함께 올려 비균일 스케일도 처리합니다.
         // 한 원소의 배치(행렬 2개)는 Skinning.hlsl의 FSkinBone과 일치해야 합니다.
         Core::TArray<Core::TStaticArray<FMatrix, 2>> Bones{};
-        Bones.reserve(Primitive.mProxy.mSkinMatrices.size());
+        Bones.reserve(Skinned->GetSkinMatrices().size());
 
-        for (const FMatrix& Skin : Primitive.mProxy.mSkinMatrices) {
+        for (const FMatrix& Skin : Skinned->GetSkinMatrices()) {
             FMatrix Inverse{};
 
             if (!Skin.IsFinite() || !Skin.TryInverse(Inverse) || !Inverse.IsFinite()) {
@@ -400,7 +416,7 @@ namespace Renderer {
             return false;
         }
 
-        Primitive.mUploadedPoseRevision = Primitive.mProxy.mPoseRevision;
+        Primitive.mUploadedPoseRevision = Skinned->GetPoseRevision();
 
         return true;
     }
@@ -408,8 +424,8 @@ namespace Renderer {
     /**
      * @brief 천 에셋마다 입자 위치와 법선, 천 상수를 GPU에 반영합니다.
      */
-    void Renderer::FScene::UploadCloth(Renderer::FScenePrimitive& Primitive) {
-        if (Primitive.mProxy.mSkeletalMesh == nullptr || Primitive.mProxy.mClothSimData.empty()) {
+    void Renderer::FScene::UploadCloth(Renderer::FScenePrimitive& Primitive, const Engine::FSkeletalMeshSceneProxy* Skinned) {
+        if (Skinned == nullptr || Skinned->GetClothSimData().empty()) {
             Primitive.mClothResources.clear();
             Primitive.mUploadedClothRevision = {};
 
@@ -417,18 +433,19 @@ namespace Renderer {
         }
 
         // 프록시가 다시 만들어져도 천 결과가 그대로이면 다시 올리지 않습니다.
-        if (Primitive.mProxy.mClothRevision.IsValid() && Primitive.mUploadedClothRevision == Primitive.mProxy.mClothRevision) {
+        if (Skinned->GetClothRevision().IsValid() && Primitive.mUploadedClothRevision == Skinned->GetClothRevision()) {
             return;
         }
 
         // 결과에 없는 천 에셋의 자원은 버립니다.
-        std::erase_if(Primitive.mClothResources, [&Primitive](const auto& Entry) {
-            return !Primitive.mProxy.mClothSimData.contains(Entry.first);
+        const auto& ClothSimData{Skinned->GetClothSimData()};
+        std::erase_if(Primitive.mClothResources, [&ClothSimData](const auto& Entry) {
+            return !ClothSimData.contains(Entry.first);
         });
 
         Core::TArray<Renderer::FClothParticleGpu> Particles{};
 
-        for (const auto& [AssetIndex, SimData] : Primitive.mProxy.mClothSimData) {
+        for (const auto& [AssetIndex, SimData] : ClothSimData) {
             if (SimData.mPositions.empty() || SimData.mPositions.size() != SimData.mNormals.size()) {
                 Primitive.mClothResources.erase(AssetIndex);
 
@@ -457,12 +474,12 @@ namespace Renderer {
 
             Renderer::FClothConstants Constants{};
             Constants.mClothLocalToComponent = SimData.mComponentRelativeTransform.ToMatrix();
-            Constants.mClothBlendWeight = Primitive.mProxy.mClothBlendWeight;
+            Constants.mClothBlendWeight = Skinned->GetClothBlendWeight();
 
             Resources.mConstants.Update(mContext, Constants);
         }
 
-        Primitive.mUploadedClothRevision = Primitive.mProxy.mClothRevision;
+        Primitive.mUploadedClothRevision = Skinned->GetClothRevision();
     }
 
     /**

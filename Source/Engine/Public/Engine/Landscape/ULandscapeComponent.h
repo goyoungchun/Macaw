@@ -6,14 +6,17 @@
 
 namespace Engine {
 
+    class FLandscapeRenderResources;
+
     UCLASS()
     class ULandscapeComponent final : public Engine::UPrimitiveComponent {
         GENERATED_BODY()
 
     public:
         Engine::EPrimitiveType GetPrimitiveType() const override;
+        Asset::UStaticMesh* GetStaticMesh() const override;
         const Asset::FMeshData& GetMeshData() const override;
-
+        std::unique_ptr<Engine::FPrimitiveSceneProxy> CreateSceneProxy() const override;
         bool ShouldCreateRenderState() const override;
 
         Int32 GetTileX() const;
@@ -23,6 +26,11 @@ namespace Engine {
 
         const Core::TArray<Engine::FLandscapeSection>& GetSections() const;
         void SetSections(Core::TArray<Engine::FLandscapeSection> Sections);
+        void SetQuadsPerSide(Uint32 Quads);
+
+    private:
+        void OnRegister() override;
+        void UpdateTileTransform();
 
     private:
         UPROPERTY(Edit, Serialize, Category = "Landscape", Getter = GetTileX, Setter = SetTileX)
@@ -33,6 +41,11 @@ namespace Engine {
 
         UPROPERTY(Serialize)
         Core::TArray<Engine::FLandscapeSection> mSections{};
+
+        UPROPERTY(Serialize)
+        Uint32 mQuadsPerSide{};
+
+        std::shared_ptr<const Engine::FLandscapeRenderResources> mRenderResources{};
     };
 
 }

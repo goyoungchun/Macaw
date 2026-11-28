@@ -277,14 +277,14 @@ namespace Engine {
         return mTemplate != nullptr;
     }
 
-    Engine::FPrimitiveSceneProxy Engine::UParticleSystemComponent::CreateSceneProxy() const {
-        Engine::FPrimitiveSceneProxy Proxy{Engine::UPrimitiveComponent::CreateSceneProxy()};
+    std::unique_ptr<Engine::FPrimitiveSceneProxy> Engine::UParticleSystemComponent::CreateSceneProxy() const {
+        auto Proxy{Engine::UPrimitiveComponent::CreateSceneProxy()};
 
         // 반투명 스프라이트라 그림자·데칼과 섞이지 않습니다.
-        Proxy.mCastShadow = false;
-        Proxy.mReceiveShadow = false;
-        Proxy.mReceivesDecals = false;
-        Proxy.mParticles = mRenderData;
+        Proxy->mCastShadow = false;
+        Proxy->mReceiveShadow = false;
+        Proxy->mReceivesDecals = false;
+        Proxy->mParticles = mRenderData;
 
         return Proxy;
     }

@@ -77,14 +77,14 @@ namespace Renderer {
             if (BuildCommands(*Scene, Family, Family.mView.mViewProjection, MeshCommands, Primitives)) {
                 for (std::size_t Index{}; Index < MeshCommands.size(); ++Index) {
                     const Renderer::FMeshDrawCommand& MeshCommand{MeshCommands[Index]};
-                    const FBox& Bounds{MeshCommand.mParticleInstance != nullptr ? MeshCommand.mParticleInstance->mBounds : MeshCommand.mPrimitive->mProxy.mBounds};
+                    const FBox& Bounds{MeshCommand.mParticleInstance != nullptr ? MeshCommand.mParticleInstance->mBounds : MeshCommand.mPrimitive->mProxy->mBounds};
                     const FVector Center{(Bounds.mMinimum + Bounds.mMaximum) * 0.5f};
                     Commands.emplace_back(Depth(Center, false), FPrimitive{Index});
                 }
             }
 
             for (const Renderer::FScenePrimitive& Primitive : Scene->GetPrimitives()) {
-                const Engine::FPrimitiveSceneProxy& Proxy{Primitive.mProxy};
+                const Engine::FPrimitiveSceneProxy& Proxy{*Primitive.mProxy};
 
                 if (Proxy.mParticles != nullptr) {
                     // 같은 컴포넌트의 에미터는 같은 깊이 키라 안정 정렬로 배열 순서가 유지됩니다.
@@ -212,7 +212,7 @@ namespace Renderer {
             const auto* Scene{static_cast<const Renderer::FScene*>(Family.mScene)};
 
             for (const Renderer::FScenePrimitive& Primitive : Scene->GetPrimitives()) {
-                const Engine::FPrimitiveSceneProxy& Proxy{Primitive.mProxy};
+                const Engine::FPrimitiveSceneProxy& Proxy{*Primitive.mProxy};
 
                 if (Proxy.mText.has_value() && !Proxy.mText->mDepthTest) {
                     Engine::FDrawText Text{*Proxy.mText};
@@ -268,8 +268,8 @@ namespace Renderer {
     }
 
     void Renderer::FTranslucencyMeshPass::AddCommands(const Renderer::FScenePrimitive& Primitive, Asset::UStaticMesh& Mesh, const Engine::FSceneViewFamily& Family, Core::TArray<Renderer::FMeshDrawCommand>& Commands, const Engine::FParticleMeshBatch* ParticleBatch) {
-        const bool Skinned{ParticleBatch == nullptr && Primitive.mProxy.mSkeletalMesh != nullptr};
-        const bool ReceiveShadows{Family.mShowFlags.mShadows && (ParticleBatch != nullptr || Primitive.mProxy.mReceiveShadow)};
+        const Engine::EVertexFactoryType FactoryType{ParticleBatch != nullptr ? Engine::EVertexFactoryType::Particle : Primitive.mProxy->GetVertexFactoryType()};
+        const bool ReceiveShadows{Family.mShowFlags.mShadows && (ParticleBatch != nullptr || Primitive.mProxy->mReceiveShadow)};
 
         const auto& SubMeshes{Mesh.GetMeshData().GetSubMeshes()};
 
@@ -283,7 +283,7 @@ namespace Renderer {
 
             // 천 섹션은 정점을 입자 위치로 옮기는 천 변형 셰이더로 그립니다.
             const Index_t ClothAssetIndex{GetClothAssetIndex(Primitive, SubMeshIndex)};
-            Renderer::FMaterialPipeline* Pipeline{mRenderer->GetMaterialPipeline(*Material, Family.mViewMode, Skinned, ReceiveShadows, ClothAssetIndex != InvalidIndex, ParticleBatch != nullptr)};
+            Renderer::FMaterialPipeline* Pipeline{mRenderer->GetMaterialPipeline(*Material, Family.mViewMode, FactoryType, ReceiveShadows, ClothAssetIndex != InvalidIndex)};
 
             if (Pipeline != nullptr) {
                 Commands.emplace_back(Pipeline, Material, &Mesh, &Primitive, SubMesh.GetFirstIndex(), SubMesh.GetIndexCount(), ClothAssetIndex);

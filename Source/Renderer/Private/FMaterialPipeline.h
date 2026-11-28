@@ -15,6 +15,7 @@
 namespace Renderer {
 
     class FShaderInstance;
+    class FVertexFactory;
 
     /**
      * @brief 머티리얼 셰이더와 양면 정책별 GPU 파이프라인을 관리합니다.
@@ -28,11 +29,10 @@ namespace Renderer {
          * @param[in] VertexShader 공유 정점 셰이더와 입력 레이아웃입니다.
          * @param[in] PixelShader 공유 픽셀 셰이더이며, 깊이 전용 패스는 nullptr입니다.
          * @param[in] TwoSided 양면 렌더링을 사용할지 지정합니다.
-         * @param[in] Instanced 메시 인스턴스의 월드 행렬을 정점 입력으로 사용하려면 true입니다.
-         * @param[in] Skinned 본 인덱스·가중치 입력을 사용하는 스키닝 파이프라인이면 true입니다.
+         * @param[in] VertexFactory 메시의 정점 입력과 리소스 바인딩을 담당합니다.
          * @param WritesGBuffer 표면 속성을 GBuffer에 기록하는 파이프라인인지 여부입니다.
          */
-        FMaterialPipeline(Renderer::EMeshPass Pass, std::shared_ptr<Renderer::FShaderInstance> VertexShader, std::shared_ptr<Renderer::FShaderInstance> PixelShader, bool TwoSided, bool Instanced = false, bool Skinned = false, bool WritesGBuffer = false);
+        FMaterialPipeline(Renderer::EMeshPass Pass, std::shared_ptr<Renderer::FShaderInstance> VertexShader, std::shared_ptr<Renderer::FShaderInstance> PixelShader, bool TwoSided, const Renderer::FVertexFactory& VertexFactory, bool WritesGBuffer = false);
 
         /**
          * @brief 기본 소멸자이며, GPU 자원은 ComPtr 멤버가 해제합니다.
@@ -59,11 +59,7 @@ namespace Renderer {
          */
         bool IsInstanced() const;
 
-        /**
-         * @brief 객체별 본 행렬을 사용하는지 반환합니다.
-         * @return 스키닝 입력을 사용하면 true입니다.
-         */
-        bool IsSkinned() const;
+        const Renderer::FVertexFactory& GetVertexFactory() const;
 
         /**
          * @brief 재질 파이프라인이 GBuffer 출력을 기록하는지 확인합니다.
@@ -99,20 +95,12 @@ namespace Renderer {
          */
         Renderer::EMeshPass mPass{};
 
-        /**
-         * @brief 스킨 정점 입력과 객체별 본 팔레트를 사용하는지 나타냅니다.
-         */
-        bool mSkinned{};
+        const Renderer::FVertexFactory& mVertexFactory;
 
         /**
          * @brief 메시 양면 렌더링 여부입니다.
          */
         bool mTwoSided{};
-
-        /**
-         * @brief 인스턴스 월드 행렬을 사용하는 메시 파이프라인인지 나타냅니다.
-         */
-        bool mInstanced{};
 
         /**
          * @brief 파이프라인이 GBuffer 출력을 기록하는지 여부입니다.

@@ -142,7 +142,7 @@ namespace Engine {
          * @brief 컴포넌트의 현재 상태를 복사한 프리미티브 프록시를 만듭니다.
          * @return 현재 상태를 담은 프록시입니다.
          */
-        virtual Engine::FPrimitiveSceneProxy CreateSceneProxy() const;
+        virtual std::unique_ptr<Engine::FPrimitiveSceneProxy> CreateSceneProxy() const;
 
         /**
          * @brief 월드 공간의 축 정렬 경계 상자를 반환합니다.
@@ -437,6 +437,7 @@ namespace Engine {
         void QueueUpdate();
 
     protected:
+        void InitializeSceneProxy(Engine::FPrimitiveSceneProxy& Proxy) const;
 
         /**
          * @brief 바디 셋업의 형상으로 월드 물리 장면에 바디를 만듭니다.

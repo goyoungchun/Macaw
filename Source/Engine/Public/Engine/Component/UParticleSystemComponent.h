@@ -139,7 +139,7 @@ namespace Engine {
         /**
          * @brief 그림자와 데칼을 받지 않고 마지막으로 만든 그리기 데이터를 담은 프록시입니다.
          */
-        Engine::FPrimitiveSceneProxy CreateSceneProxy() const override;
+        std::unique_ptr<Engine::FPrimitiveSceneProxy> CreateSceneProxy() const override;
 
         /**
          * @brief 에미터가 쓰는 머티리얼 경로를 로드합니다. 한 번 찾은 결과(실패 포함)는 이 컴포넌트가 기억합니다.

@@ -21,6 +21,10 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 
+namespace Engine {
+    class FSkeletalMeshSceneProxy;
+}
+
 namespace Renderer {
 
     /**
@@ -110,7 +114,7 @@ namespace Renderer {
         /**
          * @copydoc Engine::FSceneInterface::AddPrimitive
          */
-        void AddPrimitive(const Engine::FPrimitiveSceneProxy& Proxy) override;
+        void AddPrimitive(std::unique_ptr<Engine::FPrimitiveSceneProxy> Proxy) override;
 
         /**
          * @brief 지정한 프리미티브의 월드 행렬과 경계 상자를 갱신합니다.
@@ -172,14 +176,14 @@ namespace Renderer {
          * @param Primitive 갱신할 프리미티브입니다.
          * @return 스킨이 없거나 업로드했으면 true입니다.
          */
-        bool UploadSkinning(Renderer::FScenePrimitive& Primitive);
+        bool UploadSkinning(Renderer::FScenePrimitive& Primitive, const Engine::FSkeletalMeshSceneProxy* Skinned);
 
         /**
          * @brief 천 에셋마다 입자 위치와 법선, 천 상수를 GPU에 반영합니다.
          * @details 올리지 못한 천은 목록에서 빼서 그 섹션을 스키닝만으로 그립니다.
          * @param Primitive 갱신할 프리미티브입니다.
          */
-        void UploadCloth(Renderer::FScenePrimitive& Primitive);
+        void UploadCloth(Renderer::FScenePrimitive& Primitive, const Engine::FSkeletalMeshSceneProxy* Skinned);
 
         /**
          * @brief 프록시가 그림자 깊이 패스에 그려지는 캐스터인지 검사합니다.

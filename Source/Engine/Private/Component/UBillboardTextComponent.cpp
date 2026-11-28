@@ -131,10 +131,10 @@ namespace Engine {
     /**
      * @brief 컴포넌트의 현재 상태를 복사한 프리미티브 프록시를 만듭니다.
      */
-    Engine::FPrimitiveSceneProxy Engine::UBillboardTextComponent::CreateSceneProxy() const {
-        Engine::FPrimitiveSceneProxy Proxy{GetGuid(), GetPrimitiveType(), GetWorldMatrix(), GetWorldBounds()};
-        Proxy.mText = Engine::FDrawText{{}, mText, mTextColor, mTextSize};
-        Proxy.mText->mDepthTest = mDepthTest;
+    std::unique_ptr<Engine::FPrimitiveSceneProxy> Engine::UBillboardTextComponent::CreateSceneProxy() const {
+        auto Proxy{Engine::UPrimitiveComponent::CreateSceneProxy()};
+        Proxy->mText = Engine::FDrawText{{}, mText, mTextColor, mTextSize};
+        Proxy->mText->mDepthTest = mDepthTest;
 
         return Proxy;
     }

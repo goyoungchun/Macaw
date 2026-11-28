@@ -12,6 +12,7 @@
 #include "Engine/FRenderTarget.h"
 #include "Engine/FSceneViewFamily.h"
 #include "Engine/EPrimitiveType.h"
+#include "Engine/EVertexFactoryType.h"
 #include "Engine/EEditorMesh.h"
 #include "RenderCore/FRenderStats.h"
 #include "RenderCore/TConstantBuffer.h"
@@ -281,7 +282,7 @@ namespace Renderer {
          * @param[in] ReceiveShadows 그림자 수신 셰이더 변형의 사용 여부입니다.
          * @param[in] Cloth 스키닝한 정점을 천 입자 위치로 옮기는 변형을 선택하려면 true이며 Skinned가 true일 때만 씁니다.
          */
-        Renderer::FMaterialPipeline* GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode = Engine::EViewMode::Lit_Phong, bool Skinned = false, bool ReceiveShadows = true, bool Cloth = false, bool ParticleMesh = false);
+        Renderer::FMaterialPipeline* GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode = Engine::EViewMode::Lit_Phong, Engine::EVertexFactoryType FactoryType = Engine::EVertexFactoryType::Static, bool ReceiveShadows = true, bool Cloth = false);
 
         /**
          * @brief 그림자 아틀라스 깊이 패스에 사용할 깊이 전용 파이프라인을 반환합니다.
@@ -289,7 +290,7 @@ namespace Renderer {
          * @param[in] Cloth 스키닝한 정점을 천 입자 위치로 옮기는 변형을 선택하려면 true이며 Skinned가 true일 때만 씁니다.
          * @return 대상의 비소유 주소이며, 셰이더를 다시 컴파일하는 중이거나 실패하면 nullptr입니다.
          */
-        Renderer::FMaterialPipeline* GetDepthPipeline(bool Skinned = false, bool Cloth = false);
+        Renderer::FMaterialPipeline* GetDepthPipeline(Engine::EVertexFactoryType FactoryType = Engine::EVertexFactoryType::Static, bool Cloth = false);
 
         /**
          * @brief 머티리얼이 없는 메시가 사용할 기본 머티리얼을 반환합니다.

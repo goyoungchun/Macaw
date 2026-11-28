@@ -268,16 +268,16 @@ namespace Renderer {
         Core::TArray<FBox> ReceiverBounds{};
 
         for (const Renderer::FScenePrimitive& Primitive : Scene.GetPrimitives()) {
-            if (Primitive.mProxy.mSprite.has_value() || Primitive.mProxy.mText.has_value()) {
+            if (Primitive.mProxy->mSprite.has_value() || Primitive.mProxy->mText.has_value()) {
                 continue;
             }
 
-            if (Primitive.mProxy.mCastShadow) {
-                CasterBounds.push_back(Primitive.mProxy.mBounds);
+            if (Primitive.mProxy->mCastShadow) {
+                CasterBounds.push_back(Primitive.mProxy->mBounds);
             }
 
-            if (Primitive.mProxy.mReceiveShadow && Renderer::FMeshPass::IsVisible(Family.mView.mViewProjection, Primitive.mProxy.mBounds)) {
-                ReceiverBounds.push_back(Primitive.mProxy.mBounds);
+            if (Primitive.mProxy->mReceiveShadow && Renderer::FMeshPass::IsVisible(Family.mView.mViewProjection, Primitive.mProxy->mBounds)) {
+                ReceiverBounds.push_back(Primitive.mProxy->mBounds);
             }
         }
 

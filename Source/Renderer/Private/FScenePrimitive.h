@@ -7,6 +7,7 @@
 #pragma once
 
 #include "Core/ReflectionMacros.h"
+#include "Core/FRevision.h"
 #include "Engine/FPrimitiveSceneProxy.h"
 #include "FClothConstants.h"
 #include "FObjectConstants.h"
@@ -51,9 +52,9 @@ namespace Renderer {
         };
 
         /**
-         * @brief 엔진에서 복사한 프리미티브 프록시입니다.
+         * @brief 장면이 소유한 프리미티브 프록시입니다.
          */
-        Engine::FPrimitiveSceneProxy mProxy{};
+        std::unique_ptr<Engine::FPrimitiveSceneProxy> mProxy{};
 
         /**
          * @brief 객체별 GPU 상수 버퍼입니다.

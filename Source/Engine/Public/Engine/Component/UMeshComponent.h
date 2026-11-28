@@ -109,17 +109,13 @@ namespace Engine {
         bool SetSlotMaterialPaths(const Core::TArray<Core::FString>& Paths);
 
         /**
-         * @brief 컴포넌트의 현재 상태를 복사한 프리미티브 프록시를 만듭니다.
-         * @return 현재 상태를 담은 프록시입니다.
-         */
-        Engine::FPrimitiveSceneProxy CreateSceneProxy() const override;
-
-        /**
          * @brief 등록된 렌더 상태와 월드 연결을 해제합니다.
          */
         void UnregisterComponent() override;
 
     protected:
+        void InitializeMeshSceneProxy(Engine::FPrimitiveSceneProxy& Proxy) const;
+
         /**
          * @brief 월드에 등록된 컴포넌트가 참조하는 에셋과 렌더 상태를 준비합니다.
          */
