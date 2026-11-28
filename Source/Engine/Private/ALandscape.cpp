@@ -172,6 +172,8 @@ namespace Engine {
 					mOwnedAsset->ApplyHeightmapFromTexture(*Texture, Error);
 				}
 			}
+
+			ReapplyAllLayerWeightmaps(*mOwnedAsset);
 		}
 
 		ResolveMaterials();
@@ -218,6 +220,11 @@ namespace Engine {
 		}
 
 		SyncLayersToAsset(*ActiveAsset);
+
+		if (TopologyChanged) {
+			ReapplyAllLayerWeightmaps(*ActiveAsset);
+		}
+
 		ResolveMaterials();
 		RebuildSharedRenderResources();
 		RebuildComponentGrid();
@@ -334,10 +341,13 @@ namespace Engine {
 
 		if (TextureAssetPath.empty()) {
 			ActiveAsset->GetMutableLayers()[LayerIndex].mWeightmapTexturePath.clear();
-
-			if (LayerIndex < mLayers.size()) {
-				mLayers[LayerIndex].mWeightmapTexturePath.clear();
-			}
+			ActiveAsset->FillLayerWeights(LayerIndex, 0u);
+			ReapplyAllLayerWeightmaps(*ActiveAsset);
+			ActiveAsset->NormalizeWeightBlendedLayers();
+			ActiveAsset->MarkDataDirty();
+			mLayers = ActiveAsset->GetLayers();
+			RebuildSharedRenderResources();
+			RefreshExistingComponents();
 
 			return true;
 		}
@@ -354,11 +364,13 @@ namespace Engine {
 			return false;
 		}
 
-		if (!ActiveAsset->ApplyWeightmapFromTexture(LayerIndex, *Texture, Error)) {
+		// 요청한 텍스처를 먼저 검증한 뒤 전체 레이어 웨이트맵을 일괄 재적용
+		if (!ActiveAsset->SampleWeightmapTextureToLayerRaw(LayerIndex, *Texture, Error)) {
 			return false;
 		}
 
 		ActiveAsset->GetMutableLayers()[LayerIndex].mWeightmapTexturePath = TextureAssetPath;
+		ReapplyAllLayerWeightmaps(*ActiveAsset);
 		mLayers = ActiveAsset->GetLayers();
 		RebuildSharedRenderResources();
 		RefreshExistingComponents();
@@ -775,6 +787,7 @@ namespace Engine {
 
 		if (Asset::ULandscapeAsset* ActiveAsset{GetActiveLandscapeAsset()}) {
 			SyncLayersToAsset(*ActiveAsset);
+			ReapplyAllLayerWeightmaps(*ActiveAsset);
 			ResolveMaterials();
 			RebuildSharedRenderResources();
 			RefreshExistingComponents();
@@ -865,6 +878,46 @@ namespace Engine {
 		}
 
 		Asset.NormalizeWeightBlendedLayers();
+	}
+
+	void ALandscape::ReapplyAllLayerWeightmaps(Asset::ULandscapeAsset& Asset) {
+		Asset::FAssetManager* Assets{GetWorld() != nullptr ? GetWorld()->GetAssets() : nullptr};
+
+		if (Assets == nullptr) {
+			return;
+		}
+
+		const Core::TArray<Asset::FLandscapeLayerInfo>& Layers{Asset.GetLayers()};
+		bool HasAnyWeightmapTexture{};
+
+		for (const Asset::FLandscapeLayerInfo& Layer : Layers) {
+			if (!Layer.mWeightmapTexturePath.empty()) {
+				HasAnyWeightmapTexture = true;
+				break;
+			}
+		}
+
+		if (!HasAnyWeightmapTexture) {
+			return;
+		}
+
+		// 모든 레이어의 원본 웨이트맵 텍스처를 먼저 채운 뒤 일괄 정규화
+		for (Index_t Index{}; Index < Layers.size(); ++Index) {
+			if (Layers[Index].mWeightmapTexturePath.empty()) {
+				Asset.FillLayerWeights(Index, 0u);
+				continue;
+			}
+
+			Core::FString LoadError{};
+			Asset::UTexture2D* Texture{Assets->LoadTexture(Core::FilePath::FromUtf8(Layers[Index].mWeightmapTexturePath), LoadError)};
+
+			if (Texture == nullptr || !Asset.SampleWeightmapTextureToLayerRaw(Index, *Texture, LoadError)) {
+				Asset.FillLayerWeights(Index, 0u);
+			}
+		}
+
+		Asset.NormalizeWeightBlendedLayers();
+		Asset.MarkDataDirty();
 	}
 
 	void ALandscape::ResolveMaterials() {

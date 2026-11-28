@@ -56,6 +56,12 @@ namespace Asset {
 		// 텍스처 에셋에서 특정 레이어 웨이트맵 적용
 		bool ApplyWeightmapFromTexture(Index_t LayerIndex, const Asset::UTexture2D& Texture, Core::FString& Error);
 
+		// 정규화 없이 텍스처 에셋의 원본 가중치를 특정 레이어에 기록
+		bool SampleWeightmapTextureToLayerRaw(Index_t LayerIndex, const Asset::UTexture2D& Texture, Core::FString& Error);
+
+		// 특정 레이어 전체 가중치를 단일 값으로 채우기
+		void FillLayerWeights(Index_t LayerIndex, Uint8 Value);
+
 		// 외부 하이트맵 또는 웨이트맵 원본 파일을 에셋 저장용 텍스처로 변환
 		static bool ConvertSourceImageToTextureAsset(const std::filesystem::path& SourcePath, bool PreserveHighPrecision, Asset::UTexture2D& OutTexture, Core::FString& Error);
 

@@ -705,6 +705,17 @@ namespace Asset {
 	}
 
 	bool ULandscapeAsset::ApplyWeightmapFromTexture(Index_t LayerIndex, const Asset::UTexture2D& Texture, Core::FString& Error) {
+		if (!SampleWeightmapTextureToLayerRaw(LayerIndex, Texture, Error)) {
+			return false;
+		}
+
+		NormalizeWeightBlendedLayers();
+		MarkDataDirty();
+
+		return true;
+	}
+
+	bool ULandscapeAsset::SampleWeightmapTextureToLayerRaw(Index_t LayerIndex, const Asset::UTexture2D& Texture, Core::FString& Error) {
 		Error.clear();
 
 		if (!IsValid() || LayerIndex >= mLayers.size()) {
@@ -737,10 +748,17 @@ namespace Asset {
 			}
 		}
 
-		NormalizeWeightBlendedLayers();
-		MarkDataDirty();
-
 		return true;
+	}
+
+	void ULandscapeAsset::FillLayerWeights(Index_t LayerIndex, Uint8 Value) {
+		SyncWeightArraySizes();
+
+		if (LayerIndex >= mLayerWeights.size()) {
+			return;
+		}
+
+		std::fill(mLayerWeights[LayerIndex].begin(), mLayerWeights[LayerIndex].end(), Value);
 	}
 
 	bool ULandscapeAsset::ConvertSourceImageToTextureAsset(const std::filesystem::path& SourcePath, bool PreserveHighPrecision, Asset::UTexture2D& OutTexture, Core::FString& Error) {

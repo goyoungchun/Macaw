@@ -133,6 +133,7 @@ namespace Engine {
 	private:
 		void SyncParametersFromAsset(const Asset::ULandscapeAsset& Asset);
 		void SyncLayersToAsset(Asset::ULandscapeAsset& Asset);
+		void ReapplyAllLayerWeightmaps(Asset::ULandscapeAsset& Asset);
 		void ResolveMaterials();
 		void RebuildSharedRenderResources();
 		void RebuildComponentGrid();
