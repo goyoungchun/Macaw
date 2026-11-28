@@ -13,8 +13,8 @@ namespace Engine {
         GENERATED_BODY()
 
     public:
-        Engine::ALandscape* GetLandscapeActor() const;
-        void SetLandscapeActor(Engine::ALandscape* LandscapeActor);
+        CoreUObject::TObjectRef<Engine::ALandscape> GetLandscapeActor() const;
+        void SetLandscapeActor(CoreUObject::TObjectRef<Engine::ALandscape> LandscapeActor);
 
     private:
         UPROPERTY(Serialize)

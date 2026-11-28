@@ -1,15 +1,13 @@
 #include "Engine/Landscape/ALandscapeStreamingProxy.h"
 
-#include "Engine/Landscape/ALandscape.h"
-
 namespace Engine {
 
-    Engine::ALandscape* ALandscapeStreamingProxy::GetLandscapeActor() const {
-        return mLandscapeActorRef.Get();
+    CoreUObject::TObjectRef<Engine::ALandscape> ALandscapeStreamingProxy::GetLandscapeActor() const {
+        return mLandscapeActorRef;
     }
 
-    void ALandscapeStreamingProxy::SetLandscapeActor(Engine::ALandscape* LandscapeActor) {
-        mLandscapeActorRef = CoreUObject::MakeObjectRef(LandscapeActor);
+    void ALandscapeStreamingProxy::SetLandscapeActor(CoreUObject::TObjectRef<Engine::ALandscape> LandscapeActor) {
+        mLandscapeActorRef = LandscapeActor;
     }
 
 }

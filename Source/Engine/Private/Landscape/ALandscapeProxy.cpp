@@ -3,7 +3,6 @@
 #include "CoreUObject/Reflection/Cast.h"
 #include "CoreUObject/Reflection/NewObject.h"
 #include "Engine/Component/USceneComponent.h"
-#include "Engine/Landscape/ULandscapeComponent.h"
 
 #include <utility>
 
@@ -20,12 +19,12 @@ namespace Engine {
         return AddComponent(std::move(Root));
     }
 
-    Core::TArray<Engine::ULandscapeComponent*> ALandscapeProxy::GetLandscapeComponents() const {
-        Core::TArray<Engine::ULandscapeComponent*> LandscapeComponents{};
+    Core::TArray<CoreUObject::TObjectRef<Engine::ULandscapeComponent>> ALandscapeProxy::GetLandscapeComponents() const {
+        Core::TArray<CoreUObject::TObjectRef<Engine::ULandscapeComponent>> LandscapeComponents{};
 
         for (const auto& Component : GetComponents()) {
             if (auto* LandscapeComponent{ CoreUObject::Cast<Engine::ULandscapeComponent>(Component.get()) }; LandscapeComponent != nullptr) {
-                LandscapeComponents.push_back(LandscapeComponent);
+                LandscapeComponents.push_back(CoreUObject::MakeObjectRef(LandscapeComponent));
             }
         }
 

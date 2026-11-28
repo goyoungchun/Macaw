@@ -1,11 +1,11 @@
 #pragma once
 
+#include "CoreUObject/TObjectRef.h"
 #include "Engine/APartitionActor.h"
+#include "Engine/Landscape/ULandscapeComponent.h"
 #include "ALandscapeProxy.generated.h"
 
 namespace Engine {
-
-    class ULandscapeComponent;
 
     UCLASS(Abstract)
     class ALandscapeProxy : public Engine::APartitionActor {
@@ -14,7 +14,7 @@ namespace Engine {
     public:
         bool InitializeDefaultComponents() override;
 
-        Core::TArray<Engine::ULandscapeComponent*> GetLandscapeComponents() const;
+        Core::TArray<CoreUObject::TObjectRef<Engine::ULandscapeComponent>> GetLandscapeComponents() const;
     };
 
 }
