@@ -25,6 +25,7 @@ namespace PhysicsRuntime {
 
 namespace Engine {
     class FPrimitiveDrawInterface;
+    class ALandscape;
     class ALevelSequenceActor;
     class UEngine;
     class FProject;
@@ -55,6 +56,7 @@ namespace RenderCore {
 namespace Editor {
 
     class FEditorViewport;
+    struct FLandscapeCreateSettings;
 
     /**
      * @brief 명시적인 편집 월드와 선택을 소유하고 패널, 콘솔과 기즈모의 편집 요청을 처리합니다.
@@ -424,6 +426,9 @@ namespace Editor {
          * @return 월드가 소유한 새 액터의 비소유 주소이며 실패하면 nullptr입니다.
          */
         Engine::AActor* SpawnActorPreset(const Core::FString& Preset, const FTransform& Placement);
+
+        bool CreateLandscape(const Editor::FLandscapeCreateSettings& Settings, Core::FString& Error);
+        bool BuildLandscape(CoreUObject::TObjectRef<Engine::ALandscape> Landscape);
 
         /**
          * @brief 편집 월드에 기본 카메라 액터를 생성합니다.

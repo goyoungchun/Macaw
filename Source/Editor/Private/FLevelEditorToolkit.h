@@ -10,6 +10,7 @@
 #include "FMessageBox.h"
 #include "Editor/FEditorTabManager.h"
 #include "Editor/FImGuiUIScale.h"
+#include "FLevelEditorModeManager.h"
 #include "Editor/Widget/FOutlinerWidget.h"
 #include "Editor/Widget/FDetailsWidget.h"
 #include "Editor/Widget/FConsoleWidget.h"
@@ -37,7 +38,6 @@ namespace Editor {
     class FEditorCommands;
     class FEditorWorkspace;
     class FEditorSettings;
-    class FEditorShell;
     class FAssetImportController;
     class FContentBrowserWidget;
     class FAssetEditorManager;
@@ -48,6 +48,9 @@ namespace Editor {
      * @brief 레벨 편집기의 뷰포트·탭·드로어와 공유 서비스를 구성하고 구동합니다.
      */
     class FLevelEditorToolkit final : public Editor::FEditorToolkit {
+    private:
+        class FEditorShell;
+
     public:
         /**
          * @brief FLevelEditorToolkit의 초기 상태와 전달받은 의존성을 구성합니다.
@@ -179,6 +182,8 @@ namespace Editor {
          */
         Editor::FEditorTabManager& mTabs;
 
+        Editor::FLevelEditorModeManager mModes;
+
         /**
          * @brief 액터 배치 위젯입니다.
          */
@@ -260,7 +265,7 @@ namespace Editor {
         /**
          * @brief 에디터 메뉴·도구 모음·상태 표시줄을 그리는 서비스입니다.
          */
-        std::unique_ptr<Editor::FEditorShell> mShell{};
+        std::unique_ptr<FEditorShell> mShell{};
 
         /**
          * @brief 초기화 완료 여부입니다.

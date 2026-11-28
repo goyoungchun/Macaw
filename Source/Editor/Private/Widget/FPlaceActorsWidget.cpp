@@ -8,11 +8,11 @@
 #include "Editor/Widget/FPlaceActorsWidget.h"
 #include "Editor/FEditorContext.h"
 #include "Editor/FAssetDragDrop.h"
-#include "EditorStyle.h"
 #include "Engine/FProject.h"
 #include "Asset/FAssetManager.h"
 #include "Asset/UTexture2D.h"
 #include "Engine/AActor.h"
+#include "Engine/Landscape/ALandscapeProxy.h"
 #include "CoreUObject/Reflection/FReflectionRegistry.h"
 #include "CoreUObject/Reflection/UClass.h"
 #include "RenderCore/IRendererModule.h"
@@ -109,7 +109,7 @@ namespace Editor {
         }
 
         for (const CoreUObject::UClass* Class : CoreUObject::FReflectionRegistry::GetDerivedClasses(Engine::AActor::StaticClass())) {
-            if (!Class->CanCreate()) {
+            if (!Class->CanCreate() || Class->IsChildOf(Engine::ALandscapeProxy::StaticClass())) {
                 continue;
             }
 
@@ -157,12 +157,6 @@ namespace Editor {
                 continue;
             }
 
-            if (Name == "ALandscape") {
-                DrawEntry(Name, "Landscape", "SceneComponent", Editor::EPlaceActorIcon::None, Editor::EEditorIcon::Landscape);
-
-                continue;
-            }
-
             if (Name == "APawn") {
                 DrawEntry(Name, "Pawn", "SceneComponent", Editor::EPlaceActorIcon::Pawn);
 
@@ -181,7 +175,7 @@ namespace Editor {
     /**
      * @brief 아이콘·설명과 드래그 페이로드를 갖는 액터 프리셋 항목을 그립니다.
      */
-    void Editor::FPlaceActorsWidget::DrawEntry(const Core::FString& Preset, const Core::FString& Label, const char* Components, Editor::EPlaceActorIcon Icon, std::optional<Editor::EEditorIcon> VectorIcon) {
+    void Editor::FPlaceActorsWidget::DrawEntry(const Core::FString& Preset, const Core::FString& Label, const char* Components, Editor::EPlaceActorIcon Icon) {
         const ImGuiTextFilter Filter{mSearch.data()};
 
         if (!Filter.PassFilter(Label.c_str())) {
@@ -192,11 +186,7 @@ namespace Editor {
 
         constexpr float RowHeight{ 32.0f };
 
-        if (VectorIcon) {
-            ImGui::Dummy({ RowHeight, RowHeight });
-            EditorStyle::DrawIcon(*VectorIcon, ImGui::GetItemRectMin(), RowHeight, ImGui::GetColorU32(ImGuiCol_Text));
-            ImGui::SameLine();
-        } else if (ID3D11ShaderResourceView* Resource{mIcons[static_cast<Index_t>(Icon)].Get()}; Resource != nullptr) {
+        if (ID3D11ShaderResourceView* Resource{mIcons[static_cast<Index_t>(Icon)].Get()}; Resource != nullptr) {
             ImGui::Image(ImTextureRef{static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(Resource))}, { RowHeight, RowHeight });
             ImGui::SameLine();
         }

@@ -11,7 +11,7 @@
 #include "Asset/FAssetManager.h"
 #include "Asset/UTexture2D.h"
 #include "Engine/AActor.h"
-#include "Engine/Landscape/ALandscape.h"
+#include "Engine/Landscape/ALandscapeProxy.h"
 #include "Engine/ALevelSequenceActor.h"
 #include "Engine/AParticleSystemActor.h"
 #include "Engine/APawn.h"
@@ -166,7 +166,7 @@ namespace Editor {
          * @return 객체를 대표하는 에디터 아이콘입니다.
          */
         EditorStyle::EIcon ObjectIcon(CoreUObject::UObject* Object) {
-            if (Object->IsA<Engine::ALandscape>() || Object->IsA<Engine::ULandscapeComponent>()) {
+            if (Object->IsA<Engine::ALandscapeProxy>() || Object->IsA<Engine::ULandscapeComponent>()) {
                 return EditorStyle::EIcon::Landscape;
             }
 
@@ -226,7 +226,7 @@ namespace Editor {
     /**
      * @brief 현재 행의 다음 컬럼에 종류별 아이콘과 이름을 표시합니다.
      */
-    void Editor::ObjectRow::DrawLabel(const Editor::FEditorContext& Context, CoreUObject::UObject* Object, bool Selected, float Indent) {
+    void Editor::ObjectRow::DrawLabel(const Editor::FEditorContext& Context, CoreUObject::UObject* Object, bool Selected, float Indent, bool* Expanded) {
         ImGui::TableNextColumn();
 
         const float X{ImGui::GetCursorScreenPos().x + ImGui::GetTreeNodeToLabelSpacing() + Indent};
@@ -235,8 +235,19 @@ namespace Editor {
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4{});
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4{});
         ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4{});
-        ImGui::TreeNodeEx("##Row", ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | (Selected ? ImGuiTreeNodeFlags_Selected : 0));
+        const ImGuiTreeNodeFlags Flags{ ImGuiTreeNodeFlags_SpanAllColumns | ImGuiTreeNodeFlags_NoTreePushOnOpen | (Selected ? ImGuiTreeNodeFlags_Selected : 0) | (Expanded != nullptr ? ImGuiTreeNodeFlags_OpenOnArrow : ImGuiTreeNodeFlags_Leaf) };
+
+        if (Expanded != nullptr) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Indent);
+            ImGui::SetNextItemOpen(*Expanded, ImGuiCond_Always);
+        }
+
+        const bool Open{ ImGui::TreeNodeEx("##Row", Flags) };
         ImGui::PopStyleColor(3);
+
+        if (Expanded != nullptr && ImGui::IsItemToggledOpen()) {
+            *Expanded = Open;
+        }
 
         const ImVec4 Target{Selected ? ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive) : ImGui::IsItemHovered() ? ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered) : ImVec4{}};
         const ImVec4 Background{FEditorAnimation::Color(ImGui::GetItemID(), "ObjectRow", Target, 0.12f, {})};

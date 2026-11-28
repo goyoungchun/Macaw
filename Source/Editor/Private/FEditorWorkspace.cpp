@@ -33,7 +33,13 @@ FEditorWorkspace::FEditorWorkspace(FEditorContext* Context, FEditorTab& LevelTab
 FEditorWorkspace::~FEditorWorkspace() = default;
 
 void FEditorWorkspace::SetToolbar(std::function<void()> Handler) {
-    mLevelTab.GetToolkitHost().SetToolbar(std::move(Handler));
+    mLevelTab.GetToolkitHost().SetToolbar([this, Handler = std::move(Handler)]() {
+        if (Handler) {
+            Handler();
+        }
+
+        UpdateLeftDock();
+    });
 }
 
 void FEditorWorkspace::SetLayoutChanged(std::function<void()> Handler) {
@@ -104,11 +110,11 @@ void FEditorWorkspace::BuildLevelLayout(Uint32 DockSpace) {
     const float BottomHeight{std::min(300.0f * Scale, Available.y * 0.4f)};
     ImGuiID Center{DockSpace};
     const ImGuiID Right{ImGui::DockBuilderSplitNode(Center, ImGuiDir_Right, RightWidth / std::max(1.0f, Available.x), nullptr, &Center)};
-    const ImGuiID Left{ImGui::DockBuilderSplitNode(Center, ImGuiDir_Left, LeftWidth / std::max(1.0f, Available.x - RightWidth), nullptr, &Center)};
+    mLeftDock = ImGui::DockBuilderSplitNode(Center, ImGuiDir_Left, LeftWidth / std::max(1.0f, Available.x - RightWidth), nullptr, &Center);
     mBottomDock = ImGui::DockBuilderSplitNode(Center, ImGuiDir_Down, BottomHeight / std::max(1.0f, Available.y), nullptr, &Center);
     ImGuiID Outliner{};
     const ImGuiID Details{ImGui::DockBuilderSplitNode(Right, ImGuiDir_Down, 0.62f, nullptr, &Outliner)};
-    mTabs.ApplyLayout(Left, Outliner, Details, mBottomDock, Center);
+    mTabs.ApplyLayout(mLeftDock, Outliner, Details, mBottomDock, Center);
 }
 
 void FEditorWorkspace::BeginTopLevelTab() {
@@ -140,6 +146,68 @@ void FEditorWorkspace::FocusLevelEditor() {
 
 bool FEditorWorkspace::IsLevelEditorFocused() const {
     return mLevelTab.IsFocused();
+}
+
+void FEditorWorkspace::UpdateLeftDock() {
+    Core::TArray<const FEditorTab*> Tabs{mTabs.GetVisibleTabs(EEditorDockRegion::Left)};
+    const ImGuiID LevelDock{mLevelTab.GetToolkitHost().GetDockSpaceId()};
+    ImGuiDockNode* LevelNode{ImGui::DockBuilderGetNode(LevelDock)};
+
+    if (Tabs.empty() || LevelNode == nullptr) {
+        return;
+    }
+
+    const auto IsPanelDock{[LevelNode](ImGuiDockNode* Node) {
+        return Node != nullptr && Node->IsLeafNode() && !Node->IsCentralNode() && ImGui::DockNodeGetRootNode(Node) == LevelNode;
+    }};
+    ImGuiDockNode* Left{ImGui::DockBuilderGetNode(mLeftDock)};
+    Left = IsPanelDock(Left) ? Left : nullptr;
+
+    std::erase_if(Tabs, [&IsPanelDock, &Left](const FEditorTab* Tab) {
+        Tab->PrepareDockedFocus();
+
+        const char* Name{Tab->GetName().c_str()};
+        const ImGuiWindow* Window{ImGui::FindWindowByName(Name)};
+        const ImGuiWindowSettings* Settings{Window == nullptr ? ImGui::FindWindowSettingsByID(ImHashStr(Name)) : nullptr};
+        const ImGuiID DockId{Window != nullptr ? Window->DockId : Settings != nullptr ? Settings->DockId : 0};
+        ImGuiDockNode* Node{ImGui::DockBuilderGetNode(DockId)};
+
+        if (IsPanelDock(Node)) {
+            if (Left == nullptr) {
+                Left = Node;
+            }
+
+            return true;
+        }
+
+        return Window != nullptr && Window->WasActive && DockId == 0;
+    });
+
+    mLeftDock = Left != nullptr ? Left->ID : 0;
+
+    if (Tabs.empty()) {
+        return;
+    }
+
+    if (Left == nullptr) {
+        const ImGuiDockNode* Center{ImGui::DockBuilderGetCentralNode(LevelDock)};
+        if (Center == nullptr) {
+            return;
+        }
+
+        const float Width{std::min(260.0f * std::max(1.0f, mUIScale.GetScale()), Center->Size.x * 0.3f)};
+        mLeftDock = ImGui::DockBuilderSplitNode(Center->ID, ImGuiDir_Left, Width / std::max(1.0f, Center->Size.x), nullptr, nullptr);
+        if (mLeftDock == 0) {
+            return;
+        }
+    }
+
+    for (const FEditorTab* Tab : Tabs) {
+        ImGui::DockBuilderDockWindow(Tab->GetName().c_str(), mLeftDock);
+    }
+
+    ImGui::DockBuilderFinish(LevelDock);
+    ImGui::MarkIniSettingsDirty();
 }
 
 bool FEditorWorkspace::DockTab(const Core::FString& Id) {

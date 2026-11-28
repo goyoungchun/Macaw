@@ -7,11 +7,9 @@
 #pragma once
 
 #include "Core/Types.h"
-#include "Editor/EEditorIcon.h"
 #include "Editor/Widget/FEditorContextWidget.h"
 
 #include <d3d11.h>
-#include <optional>
 #include <wrl/client.h>
 
 namespace Editor {
@@ -110,7 +108,7 @@ namespace Editor {
          * @param[in] Components 기본 컴포넌트의 설명 문자열입니다.
          * @param[in] Icon 항목에 표시할 아이콘 종류입니다.
          */
-        void DrawEntry(const Core::FString& Preset, const Core::FString& Label, const char* Components, Editor::EPlaceActorIcon Icon, std::optional<Editor::EEditorIcon> VectorIcon = {});
+        void DrawEntry(const Core::FString& Preset, const Core::FString& Label, const char* Components, Editor::EPlaceActorIcon Icon);
 
         /**
          * @brief 프로젝트 에셋과 렌더러에서 액터 배치 아이콘을 준비합니다.

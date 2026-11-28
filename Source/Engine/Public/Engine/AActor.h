@@ -103,6 +103,8 @@ namespace Engine {
         bool CanPromoteRootComponent(const Engine::USceneComponent* Component) const;
         bool PromoteRootComponent(Engine::USceneComponent* Component);
 
+        virtual CoreUObject::TObjectRef<Engine::AActor> GetSceneOutlinerParent() const;
+
         /**
          * @brief 루트 공간 컴포넌트에 액터의 변환을 적용합니다.
          * @param[in] Transform 적용할 위치, 회전과 스케일입니다.

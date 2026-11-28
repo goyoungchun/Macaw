@@ -40,6 +40,7 @@ FLevelEditorToolkit::FLevelEditorToolkit(FEditorContext* Context, FEditorViewpor
 	  mViewportLayout{Context, Viewport, PlaySession},
 	  mTopLevelTab{"###LevelEditor", false, EEditorTabRole::TopLevel},
 	  mTabs{mTopLevelTab.GetToolkitHost().GetTabManager()},
+	  mModes{Context, mTabs},
 	  mPlaceActorsWidget{Context},
 	  mOutlinerWidget{Context},
 	  mDetailsWidget{Context},
@@ -71,7 +72,7 @@ bool FLevelEditorToolkit::Initialize(RenderCore::IRendererModule* Renderer, Plat
     mDrawers->RegisterDrawer("Content", "Content Drawer", 380.0f);
     mDrawers->RegisterDrawer("Console", "Output Log", 300.0f);
     mSettings = std::make_unique<FEditorSettings>(mContext, Platform, mPlaySession, mViewportLayout, *mWorkspace, mTabs, *mDrawers, mUIScale, IniPath);
-    mShell = std::make_unique<FEditorShell>(mContext, mViewport, mPlaySession, Platform, mViewportLayout, mTabs, *mWorkspace, *mSettings, *mCommands, *mImports, *mAssetEditors, *mDrawers, mUIScale);
+    mShell = std::make_unique<FEditorShell>(*this);
     ConnectServices();
     mSettings->InitializeSettings();
     mBrowser->LoadContentIcons(Renderer);
@@ -103,7 +104,8 @@ void FLevelEditorToolkit::RegisterTabs() {
     ViewportTab->SetContentPadding({});
     ViewportTab->SetAutoHideTabBar(true);
 
-    mTabs.RegisterWidget("PlaceActors", "Place Actors", mPlaceActorsWidget, EEditorDockRegion::Left, EEditorTabRole::Panel, false);
+    mTabs.RegisterWidget("PlaceActors", "Place Actors", mPlaceActorsWidget, EEditorDockRegion::Left, EEditorTabRole::Panel, true);
+    mModes.RegisterTabs();
     mTabs.RegisterWidget("Outliner", "Outliner", mOutlinerWidget, EEditorDockRegion::Outliner, EEditorTabRole::Panel, false, "Outliner###World Outliner");
     mTabs.RegisterWidget("Details", "Details", mDetailsWidget, EEditorDockRegion::Details, EEditorTabRole::Panel, false);
     mTabs.RegisterWidget("Console", "Output Log", mConsoleWidget, EEditorDockRegion::Bottom, EEditorTabRole::Drawer, true, "Output Log###Console");

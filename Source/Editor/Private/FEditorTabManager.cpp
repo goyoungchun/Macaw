@@ -166,6 +166,10 @@ void FEditorTabManager::Draw(float DeltaTime) {
 
 void FEditorTabManager::DrawMenu() {
     for (FEntry& Entry : mEntries) {
+        if (Entry.mRole == EEditorTabRole::ModePanel) {
+            continue;
+        }
+
         if (ImGui::MenuItem(Entry.mLabel.c_str(), nullptr, IsVisible(Entry.mId))) {
             if (IsVisible(Entry.mId)) {
                 SetVisible(Entry.mId, false);
@@ -218,6 +222,18 @@ bool FEditorTabManager::HasRegion(EEditorDockRegion Region) const {
     return std::any_of(mEntries.begin(), mEntries.end(), [Region](const FEntry& Entry) {
         return Entry.mRegion == Region && Entry.mRole != EEditorTabRole::Drawer;
     });
+}
+
+Core::TArray<const FEditorTab*> FEditorTabManager::GetVisibleTabs(EEditorDockRegion Region) const {
+    Core::TArray<const FEditorTab*> Tabs{};
+
+    for (const FEntry& Entry : mEntries) {
+        if (Entry.mRegion == Region && Entry.mRole != EEditorTabRole::Drawer && Entry.mTab != nullptr && Entry.mTab->IsVisible()) {
+            Tabs.push_back(Entry.mTab);
+        }
+    }
+
+    return Tabs;
 }
 
 bool FEditorTabManager::IsFocused() const {

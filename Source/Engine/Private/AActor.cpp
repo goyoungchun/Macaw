@@ -211,6 +211,12 @@ namespace Engine {
         return mRootComponent;
     }
 
+    CoreUObject::TObjectRef<Engine::AActor> Engine::AActor::GetSceneOutlinerParent() const {
+        const Engine::USceneComponent* Root{GetRootComponent()};
+        const Engine::USceneComponent* Parent{Root != nullptr ? Root->GetAttachParent() : nullptr};
+        return CoreUObject::MakeObjectRef(Parent != nullptr ? Parent->GetOwner() : nullptr);
+    }
+
     /**
      * @brief 소유한 공간 컴포넌트를 액터의 루트로 지정합니다.
      */

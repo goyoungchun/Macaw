@@ -39,7 +39,7 @@ namespace Editor {
          * @note 행은 호출자가 ImGui::TableNextRow()로 시작합니다. 클릭 검사는 호출 직후 ImGui::IsItemClicked()로 수행합니다.
          * @param Indent 행 이름 앞에 적용할 가로 들여쓰기(픽셀)입니다.
          */
-        void DrawLabel(const Editor::FEditorContext& Context, CoreUObject::UObject* Object, bool Selected, float Indent = 0.0f);
+        void DrawLabel(const Editor::FEditorContext& Context, CoreUObject::UObject* Object, bool Selected, float Indent = 0.0f, bool* Expanded = nullptr);
 
         /**
          * @brief 현재 행의 다음 컬럼에 타입 이름을 표시합니다.

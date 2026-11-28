@@ -12,6 +12,7 @@
 #include "Editor/FAssetDragDrop.h"
 #include "Editor/FGizmoCore.h"
 #include "Engine/AActor.h"
+#include "Engine/Landscape/ALandscape.h"
 #include "Engine/Component/UActorComponent.h"
 #include "Engine/Component/ULuaScriptComponent.h"
 #include "Engine/Component/USceneComponent.h"
@@ -523,6 +524,16 @@ namespace Editor {
             ImGui::TextUnformatted(Actor->GetName().c_str());
             DrawComponentTree(Actor, CoreUObject::MakeObjectRef(Selected));
 
+            if (auto* Landscape{ CoreUObject::Cast<Engine::ALandscape>(Selected) }; Landscape != nullptr) {
+                ImGui::BeginDisabled(!Context->CanEditWorld());
+
+                if (ImGui::Button("Repartition")) {
+                    Context->BuildLandscape(CoreUObject::MakeObjectRef(Landscape));
+                }
+
+                ImGui::EndDisabled();
+            }
+
             if (mLockedContext != nullptr) {
                 Targets = mLockedTargets;
             } else if (CoreUObject::UObject* Current{Context->GetSelectedObject()}) {
@@ -806,13 +817,29 @@ namespace Editor {
         const CoreUObject::TObjectRef<CoreUObject::UObject> ActorHandle{CoreUObject::MakeObjectRef(Actor)};
         Engine::USceneComponent* Root{Actor->GetRootComponent()};
         Core::TMap<const Engine::USceneComponent*, Core::TArray<Engine::UActorComponent*>> Children{};
+        const bool IsStreamingProxy{ Actor->IsA<Engine::ALandscapeStreamingProxy>() };
+        const auto ShowsComponent{ [Root, IsStreamingProxy](const Engine::UActorComponent* Component) {
+            return Component == Root || !IsStreamingProxy || !Component->IsA<Engine::ULandscapeComponent>();
+        } };
+        Index_t VisibleRows{ 1 };
 
         for (const auto& Component : Actor->GetComponents()) {
+            if (!ShowsComponent(Component.get())) {
+                continue;
+            }
+
+            ++VisibleRows;
             const auto* Scene{CoreUObject::Cast<Engine::USceneComponent>(Component.get())};
             const Engine::USceneComponent* Parent{};
 
             if (Scene != nullptr && Scene != Root) {
-                Parent = Scene->GetAttachParent() != nullptr ? Scene->GetAttachParent() : Root;
+                Parent = Scene->GetAttachParent();
+
+                while (Parent != nullptr && !ShowsComponent(Parent)) {
+                    Parent = Parent->GetAttachParent();
+                }
+
+                Parent = Parent != nullptr ? Parent : Root;
             }
 
             if (Scene != Root || Root == nullptr) {
@@ -822,7 +849,7 @@ namespace Editor {
 
         constexpr std::size_t MaxVisibleRows{8};
         const float RowHeight{ImGui::GetTextLineHeight() + ImGui::GetStyle().CellPadding.y * 2.0f};
-        const float Height{static_cast<float>(std::min(Actor->GetComponents().size() + 1, MaxVisibleRows)) * RowHeight + 4.0f};
+        const float Height{static_cast<float>(std::min(VisibleRows, MaxVisibleRows)) * RowHeight + 4.0f};
         constexpr ImGuiTableFlags Flags{ImGuiTableFlags_BordersOuter | ImGuiTableFlags_ScrollY};
         bool OpenRootDropMenu{};
 

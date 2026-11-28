@@ -18,6 +18,7 @@
 
 #include <imgui_internal.h>
 #include <algorithm>
+#include <optional>
 
 namespace Editor {
 
@@ -30,6 +31,7 @@ namespace Editor {
         struct FOutlinerRow {
             FActorRef mActor{};
             float mIndent{};
+            std::optional<ImGuiID> mExpansionId{};
         };
 
         /**
@@ -42,8 +44,10 @@ namespace Editor {
             return Filter.PassFilter(Object->GetName().c_str()) || Filter.PassFilter(ObjectRow::GetTypeLabel(Object).c_str());
         }
 
-        Core::TArray<FOutlinerRow> BuildActorRows(const FEditorContext& Context, const Core::TArray<FActorRef>& Actors, const ImGuiTextFilter& Filter) {
-            Core::TMap<const Engine::AActor*, Core::TArray<Engine::AActor*>> Children{};
+        Core::TArray<FOutlinerRow> BuildActorRows(const FEditorContext& Context, const Core::TArray<FActorRef>& Actors, const ImGuiTextFilter& Filter, const ImGuiStorage& ExpansionState) {
+            Core::TMap<const Engine::AActor*, const Engine::AActor*> Parents{};
+            Core::TArray<Engine::AActor*> ResolvedActors{};
+            ResolvedActors.reserve(Actors.size());
 
             for (FActorRef Handle : Actors) {
                 auto* Actor{CoreUObject::Cast<Engine::AActor>(Context.ResolveObject(Handle))};
@@ -52,34 +56,64 @@ namespace Editor {
                     continue;
                 }
 
-                const Engine::USceneComponent* Root{Actor->GetRootComponent()};
-                const Engine::USceneComponent* Parent{Root != nullptr ? Root->GetAttachParent() : nullptr};
+                Parents.emplace(Actor, Actor->AActor::GetSceneOutlinerParent().Get());
+                ResolvedActors.push_back(Actor);
+            }
 
-                Children[Parent != nullptr ? Parent->GetOwner() : nullptr].push_back(Actor);
+            for (Engine::AActor* Actor : ResolvedActors) {
+                const Engine::AActor*& CurrentParent{Parents.at(Actor)};
+                const Engine::AActor* Parent{Actor->GetSceneOutlinerParent().Get()};
+
+                if (Parent == CurrentParent || (Parent != nullptr && !Parents.contains(Parent))) {
+                    continue;
+                }
+
+                const Engine::AActor* Ancestor{Parent};
+
+                for (Index_t Depth{}; Ancestor != nullptr && Ancestor != Actor && Depth < Parents.size(); ++Depth) {
+                    const auto AncestorEntry{Parents.find(Ancestor)};
+                    Ancestor = AncestorEntry != Parents.end() ? AncestorEntry->second : nullptr;
+                }
+
+                if (Ancestor == nullptr) {
+                    CurrentParent = Parent;
+                }
+            }
+
+            Core::TMap<const Engine::AActor*, Core::TArray<Engine::AActor*>> Children{};
+
+            for (Engine::AActor* Actor : ResolvedActors) {
+                const Engine::AActor* Parent{Parents.at(Actor)};
+                Children[Parents.contains(Parent) ? Parent : nullptr].push_back(Actor);
             }
 
             Core::TArray<FOutlinerRow> Rows{};
             Rows.reserve(Actors.size());
             const float IndentStep{ImGui::GetTreeNodeToLabelSpacing()};
-            const auto Visit{[&](const auto& VisitChildren, const Engine::AActor* Parent, float Indent) -> void {
-                const auto It{Children.find(Parent)};
-
-                if (It == Children.end()) {
-                    return;
-                }
-
-                for (Engine::AActor* Actor : It->second) {
+            const bool CanCollapse{!Filter.IsActive()};
+            const ImGuiID ExpansionScope{ImGui::GetID("##OutlinerExpansion")};
+            const auto Visit{[&](const auto& VisitChildren, const Core::TArray<Engine::AActor*>& Siblings, float Indent) -> void {
+                for (Engine::AActor* Actor : Siblings) {
                     const bool Matches{MatchesFilter(Filter, Actor)};
+                    const auto ActorChildren{Children.find(Actor)};
+                    std::optional<ImGuiID> ExpansionId{};
 
-                    if (Matches) {
-                        Rows.push_back({CoreUObject::MakeObjectRef(Actor), Indent});
+                    if (CanCollapse && ActorChildren != Children.end()) {
+                        const auto& GuidBytes{Actor->GetGuid().mBytes};
+                        ExpansionId = ImHashData(GuidBytes.data(), GuidBytes.size(), ExpansionScope);
                     }
 
-                    VisitChildren(VisitChildren, Actor, Matches ? Indent + IndentStep : Indent);
+                    if (Matches) {
+                        Rows.push_back({CoreUObject::MakeObjectRef(Actor), Indent, ExpansionId});
+                    }
+
+                    if (ActorChildren != Children.end() && (!ExpansionId || ExpansionState.GetBool(*ExpansionId, true))) {
+                        VisitChildren(VisitChildren, ActorChildren->second, Matches ? Indent + IndentStep : Indent);
+                    }
                 }
             }};
 
-            Visit(Visit, nullptr, 0.0f);
+            Visit(Visit, Children[nullptr], 0.0f);
 
             return Rows;
         }
@@ -186,7 +220,8 @@ namespace Editor {
         const ImGuiTextFilter Filter{mSearch.data()};
         const auto Actors{Context->GetActorRefs()};
         const Core::TArray<CoreUObject::TObjectRef<Engine::AActor>> Selection{Context->GetSelectedActors()};
-        const auto Visible{BuildActorRows(*Context, Actors, Filter)};
+        ImGuiStorage& ExpansionState{ *ImGui::GetStateStorage() };
+        const auto Visible{ BuildActorRows(*Context, Actors, Filter, ExpansionState) };
 
         const bool CanEdit{Context->CanEditWorld()};
         bool DuplicateRequested{};
@@ -208,7 +243,7 @@ namespace Editor {
             ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed, ImGui::CalcTextSize("DirectionalLightActor").x);
             ImGui::TableHeadersRow();
 
-            for (const auto& [Handle, Indent] : Visible) {
+            for (const auto& [Handle, Indent, ExpansionId] : Visible) {
                 Engine::AActor* Actor{CoreUObject::Cast<Engine::AActor>(Context->ResolveObject(Handle))};
 
                 if (Actor == nullptr) {
@@ -234,12 +269,19 @@ namespace Editor {
                 ImGui::EndDisabled();
 
                 const float RowAlpha{ImGui::GetStyle().Alpha * (Actor->IsVisible() ? 1.0f : 0.5f)};
+                bool Expanded{ !ExpansionId || ExpansionState.GetBool(*ExpansionId, true) };
 
                 ImGui::PushStyleVar(ImGuiStyleVar_Alpha, RowAlpha);
-                ObjectRow::DrawLabel(*Context, Actor, Selected, Indent);
+                ObjectRow::DrawLabel(*Context, Actor, Selected, Indent, ExpansionId ? &Expanded : nullptr);
                 ImGui::PopStyleVar();
 
-                if (ImGui::IsItemClicked()) {
+                const bool Toggled{ ExpansionId && ImGui::IsItemToggledOpen() };
+
+                if (Toggled) {
+                    ExpansionState.SetBool(*ExpansionId, Expanded);
+                }
+
+                if (!Toggled && ImGui::IsItemClicked()) {
                     const auto Anchor{Selection.empty() ? Visible.end() : std::ranges::find(Visible, Selection.back(), &FOutlinerRow::mActor)};
 
                     if (ImGui::GetIO().KeyCtrl) {
@@ -261,7 +303,7 @@ namespace Editor {
                     }
                 }
 
-                if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                if (!Toggled && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                     Context->FocusActor(Handle);
                     Context->OpenInSequencer(CoreUObject::Cast<Engine::ALevelSequenceActor>(Context->ResolveObject(Handle)));
                 }

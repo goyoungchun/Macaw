@@ -107,6 +107,7 @@ namespace Editor {
          * @param[in] DockSpace 배치를 구성할 ImGui 도킹 공간 식별자입니다.
          */
         void BuildLevelLayout(Uint32 DockSpace);
+        void UpdateLeftDock();
 
     private:
         /**
@@ -143,6 +144,7 @@ namespace Editor {
          * @brief 레벨 편집기 내부 도킹 공간의 식별자입니다.
          */
         Uint32 mLevelDock{};
+        Uint32 mLeftDock{};
 
         /**
          * @brief 레벨 편집기 하단 패널의 도킹 노드 식별자입니다.

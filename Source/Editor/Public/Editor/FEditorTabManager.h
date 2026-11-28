@@ -232,6 +232,7 @@ namespace Editor {
          * @return 드로어가 아닌 탭이 해당 영역에 있으면 true입니다.
          */
         bool HasRegion(Editor::EEditorDockRegion Region) const;
+        Core::TArray<const Editor::FEditorTab*> GetVisibleTabs(Editor::EEditorDockRegion Region) const;
 
         /**
          * @brief 관리하는 탭 또는 내부 창에 입력 포커스가 있는지 검사합니다.

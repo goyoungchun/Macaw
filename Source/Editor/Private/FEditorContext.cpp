@@ -8,6 +8,7 @@
 #include "Core/Literals/AngleFunctions.h"
 #include "Editor/FEditorContext.h"
 #include "Editor/FEditorViewport.h"
+#include "Editor/Landscape/FLandscapeCreateSettings.h"
 #include "Core/FilePath.h"
 #include "Engine/FProject.h"
 #include "Engine/Component/UMeshComponent.h"
@@ -33,6 +34,7 @@
 #include "Engine/AStaticMeshActor.h"
 #include "Engine/ACameraActor.h"
 #include "Engine/ALevelSequenceActor.h"
+#include "Engine/Landscape/ALandscape.h"
 #include "Engine/Component/UCameraComponent.h"
 #include "Engine/EPrimitiveType.h"
 #include "Engine/Component/UActorComponent.h"
@@ -906,6 +908,12 @@ namespace Editor {
         bool Removed{};
 
         for (CoreUObject::TObjectRef<Engine::AActor> Handle : Actors) {
+            if (const auto* Landscape{ CoreUObject::Cast<Engine::ALandscape>(ResolveObject(Handle)) }; Landscape != nullptr) {
+                for (const auto& Proxy : Landscape->GetStreamingProxies()) {
+                    Removed = World->DestroyActor(Proxy) || Removed;
+                }
+            }
+
             Removed = World->DestroyActor(Handle) || Removed;
         }
 
@@ -2222,6 +2230,84 @@ namespace Editor {
         CompleteActorSpawn(Actor, "Placed ");
 
         return Actor;
+    }
+
+    bool Editor::FEditorContext::CreateLandscape(const Editor::FLandscapeCreateSettings& Settings, Core::FString& Error) {
+        Error.clear();
+        Engine::UWorld* World{GetWorld()};
+
+        if (!CanModifyScene() || IsSceneEditActive() || World->IsDispatching()) {
+            Error = "Landscape creation requires a stopped, editable world.";
+
+            return false;
+        }
+
+        const FTransform Placement{Settings.mLocation, {}, {1.0f, 1.0f, 1.0f}};
+        if (!Placement.IsValid()) {
+            Error = "Enter a valid Landscape location.";
+
+            return false;
+        }
+
+        FSceneEditScope Edit{*this};
+        if (!IsSceneEditActive()) {
+            Error = "Could not start an undoable Landscape creation.";
+
+            return false;
+        }
+
+        FOperationScope Scope{&mChangingState};
+        auto* Landscape{CoreUObject::Cast<Engine::ALandscape>(World->SpawnActor(Engine::ALandscape::StaticClass()))};
+        if (Landscape == nullptr) {
+            Error = "Could not create the Landscape actor.";
+
+            return false;
+        }
+
+        if (!Landscape->SetComponentCountX(Settings.mComponentCountX) || !Landscape->SetComponentCountY(Settings.mComponentCountY) || !Landscape->SetProxySizeInComponents(Settings.mProxySizeInComponents) || !Landscape->SetSectionsPerComponent(Settings.mSectionsPerComponent) || !Landscape->SetQuadsPerSection(Settings.mQuadsPerSection)) {
+            World->DestroyActor(CoreUObject::MakeObjectRef(Landscape));
+            Error = "Use positive component counts and proxy size, a 1 x 1 or 2 x 2 section layout, and 2^n - 1 quads per section.";
+
+            return false;
+        }
+
+        if (!ApplySpawnPlacement(Landscape, Placement)) {
+            Error = "Could not set the Landscape location.";
+
+            return false;
+        }
+
+        if (!Landscape->BuildLandscape(Error)) {
+            World->DestroyActor(CoreUObject::MakeObjectRef(Landscape));
+
+            return false;
+        }
+
+        CompleteActorSpawn(Landscape, "Created ");
+        return true;
+    }
+
+    bool Editor::FEditorContext::BuildLandscape(CoreUObject::TObjectRef<Engine::ALandscape> Landscape) {
+        auto* Actor{ CoreUObject::Cast<Engine::ALandscape>(ResolveObject(Landscape)) };
+
+        if (Actor == nullptr || !CanModifyScene() || IsSceneEditActive()) {
+            return false;
+        }
+
+        FSceneEditScope Edit{ *this };
+        FOperationScope Scope{ &mChangingState };
+        Core::FString Error{};
+
+        if (!Actor->BuildLandscape(Error)) {
+            AddLog(Error);
+
+            return false;
+        }
+
+        NoteSceneEdit();
+        AddLog("Built Landscape " + Actor->GetName());
+
+        return true;
     }
 
 }

@@ -36,7 +36,9 @@ namespace Editor {
         /**
          * @brief 하단에서 임시로 펼쳐지는 드로어 탭입니다.
          */
-        Drawer
+        Drawer,
+
+        ModePanel
     };
 
     /**
@@ -96,6 +98,8 @@ namespace Editor {
          * @return 해당 편집기 영역에 포커스가 있으면 true입니다.
          */
         bool IsFocused() const;
+
+        void PrepareDockedFocus() const;
 
         /**
          * @brief 포커스 요청을 읽고 요청 상태를 해제합니다.

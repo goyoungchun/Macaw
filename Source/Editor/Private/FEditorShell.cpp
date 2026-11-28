@@ -10,6 +10,7 @@
 #include "FEditorDrawerManager.h"
 #include "FEditorSettings.h"
 #include "FEditorViewportLayout.h"
+#include "FLevelEditorModeManager.h"
 #include "FAssetImportController.h"
 #include "FAssetEditorManager.h"
 #include "Editor/FEditorTabManager.h"
@@ -38,23 +39,11 @@
 
 using namespace Editor;
 
-FEditorShell::FEditorShell(FEditorContext* Context, FEditorViewport* Viewport, FPlayInEditorSession* PlaySession, Platform::FWindowsApplication* Platform, FEditorViewportLayout& ViewportLayout, FEditorTabManager& Tabs, FEditorWorkspace& Workspace, FEditorSettings& Settings, FEditorCommands& Commands, FAssetImportController& Imports, FAssetEditorManager& AssetEditors, FEditorDrawerManager& Drawers, FImGuiUIScale& UIScale)
-	: mContext{Context},
-	  mViewport{Viewport},
-	  mPlaySession{PlaySession},
-	  mPlatform{Platform},
-	  mViewportLayout{ViewportLayout},
-	  mTabs{Tabs},
-	  mWorkspace{Workspace},
-	  mSettings{Settings},
-	  mCommands{Commands},
-	  mImports{Imports},
-	  mAssetEditors{AssetEditors},
-	  mDrawers{Drawers},
-	  mUIScale{UIScale},
-	  mStatusCommand{Context},
+FLevelEditorToolkit::FEditorShell::FEditorShell(FLevelEditorToolkit& Toolkit)
+	: mToolkit{Toolkit},
+	  mStatusCommand{Toolkit.mContext},
 	  mSaveButton{"SaveLevel", {}, [this]() {
-          mCommands.SaveLevel(false);
+          mToolkit.mCommands->SaveLevel(false);
       }},
 	  mAddButton{"QuickAdd", {}, []() {
           ImGui::OpenPopup("QuickAddMenu");
@@ -66,23 +55,23 @@ FEditorShell::FEditorShell(FEditorContext* Context, FEditorViewport* Viewport, F
           ImGui::OpenPopup("SettingsMenu");
       }},
 	  mPlayButton{"Play", {}, [this]() {
-          if (mPlaySession->IsPaused()) {
-              mPlaySession->SetPaused(false);
+          if (mToolkit.mPlaySession->IsPaused()) {
+              mToolkit.mPlaySession->SetPaused(false);
           } else {
-              mCommands.RequestPlay();
+              mToolkit.mCommands->RequestPlay();
           }
       }},
 	  mPauseButton{"Pause", {}, [this]() {
-          mPlaySession->SetPaused(true);
+          mToolkit.mPlaySession->SetPaused(true);
       }},
 	  mStepButton{"Step", {}, [this]() {
-          mPlaySession->Step();
+          mToolkit.mPlaySession->Step();
       }},
 	  mStopButton{"Stop", {}, [this]() {
-          mPlaySession->Stop();
+          mToolkit.mPlaySession->Stop();
       }},
 	  mSimulateButton{"Simulate", {}, [this]() {
-          mPlaySession->Start(nullptr, FPlayInEditorSession::EMode::Simulate);
+          mToolkit.mPlaySession->Start(nullptr, FPlayInEditorSession::EMode::Simulate);
       }},
 	  mPlayOptionsButton{"PlayOptions", {}, []() {
           ImGui::OpenPopup("PlayOptionsMenu");
@@ -109,9 +98,9 @@ FEditorShell::FEditorShell(FEditorContext* Context, FEditorViewport* Viewport, F
     mPlayOptionsButton.SetToolTip("PIE 실행 옵션");
 }
 
-FEditorShell::~FEditorShell() = default;
+FLevelEditorToolkit::FEditorShell::~FEditorShell() = default;
 
-void FEditorShell::LoadBranding(RenderCore::IRendererModule* Renderer) {
+void FLevelEditorToolkit::FEditorShell::LoadBranding(RenderCore::IRendererModule* Renderer) {
     const HMODULE Module{GetModuleHandleW(nullptr)};
     const HRSRC Resource{FindResourceW(Module, MAKEINTRESOURCEW(MacawBrandResource), RT_RCDATA)};
     const HGLOBAL Data{Resource != nullptr ? LoadResource(Module, Resource) : nullptr};
@@ -124,9 +113,9 @@ void FEditorShell::LoadBranding(RenderCore::IRendererModule* Renderer) {
     }
 }
 
-void FEditorShell::DrawMenu() {
-    FEditorToolkitHost* ActiveHost{mAssetEditors.GetActiveToolkitHost()};
-    const float Scale{mUIScale.GetScale()};
+void FLevelEditorToolkit::FEditorShell::DrawMenu() {
+    FEditorToolkitHost* ActiveHost{mToolkit.mAssetEditors->GetActiveToolkitHost()};
+    const float Scale{mToolkit.mUIScale.GetScale()};
     const float HeaderHeight{std::max(EditorStyle::MenuBarHeight * Scale, ImGui::GetFontSize() + 8.0f * Scale)};
     const float TabBarHeight{EditorStyle::GetTopLevelTabHeight()};
 
@@ -148,87 +137,87 @@ void FEditorShell::DrawMenu() {
         ImGui::Dummy(ImVec2{(EditorStyle::BrandAreaWidth - 8.0f) * Scale, ImGui::GetFontSize()});
 
         if (ImGui::BeginMenu("File")) {
-            const bool CanSave{!mContext->IsSceneEditActive()};
+            const bool CanSave{!mToolkit.mContext->IsSceneEditActive()};
 
             if (ActiveHost != nullptr) {
                 if (ImGui::MenuItem("Find Asset in Content Browser")) {
-                    mAssetEditors.BrowseActiveAsset();
+                    mToolkit.mAssetEditors->BrowseActiveAsset();
                 }
 
                 ImGui::Separator();
             }
 
-            ImGui::BeginDisabled(!mContext->CanEditWorld());
+            ImGui::BeginDisabled(!mToolkit.mContext->CanEditWorld());
 
             if (ImGui::MenuItem("New Level", "Ctrl+N")) {
-                mCommands.NewLevel();
+                mToolkit.mCommands->NewLevel();
             }
 
             if (ImGui::MenuItem("Open Level...", "Ctrl+O")) {
-                mCommands.OpenLevel();
+                mToolkit.mCommands->OpenLevel();
             }
 
             ImGui::Separator();
 
             if (ImGui::MenuItem("Save Current Level", "Ctrl+S", false, CanSave)) {
-                mCommands.SaveLevel(false);
+                mToolkit.mCommands->SaveLevel(false);
             }
 
             if (ImGui::MenuItem("Save Current Level As...", "Ctrl+Alt+S", false, CanSave)) {
-                mCommands.SaveLevel(true);
+                mToolkit.mCommands->SaveLevel(true);
             }
 
-            if (ImGui::MenuItem("Set Current Level as Startup", nullptr, false, CanSave && !mContext->GetScenePath().empty())) {
-                mCommands.SetCurrentLevelAsStartup();
+            if (ImGui::MenuItem("Set Current Level as Startup", nullptr, false, CanSave && !mToolkit.mContext->GetScenePath().empty())) {
+                mToolkit.mCommands->SetCurrentLevelAsStartup();
             }
 
             ImGui::Separator();
 
-            if (ImGui::MenuItem("Import Into Level...", nullptr, false, mContext->GetProject() != nullptr)) {
-                mImports.ImportAsset();
+            if (ImGui::MenuItem("Import Into Level...", nullptr, false, mToolkit.mContext->GetProject() != nullptr)) {
+                mToolkit.mImports->ImportAsset();
             }
 
             ImGui::Separator();
 
             if (ImGui::MenuItem("New Project...")) {
-                mCommands.ChooseProject(true);
+                mToolkit.mCommands->ChooseProject(true);
             }
 
             if (ImGui::MenuItem("Open Project...")) {
-                mCommands.ChooseProject(false);
+                mToolkit.mCommands->ChooseProject(false);
             }
 
-            if (ImGui::MenuItem("Package Project...", nullptr, false, mContext->GetProject() != nullptr)) {
-                mCommands.ExportGame();
+            if (ImGui::MenuItem("Package Project...", nullptr, false, mToolkit.mContext->GetProject() != nullptr)) {
+                mToolkit.mCommands->ExportGame();
             }
 
             ImGui::EndDisabled();
             ImGui::Separator();
 
             if (ImGui::MenuItem("Exit")) {
-                mCommands.RequestExit();
+                mToolkit.mCommands->RequestExit();
             }
 
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Edit")) {
-            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, mContext->CanUndo())) {
-                mContext->Undo();
+            if (ImGui::MenuItem("Undo", "Ctrl+Z", false, mToolkit.mContext->CanUndo())) {
+                mToolkit.mContext->Undo();
             }
 
-            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, mContext->CanRedo())) {
-                mContext->Redo();
+            if (ImGui::MenuItem("Redo", "Ctrl+Y", false, mToolkit.mContext->CanRedo())) {
+                mToolkit.mContext->Redo();
             }
 
             ImGui::Separator();
 
             if (ImGui::MenuItem("Editor Preferences...", "Ctrl+,")) {
-                mSettings.OpenSettings(0);
+                mToolkit.mSettings->OpenSettings(0);
             }
 
             if (ImGui::MenuItem("Project Settings...")) {
-                mSettings.OpenSettings(5);
+                mToolkit.mSettings->OpenSettings(5);
             }
 
             ImGui::EndMenu();
@@ -240,17 +229,17 @@ void FEditorShell::DrawMenu() {
                 ImGui::Separator();
 
                 if (ImGui::BeginMenu("Level Editor")) {
-                    mTabs.DrawMenu();
+                    mToolkit.mTabs.DrawMenu();
                     ImGui::EndMenu();
                 }
             } else {
-                mTabs.DrawMenu();
+                mToolkit.mTabs.DrawMenu();
             }
 
-            ImGui::MenuItem("Statistics", nullptr, &mSettings.GetStatisticsVisibility());
+            ImGui::MenuItem("Statistics", nullptr, &mToolkit.mSettings->GetStatisticsVisibility());
 
             if (ImGui::BeginMenu("Stat Overlay")) {
-                Editor::FViewportStatistics* Statistics{mViewportLayout.GetActiveViewport()->GetStatistics()};
+                Editor::FViewportStatistics* Statistics{mToolkit.mViewportLayout.GetActiveViewport()->GetStatistics()};
 
                 for (const Core::FString& Group : Core::FStats::Get().GetGroups()) {
                     if (ImGui::MenuItem(Group.c_str(), nullptr, Statistics->IsEnabled(Group))) {
@@ -271,7 +260,8 @@ void FEditorShell::DrawMenu() {
                         ActiveHost->GetTabManager().RestoreDefaults();
                         ActiveHost->RequestLayoutReset();
                     } else {
-                        mWorkspace.SetLayoutVersion(0);
+                        mToolkit.mModes.ActivateMode(ELevelEditorMode::Select);
+                        mToolkit.mWorkspace->SetLayoutVersion(0);
                     }
                 }
 
@@ -281,13 +271,13 @@ void FEditorShell::DrawMenu() {
             ImGui::EndMenu();
         }
 
-        const Core::FString& Project{mContext->GetProject()->GetName()};
+        const Core::FString& Project{mToolkit.mContext->GetProject()->GetName()};
         const float ControlsWidth{138.0f * Scale};
         const float ControlsLeft{ImGui::GetWindowWidth() - ControlsWidth};
         const float DragLeft{ImGui::GetCursorPosX()};
         const RECT DragBounds{static_cast<LONG>(DragLeft), 0, static_cast<LONG>(ControlsLeft), static_cast<LONG>(ImGui::GetWindowHeight())};
 
-        mPlatform->SetTitleBarDragBounds(DragBounds);
+        mToolkit.mPlatform->SetTitleBarDragBounds(DragBounds);
 
         if (ControlsLeft - DragLeft > ImGui::CalcTextSize(Project.c_str()).x + 24.0f * Scale) {
             ImGui::SameLine(ControlsLeft - ImGui::CalcTextSize(Project.c_str()).x - 16.0f * Scale);
@@ -302,50 +292,50 @@ void FEditorShell::DrawMenu() {
 
     using Core::EKey;
 
-    const Core::FInput& Input{mPlatform->GetInput()};
+    const Core::FInput& Input{mToolkit.mPlatform->GetInput()};
 
     if (Input.IsDown(EKey::Control) && ImGui::GetTopMostPopupModal() == nullptr) {
-        if (Input.WasPressed(EKey::Space) && !mAssetEditors.IsSourceEditorFocused()) {
-            mDrawers.ToggleDrawer("Content");
+        if (Input.WasPressed(EKey::Space) && !mToolkit.mAssetEditors->IsSourceEditorFocused()) {
+            mToolkit.mDrawers->ToggleDrawer("Content");
         } else if (Input.WasPressed(EKey::Comma) && !ImGui::GetIO().WantTextInput) {
-            mSettings.OpenSettings(0);
+            mToolkit.mSettings->OpenSettings(0);
         }
     }
 
     if (!ImGui::GetIO().WantTextInput && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup)) {
-        if (Input.IsDown(EKey::Alt) && Input.WasPressed(EKey::P) && mViewportLayout.CanChangeLayout()) {
-            mCommands.RequestPlay();
-        } else if (mPlaySession->IsActive() && !mDrawers.HasOpenDrawer() && Input.WasPressed(EKey::Escape)) {
-            mPlaySession->Stop();
+        if (Input.IsDown(EKey::Alt) && Input.WasPressed(EKey::P) && mToolkit.mViewportLayout.CanChangeLayout()) {
+            mToolkit.mCommands->RequestPlay();
+        } else if (mToolkit.mPlaySession->IsActive() && !mToolkit.mDrawers->HasOpenDrawer() && Input.WasPressed(EKey::Escape)) {
+            mToolkit.mPlaySession->Stop();
         }
     }
 
-    if (Input.IsDown(EKey::Control) && !ImGui::GetIO().WantTextInput && ImGui::GetTopMostPopupModal() == nullptr && mContext->CanEditWorld()) {
-        const bool AssetEditorFocused{mAssetEditors.IsFocused()};
+    if (Input.IsDown(EKey::Control) && !ImGui::GetIO().WantTextInput && ImGui::GetTopMostPopupModal() == nullptr && mToolkit.mContext->CanEditWorld()) {
+        const bool AssetEditorFocused{mToolkit.mAssetEditors->IsFocused()};
         const ImGuiWindow* Focused{ImGui::GetCurrentContext()->NavWindow};
         const ImGuiWindow* Root{Focused != nullptr ? Focused->RootWindow : nullptr};
-        const bool SceneFocused{Root != nullptr && (Root == ImGui::FindWindowByName(mViewport->GetName().c_str()) || Root == ImGui::FindWindowByName(mTabs.FindTab("Outliner")->GetName().c_str()) || Root == ImGui::FindWindowByName(mTabs.FindTab("Details")->GetName().c_str()) || Root == ImGui::FindWindowByName(mTabs.FindTab("PlaceActors")->GetName().c_str()))};
+        const bool SceneFocused{Root != nullptr && (Root == ImGui::FindWindowByName(mToolkit.mViewport->GetName().c_str()) || Root == ImGui::FindWindowByName(mToolkit.mTabs.FindTab("Outliner")->GetName().c_str()) || Root == ImGui::FindWindowByName(mToolkit.mTabs.FindTab("Details")->GetName().c_str()) || Root == ImGui::FindWindowByName(mToolkit.mTabs.FindTab("PlaceActors")->GetName().c_str()) || Root == ImGui::FindWindowByName(mToolkit.mTabs.FindTab("Landscape")->GetName().c_str()))};
 
         if (SceneFocused && !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup)) {
             if (Input.WasPressed(EKey::Y) || (Input.WasPressed(EKey::Z) && Input.IsDown(EKey::Shift))) {
-                mContext->Redo();
+                mToolkit.mContext->Redo();
             } else if (Input.WasPressed(EKey::Z)) {
-                mContext->Undo();
+                mToolkit.mContext->Undo();
             }
         }
 
         if (Input.WasPressed(EKey::S) && !AssetEditorFocused) {
-            mCommands.SaveLevel(Input.IsDown(EKey::Alt));
+            mToolkit.mCommands->SaveLevel(Input.IsDown(EKey::Alt));
         } else if (Input.WasPressed(EKey::O)) {
-            mCommands.OpenLevel();
+            mToolkit.mCommands->OpenLevel();
         } else if (Input.WasPressed(EKey::N)) {
-            mCommands.NewLevel();
+            mToolkit.mCommands->NewLevel();
         }
     }
 }
 
-void FEditorShell::DrawWindowControls() {
-    const float Scale{mUIScale.GetScale()};
+void FLevelEditorToolkit::FEditorShell::DrawWindowControls() {
+    const float Scale{mToolkit.mUIScale.GetScale()};
     const float Width{46.0f * Scale};
     const float Height{ImGui::GetWindowHeight()};
     const ImVec2 Origin{ImGui::GetWindowPos()};
@@ -374,7 +364,7 @@ void FEditorShell::DrawWindowControls() {
         if (Index == 0) {
             Draw->AddLine(ImVec2{Center.x - Radius, Center.y}, ImVec2{Center.x + Radius, Center.y}, Color, Thickness);
         } else if (Index == 1) {
-            if (mPlatform->IsMaximized()) {
+            if (mToolkit.mPlatform->IsMaximized()) {
                 Draw->AddRect(ImVec2{Center.x - Radius + 2.0f * Scale, Center.y - Radius}, ImVec2{Center.x + Radius, Center.y + Radius - 2.0f * Scale}, Color, 0.0f, 0, Thickness);
                 Draw->AddRectFilled(ImVec2{Center.x - Radius, Center.y - Radius + 2.0f * Scale}, ImVec2{Center.x + Radius - 2.0f * Scale, Center.y + Radius}, ImGui::GetColorU32(Hovered ? ImGuiCol_ButtonHovered : ImGuiCol_MenuBarBg));
                 Draw->AddRect(ImVec2{Center.x - Radius, Center.y - Radius + 2.0f * Scale}, ImVec2{Center.x + Radius - 2.0f * Scale, Center.y + Radius}, Color, 0.0f, 0, Thickness);
@@ -388,9 +378,9 @@ void FEditorShell::DrawWindowControls() {
 
         if (Pressed) {
             if (Index == 2) {
-                PostMessageW(mPlatform->GetWindowHandle(), WM_CLOSE, 0, 0);
+                PostMessageW(mToolkit.mPlatform->GetWindowHandle(), WM_CLOSE, 0, 0);
             } else {
-                PostMessageW(mPlatform->GetWindowHandle(), WM_SYSCOMMAND, Index == 0 ? SC_MINIMIZE : (mPlatform->IsMaximized() ? SC_RESTORE : SC_MAXIMIZE), 0);
+                PostMessageW(mToolkit.mPlatform->GetWindowHandle(), WM_SYSCOMMAND, Index == 0 ? SC_MINIMIZE : (mToolkit.mPlatform->IsMaximized() ? SC_RESTORE : SC_MAXIMIZE), 0);
             }
         }
 
@@ -398,10 +388,10 @@ void FEditorShell::DrawWindowControls() {
     }
 }
 
-void FEditorShell::DrawEditorToolbar() {
+void FLevelEditorToolkit::FEditorShell::DrawEditorToolbar() {
     Editor::EditorStyle::PushViewportToolbar();
 
-    const float Scale{mUIScale.GetScale()};
+    const float Scale{mToolkit.mUIScale.GetScale()};
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{8.0f * Scale, 4.0f * Scale});
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{8.0f * Scale, 4.0f * Scale});
@@ -413,15 +403,36 @@ void FEditorShell::DrawEditorToolbar() {
     const float Height{ImGui::GetFrameHeight() + ImGui::GetStyle().WindowPadding.y * 2.0f};
 
     if (ImGui::BeginChild("##EditorToolbar", ImVec2{0.0f, Height}, ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
-        const bool CanEdit{mContext->CanEditWorld()};
+        const bool CanEdit{mToolkit.mContext->CanEditWorld()};
         const float ButtonWidth{ImGui::GetFrameHeight() + 12.0f * Scale};
 
-        mSaveButton.SetEnabled(CanEdit && !mContext->IsSceneEditActive());
-        mSaveButton.SetSize({ButtonWidth, 0.0f});
+        mSaveButton.SetEnabled(CanEdit && !mToolkit.mContext->IsSceneEditActive());
         mSaveButton.Draw(0.0f);
 
-        ImGui::SameLine();
+        ImGui::SameLine(0.0f, 4.0f * Scale);
+        const bool LandscapeMode{mToolkit.mModes.GetActiveMode() == ELevelEditorMode::Landscape};
+        const EEditorIcon ModeIcon{LandscapeMode ? EEditorIcon::Landscape : EEditorIcon::Select};
+        const char* ModeLabel{LandscapeMode ? "Landscape Mode###EditorMode" : "Select Mode###EditorMode"};
 
+        if (EditorStyle::LabelButton(ModeLabel, &ModeIcon, true)) {
+            ImGui::OpenPopup("EditorModeMenu");
+        }
+
+        ImGui::SetNextWindowPos(ImVec2{ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y + 4.0f * Scale}, ImGuiCond_Appearing);
+
+        if (EditorStyle::BeginPopup("EditorModeMenu")) {
+            if (EditorStyle::IconMenuItem("Select Mode", EEditorIcon::Select, !LandscapeMode)) {
+                mToolkit.mModes.ActivateMode(ELevelEditorMode::Select);
+            }
+
+            if (EditorStyle::IconMenuItem("Landscape Mode", EEditorIcon::Landscape, LandscapeMode)) {
+                mToolkit.mModes.ActivateMode(ELevelEditorMode::Landscape);
+            }
+
+            EditorStyle::EndPopup();
+        }
+
+        ImGui::SameLine();
         mAddButton.SetEnabled(CanEdit);
         mAddButton.SetSelected(ImGui::IsPopupOpen("QuickAddMenu"));
         mAddButton.SetSize({ButtonWidth, 0.0f});
@@ -443,12 +454,12 @@ void FEditorShell::DrawEditorToolbar() {
         ImGui::SetNextWindowPos(ImVec2{ImGui::GetItemRectMin().x, ImGui::GetItemRectMax().y + 4.0f * Scale}, ImGuiCond_Appearing);
 
         if (EditorStyle::BeginPopup("CinematicsMenu")) {
-            if (ImGui::MenuItem("Open Sequencer", nullptr, mTabs.IsVisible("Sequencer"))) {
-                mTabs.TryInvokeTab("Sequencer");
+            if (ImGui::MenuItem("Open Sequencer", nullptr, mToolkit.mTabs.IsVisible("Sequencer"))) {
+                mToolkit.mTabs.TryInvokeTab("Sequencer");
             }
 
             if (ImGui::MenuItem("Add Level Sequence Actor", nullptr, false, CanEdit)) {
-                mContext->SpawnActorPreset("LevelSequenceActor");
+                mToolkit.mContext->SpawnActorPreset("LevelSequenceActor");
             }
 
             EditorStyle::EndPopup();
@@ -457,9 +468,9 @@ void FEditorShell::DrawEditorToolbar() {
         ImGui::SameLine();
         DrawPlayControls();
 
-        if (mPlaySession->IsActive()) {
-            const bool Paused{mPlaySession->IsPaused()};
-            const char* Status{mPlaySession->IsSimulating() ? (Paused ? "Simulation Paused" : "Simulating") : (Paused ? "Paused" : "Playing")};
+        if (mToolkit.mPlaySession->IsActive()) {
+            const bool Paused{mToolkit.mPlaySession->IsPaused()};
+            const char* Status{mToolkit.mPlaySession->IsSimulating() ? (Paused ? "Simulation Paused" : "Simulating") : (Paused ? "Paused" : "Playing")};
 
             ImGui::SameLine(0.0f, 12.0f * Scale);
             ImGui::AlignTextToFramePadding();
@@ -476,7 +487,7 @@ void FEditorShell::DrawEditorToolbar() {
         ImGui::SetNextWindowPos(ImVec2{ImGui::GetItemRectMax().x, ImGui::GetItemRectMax().y + 4.0f * Scale}, ImGuiCond_Appearing, ImVec2{1.0f, 0.0f});
 
         if (EditorStyle::BeginPopup("SettingsMenu")) {
-            mSettings.DrawSettingsMenu();
+            mToolkit.mSettings->DrawSettingsMenu();
             EditorStyle::EndPopup();
         }
     }
@@ -487,48 +498,48 @@ void FEditorShell::DrawEditorToolbar() {
     Editor::EditorStyle::PopViewportToolbar();
 }
 
-void FEditorShell::DrawAddMenu() {
+void FLevelEditorToolkit::FEditorShell::DrawAddMenu() {
     ImGui::SeparatorText("Shapes");
 
     if (ImGui::MenuItem("Cube")) {
-        mContext->SpawnPrimitive(Engine::EPrimitiveType::Cube);
+        mToolkit.mContext->SpawnPrimitive(Engine::EPrimitiveType::Cube);
     }
 
     if (ImGui::MenuItem("Sphere")) {
-        mContext->SpawnPrimitive(Engine::EPrimitiveType::Sphere);
+        mToolkit.mContext->SpawnPrimitive(Engine::EPrimitiveType::Sphere);
     }
 
     if (ImGui::MenuItem("Plane")) {
-        mContext->SpawnPrimitive(Engine::EPrimitiveType::Plane);
+        mToolkit.mContext->SpawnPrimitive(Engine::EPrimitiveType::Plane);
     }
 
     ImGui::SeparatorText("Basic");
 
     if (ImGui::MenuItem("Camera Actor")) {
-        mContext->SpawnCamera();
+        mToolkit.mContext->SpawnCamera();
     }
 
     if (ImGui::MenuItem("Text")) {
-        mContext->SpawnText();
+        mToolkit.mContext->SpawnText();
     }
 
     if (ImGui::MenuItem("Billboard")) {
-        mContext->SpawnBillboard();
+        mToolkit.mContext->SpawnBillboard();
     }
 
     ImGui::Separator();
 
-    if (ImGui::MenuItem("Place Actors Panel", nullptr, mTabs.IsVisible("PlaceActors"))) {
-        mTabs.TryInvokeTab("PlaceActors");
+    if (ImGui::MenuItem("Place Actors Panel", nullptr, mToolkit.mTabs.IsVisible("PlaceActors"))) {
+        mToolkit.mTabs.TryInvokeTab("PlaceActors");
     }
 
-    if (ImGui::MenuItem("Import Content...", nullptr, false, mContext->GetProject() != nullptr)) {
-        mImports.ImportAsset();
+    if (ImGui::MenuItem("Import Content...", nullptr, false, mToolkit.mContext->GetProject() != nullptr)) {
+        mToolkit.mImports->ImportAsset();
     }
 }
 
-void FEditorShell::DrawStatusBar() {
-    const float Scale{mUIScale.GetScale()};
+void FLevelEditorToolkit::FEditorShell::DrawStatusBar() {
+    const float Scale{mToolkit.mUIScale.GetScale()};
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{6.0f * Scale, 3.0f * Scale});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
@@ -544,18 +555,18 @@ void FEditorShell::DrawStatusBar() {
         const Editor::EditorStyle::EIcon FolderIcon{Editor::EditorStyle::EIcon::Folder};
         const Editor::EditorStyle::EIcon LogIcon{Editor::EditorStyle::EIcon::Log};
 
-        ImGui::PushStyleColor(ImGuiCol_Button, mDrawers.IsDrawerOpen("Content") ? ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive) : ImVec4{});
+        ImGui::PushStyleColor(ImGuiCol_Button, mToolkit.mDrawers->IsDrawerOpen("Content") ? ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive) : ImVec4{});
 
         if (Editor::EditorStyle::LabelButton("Content Drawer", &FolderIcon, false, true, "콘텐츠 드로어 열기 / 닫기 (Ctrl+Space)")) {
-            mDrawers.ToggleDrawer("Content");
+            mToolkit.mDrawers->ToggleDrawer("Content");
         }
 
         ImGui::PopStyleColor();
         ImGui::SameLine(0.0f, 4.0f * Scale);
-        ImGui::PushStyleColor(ImGuiCol_Button, mDrawers.IsDrawerOpen("Console") ? ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive) : ImVec4{});
+        ImGui::PushStyleColor(ImGuiCol_Button, mToolkit.mDrawers->IsDrawerOpen("Console") ? ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive) : ImVec4{});
 
         if (Editor::EditorStyle::LabelButton("Output Log", &LogIcon, false, true, "출력 로그 열기 / 닫기")) {
-            mDrawers.ToggleDrawer("Console");
+            mToolkit.mDrawers->ToggleDrawer("Console");
         }
 
         ImGui::PopStyleColor();
@@ -565,7 +576,7 @@ void FEditorShell::DrawStatusBar() {
         ImGui::SameLine(0.0f, 6.0f * Scale);
         mStatusCommand.Draw("StatusCommand", 300.0f * Scale);
 
-        const bool Dirty{mContext->IsSceneDirty()};
+        const bool Dirty{mToolkit.mContext->IsSceneDirty()};
         const char* Saved{Dirty ? "1 Unsaved" : "All Saved"};
         const float RightWidth{ImGui::CalcTextSize(Saved).x};
 
@@ -584,15 +595,15 @@ void FEditorShell::DrawStatusBar() {
     ImGui::PopStyleVar(4);
 }
 
-void FEditorShell::DrawPlayControls() {
+void FLevelEditorToolkit::FEditorShell::DrawPlayControls() {
     ImGui::PushID("PIEControls");
 
-    const float Scale{mUIScale.GetScale()};
-    const bool Active{mPlaySession->IsActive()};
-    const bool Paused{mPlaySession->IsPaused()};
-    const bool CanStartSession{!Active && mViewportLayout.CanChangeLayout()};
-    const bool CanStart{CanStartSession && mPlaySession->CanStart()};
-    const bool Simulating{mPlaySession->IsSimulating()};
+    const float Scale{mToolkit.mUIScale.GetScale()};
+    const bool Active{mToolkit.mPlaySession->IsActive()};
+    const bool Paused{mToolkit.mPlaySession->IsPaused()};
+    const bool CanStartSession{!Active && mToolkit.mViewportLayout.CanChangeLayout()};
+    const bool CanStart{CanStartSession && mToolkit.mPlaySession->CanStart()};
+    const bool Simulating{mToolkit.mPlaySession->IsSimulating()};
     const float Height{ImGui::GetFrameHeight()};
     const float Padding{2.0f * Scale};
     const ImVec2 Origin{ImGui::GetCursorScreenPos()};
@@ -629,7 +640,7 @@ void FEditorShell::DrawPlayControls() {
     mStopButton.Draw(0.0f);
 
     ImGui::SameLine(0.0f, 0.0f);
-    mSimulateButton.SetEnabled(CanStartSession && mPlaySession->CanStart(FPlayInEditorSession::EMode::Simulate));
+    mSimulateButton.SetEnabled(CanStartSession && mToolkit.mPlaySession->CanStart(FPlayInEditorSession::EMode::Simulate));
     mSimulateButton.SetSelected(Simulating);
     mSimulateButton.Draw(0.0f);
 
@@ -653,11 +664,11 @@ void FEditorShell::DrawPlayControls() {
     ImGui::PopID();
 }
 
-void FEditorShell::DrawPlayOptions() {
-    FPlayInEditorSession::FOptions Options{mPlaySession->GetOptions()};
+void FLevelEditorToolkit::FEditorShell::DrawPlayOptions() {
+    FPlayInEditorSession::FOptions Options{mToolkit.mPlaySession->GetOptions()};
     bool Changed{};
 
-    ImGui::BeginDisabled(mPlaySession->IsActive());
+    ImGui::BeginDisabled(mToolkit.mPlaySession->IsActive());
     ImGui::SeparatorText("Play Mode");
 
     if (ImGui::MenuItem("Editor Viewport", nullptr, !Options.mNewWindow)) {
@@ -687,7 +698,7 @@ void FEditorShell::DrawPlayOptions() {
 
     Core::TStaticArray<int, 2> Size{static_cast<int>(Options.mWindowWidth), static_cast<int>(Options.mWindowHeight)};
 
-    ImGui::SetNextItemWidth(240.0f * mUIScale.GetScale());
+    ImGui::SetNextItemWidth(240.0f * mToolkit.mUIScale.GetScale());
 
     if (ImGui::InputInt2("##PlayWindowSize", Size.data())) {
         Options.mWindowWidth = static_cast<Uint32>(std::clamp(Size[0], 320, 7680));
@@ -715,16 +726,16 @@ void FEditorShell::DrawPlayOptions() {
     Changed |= ImGui::Checkbox("Start Paused", &Options.mStartPaused);
     ImGui::EndDisabled();
 
-    if (Changed && mPlaySession->SetOptions(Options)) {
-        mSettings.MarkDirty();
+    if (Changed && mToolkit.mPlaySession->SetOptions(Options)) {
+        mToolkit.mSettings->MarkDirty();
     }
 
     ImGui::Separator();
     ImGui::TextDisabled("Alt+P: Play | Esc: Stop | Shift+F1: Release input");
 }
 
-void FEditorShell::DrawShadowAtlas() {
-    if (!mContext->IsShadowAtlasOpen()) {
+void FLevelEditorToolkit::FEditorShell::DrawShadowAtlas() {
+    if (!mToolkit.mContext->IsShadowAtlasOpen()) {
         return;
     }
 
@@ -733,8 +744,8 @@ void FEditorShell::DrawShadowAtlas() {
     ImGui::SetNextWindowSize({760.0f, 840.0f}, ImGuiCond_FirstUseEver);
 
     if (ImGui::Begin("Shadow Atlas", &Open)) {
-        const RenderCore::FShadowAtlasView Atlas{mContext->GetRenderer()->GetShadowAtlasView()};
-        const RenderCore::FRenderStats Stats{mContext->GetRenderer()->GetStats()};
+        const RenderCore::FShadowAtlasView Atlas{mToolkit.mContext->GetRenderer()->GetShadowAtlasView()};
+        const RenderCore::FRenderStats Stats{mToolkit.mContext->GetRenderer()->GetStats()};
 
         ImGui::Text("%u x %u | D24S8 | %u maps", Atlas.mSize, Atlas.mSize, Stats.mShadowMaps);
         ImGui::Text("Resources: %.1f MiB | Allocated tiles: %.1f MiB", Stats.mShadowAtlasBytes / (1024.0 * 1024.0), Stats.mShadowAllocatedBytes / (1024.0 * 1024.0));
@@ -772,5 +783,5 @@ void FEditorShell::DrawShadowAtlas() {
     }
 
     ImGui::End();
-    mContext->SetShadowAtlasOpen(Open);
+    mToolkit.mContext->SetShadowAtlasOpen(Open);
 }

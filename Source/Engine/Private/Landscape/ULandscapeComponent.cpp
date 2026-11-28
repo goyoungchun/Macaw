@@ -21,6 +21,34 @@ namespace Engine {
         return false;
     }
 
+    Int32 ULandscapeComponent::GetTileX() const {
+        return mTileX;
+    }
+
+    bool ULandscapeComponent::SetTileX(Int32 X) {
+        if (X < 0) {
+            return false;
+        }
+
+        mTileX = X;
+
+        return true;
+    }
+
+    Int32 ULandscapeComponent::GetTileY() const {
+        return mTileY;
+    }
+
+    bool ULandscapeComponent::SetTileY(Int32 Y) {
+        if (Y < 0) {
+            return false;
+        }
+
+        mTileY = Y;
+
+        return true;
+    }
+
     const Core::TArray<Engine::FLandscapeSection>& ULandscapeComponent::GetSections() const {
         return mSections;
     }

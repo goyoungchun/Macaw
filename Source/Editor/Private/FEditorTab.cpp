@@ -136,6 +136,20 @@ bool FEditorTab::IsFocused() const {
     return Window != nullptr && Focused != nullptr && (Window->RootWindow == Focused->RootWindow || (mToolkitHost != nullptr && mToolkitHost->IsFocused()));
 }
 
+void FEditorTab::PrepareDockedFocus() const {
+    if (!mFocusRequested) {
+        return;
+    }
+
+    ImGuiWindow* Window{ImGui::FindWindowByName(mName.c_str())};
+    ImGuiTabBar* TabBar{Window != nullptr && Window->DockNode != nullptr ? Window->DockNode->TabBar : nullptr};
+
+    if (ImGuiTabItem* Tab{TabBar != nullptr ? ImGui::TabBarFindTabByID(TabBar, Window->TabId) : nullptr}; Tab != nullptr) {
+        ImGui::FocusWindow(Window);
+        ImGui::TabBarQueueFocus(TabBar, Tab);
+    }
+}
+
 const Core::FString& FEditorTab::GetName() const {
     return mName;
 }
