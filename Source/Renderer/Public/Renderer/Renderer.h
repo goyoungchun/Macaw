@@ -45,6 +45,7 @@ namespace Renderer {
     class FPostProcessResources;
     class FSkyResources;
     class FGridResources;
+	class FLandscapeResources;
     class FScene;
     struct FPassTarget;
     struct FMeshPassParameters;
@@ -281,7 +282,7 @@ namespace Renderer {
          * @param[in] ReceiveShadows 그림자 수신 셰이더 변형의 사용 여부입니다.
          * @param[in] Cloth 스키닝한 정점을 천 입자 위치로 옮기는 변형을 선택하려면 true이며 Skinned가 true일 때만 씁니다.
          */
-        Renderer::FMaterialPipeline* GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode = Engine::EViewMode::Lit_Phong, bool Skinned = false, bool ReceiveShadows = true, bool Cloth = false, bool ParticleMesh = false);
+        Renderer::FMaterialPipeline* GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode = Engine::EViewMode::Lit_Phong, bool Skinned = false, bool ReceiveShadows = true, bool Cloth = false, bool ParticleMesh = false, bool Landscape = false);
 
         /**
          * @brief 그림자 아틀라스 깊이 패스에 사용할 깊이 전용 파이프라인을 반환합니다.
@@ -289,7 +290,7 @@ namespace Renderer {
          * @param[in] Cloth 스키닝한 정점을 천 입자 위치로 옮기는 변형을 선택하려면 true이며 Skinned가 true일 때만 씁니다.
          * @return 대상의 비소유 주소이며, 셰이더를 다시 컴파일하는 중이거나 실패하면 nullptr입니다.
          */
-        Renderer::FMaterialPipeline* GetDepthPipeline(bool Skinned = false, bool Cloth = false);
+        Renderer::FMaterialPipeline* GetDepthPipeline(bool Skinned = false, bool Cloth = false, bool Landscape = false);
 
         /**
          * @brief 머티리얼이 없는 메시가 사용할 기본 머티리얼을 반환합니다.
@@ -704,6 +705,9 @@ namespace Renderer {
          * @brief 렌더러가 초기화 때 생성하고 종료 때 해제하는 enum별 불변 GPU 정점·인덱스 버퍼입니다.
          */
         Core::TStaticArray<std::unique_ptr<Asset::UStaticMesh>, static_cast<std::size_t>(Engine::EEditorMesh::Count)> mEditorMeshes{};
+
+		// 지형 렌더링용 상수 버퍼 및 샘플러 자원
+		std::unique_ptr<Renderer::FLandscapeResources> mLandscapeResources{};
     };
 
 }

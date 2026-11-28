@@ -47,6 +47,53 @@ namespace Renderer {
         const bool Skinned{ParticleBatch == nullptr && Primitive.mProxy.mSkeletalMesh != nullptr};
         const bool ReceiveShadows{Family.mShowFlags.mShadows && (ParticleBatch != nullptr || Primitive.mProxy.mReceiveShadow)};
 
+		if (ParticleBatch == nullptr && Primitive.mProxy.mLandscape.has_value() && Primitive.mProxy.mLandscape->mShared != nullptr) {
+			const Engine::FLandscapeComponentRenderData& Comp{*Primitive.mProxy.mLandscape};
+			const Engine::FLandscapeSharedRenderData& Shared{*Comp.mShared};
+			Asset::UMaterial* Material{ResolveMaterial(Primitive, 0u, mDefaultMaterial.Get(), nullptr)};
+
+			if (Material == nullptr || Material->GetBlendMode() != Asset::EBlendMode::Opaque) {
+				return;
+			}
+
+			if (!Material->CreateResources(mDevice, mContext)) {
+				Material = mDefaultMaterial.Get();
+			}
+
+			Renderer::FMaterialPipeline* Pipeline{mRenderer->GetMaterialPipeline(*Material, Family.mViewMode, false, ReceiveShadows, false, false, true)};
+
+			if (Pipeline == nullptr) {
+				Material = mDefaultMaterial.Get();
+				Pipeline = mRenderer->GetMaterialPipeline(*Material, Family.mViewMode, false, ReceiveShadows, false, false, true);
+			}
+
+			if (Pipeline == nullptr || Shared.mLODRanges.empty()) {
+				return;
+			}
+
+			for (Uint32 SubY{}; SubY < Shared.mNumSubsections; ++SubY) {
+				for (Uint32 SubX{}; SubX < Shared.mNumSubsections; ++SubX) {
+					const Index_t SubLocalIndex{static_cast<Index_t>(SubY) * Shared.mNumSubsections + SubX};
+
+					if (SubLocalIndex < Comp.mSubsectionBounds.size() && !IsVisible(mCurrentViewProjection, Comp.mSubsectionBounds[SubLocalIndex])) {
+						continue;
+					}
+
+					const Uint32 GlobalSubX{Comp.mComponentIndexX * Shared.mNumSubsections + SubX};
+					const Uint32 GlobalSubY{Comp.mComponentIndexY * Shared.mNumSubsections + SubY};
+					const Renderer::FLandscapeSectionLODState SectionState{mLandscapeLODSolver.GetSectionState(Shared.mLandscapeId, GlobalSubX, GlobalSubY)};
+					const Uint32 ClampedLOD{SectionState.mLOD < Shared.mLODRanges.size() ? SectionState.mLOD : static_cast<Uint32>(Shared.mLODRanges.size() - 1u)};
+					const Asset::FLandscapeLODSectionRange& Range{Shared.mLODRanges[ClampedLOD]};
+
+					Renderer::FMeshDrawCommand DrawCommand{Pipeline, Material, &Mesh, &Primitive, Range.mFirstIndex, Range.mIndexCount};
+					DrawCommand.SetLandscapeDrawInfo({true, SubX, SubY, ClampedLOD, SectionState.mMorphFactor, SectionState.mStitchMask});
+					Commands.push_back(DrawCommand);
+				}
+			}
+
+			return;
+		}
+
         const auto& SubMeshes{Mesh.GetMeshData().GetSubMeshes()};
 
         for (Index_t SubMeshIndex{}; SubMeshIndex < SubMeshes.size(); ++SubMeshIndex) {

@@ -162,6 +162,12 @@ namespace Editor {
                 continue;
             }
 
+			if (Name == "ALandscape") {
+				DrawEntry(Name, "Landscape", "LandscapeComponent", Editor::EPlaceActorIcon::None);
+
+				continue;
+			}
+
             const Editor::EPlaceActorIcon Icon{Fog ? Editor::EPlaceActorIcon::HeightFog : Name.find("Directional") != Core::FString::npos ? Editor::EPlaceActorIcon::DirectionalLight : Name.find("Ambient") != Core::FString::npos ? Editor::EPlaceActorIcon::AmbientLight : Name.find("Spot") != Core::FString::npos ? Editor::EPlaceActorIcon::SpotLight : Light ? Editor::EPlaceActorIcon::PointLight : Editor::EPlaceActorIcon::None};
             Core::FString Label{Name.starts_with('A') ? Name.substr(1) : Name};
 

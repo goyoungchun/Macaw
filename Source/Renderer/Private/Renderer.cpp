@@ -44,6 +44,7 @@
 #include "FPostProcessResources.h"
 #include "FSkyResources.h"
 #include "FGridResources.h"
+#include "FLandscapeResources.h"
 #include "FEditorMeshConstants.h"
 #include "FTextRenderer.h"
 #include "FSpriteRenderer.h"
@@ -217,6 +218,7 @@ namespace Renderer {
         mPostProcessResources.reset();
         mSkyResources.reset();
         mGridResources.reset();
+		mLandscapeResources.reset();
 
         mOverlayLayout.Reset();
         mEditorMeshBuffer.Reset();
@@ -1039,6 +1041,12 @@ namespace Renderer {
             return false;
         }
 
+		mLandscapeResources = std::make_unique<Renderer::FLandscapeResources>();
+
+		if (!mLandscapeResources->Initialize(mDevice.Get())) {
+			return false;
+		}
+
         const auto& EngineContent{mAssets->GetEngineContentRoot()};
 
         if (!mSkyResources->Initialize(mDevice.Get(), EngineContent / "Sky/Epic_BlueSunset_EquiRect_flat.dds.masset", EngineContent / "Sky/PreviewCourtyard.dds.masset")) {
@@ -1308,9 +1316,10 @@ namespace Renderer {
     /**
      * @brief 머티리얼별 GPU 파이프라인을 반환합니다.
      */
-    Renderer::FMaterialPipeline* Renderer::FRenderer::GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode, bool Skinned, bool ReceiveShadows, bool Cloth, bool ParticleMesh) {
+    Renderer::FMaterialPipeline* Renderer::FRenderer::GetMaterialPipeline(const Asset::UMaterial& Material, Engine::EViewMode Mode, bool Skinned, bool ReceiveShadows, bool Cloth, bool ParticleMesh, bool Landscape) {
         Cloth = Cloth && Skinned;
-        ParticleMesh = ParticleMesh && !Skinned;
+        ParticleMesh = ParticleMesh && !Skinned && !Landscape;
+		Landscape = Landscape && !Skinned;
 
         if (Engine::IsBufferVisualization(Mode) && Mode != Engine::EViewMode::WorldNormal && Mode != Engine::EViewMode::SceneDepth) {
             Mode = Engine::EViewMode::Lit_Phong;
@@ -1334,9 +1343,9 @@ namespace Renderer {
         const bool NormalMap{Material.GetNormalMapTexture() != nullptr};
         const bool Translucent{Material.GetBlendMode() != Asset::EBlendMode::Opaque};
         const Renderer::EMeshPass Pass{Translucent ? Renderer::EMeshPass::TranslucencyMeshPass : Renderer::EMeshPass::OpaqueMeshPass};
-        const bool Instanced{!Skinned};
+        const bool Instanced{!Skinned && !Landscape};
         const auto ShaderHandle{Shader->GetHandle()};
-        const Core::FString Key{Shader->GetGuid().ToString() + "|" + std::to_string(ShaderHandle.mIndex) + ":" + std::to_string(ShaderHandle.mGeneration) + "|" + ShaderPath + "|" + Shader->GetEntryPoint() + (Shader->WritesGBuffer() ? "|GBuffer" : "|Forward") + (Material.IsTwoSided() ? "|TwoSided" : "|OneSided") + "|" + std::to_string(static_cast<Uint32>(PixelMode)) + (NormalMap ? "|NormalMap" : "|VertexNormal") + (Skinned ? "|Skinned" : ParticleMesh ? "|ParticleMesh" : "|Static") + (Cloth ? "|Cloth" : "") + (Shadowed ? "|Shadowed" : "|Unshadowed") + (Translucent ? "|Translucent" : "|Opaque")};
+        const Core::FString Key{Shader->GetGuid().ToString() + "|" + std::to_string(ShaderHandle.mIndex) + ":" + std::to_string(ShaderHandle.mGeneration) + "|" + ShaderPath + "|" + Shader->GetEntryPoint() + (Shader->WritesGBuffer() ? "|GBuffer" : "|Forward") + (Material.IsTwoSided() ? "|TwoSided" : "|OneSided") + "|" + std::to_string(static_cast<Uint32>(PixelMode)) + (NormalMap ? "|NormalMap" : "|VertexNormal") + (Skinned ? "|Skinned" : ParticleMesh ? "|ParticleMesh" : Landscape ? "|Landscape" : "|Static") + (Cloth ? "|Cloth" : "") + (Shadowed ? "|Shadowed" : "|Unshadowed") + (Translucent ? "|Translucent" : "|Opaque")};
         const auto Existing{mMaterialPipelines.find(Key)};
 
         if (Existing != mMaterialPipelines.end()) {
@@ -1348,7 +1357,7 @@ namespace Renderer {
         }
 
         const std::filesystem::path VertexSource{mShaderDirectory / (ParticleMesh ? "ParticleMesh.vs.hlsl" : Skinned ? "SkinnedMesh.vs.hlsl" : "StaticMesh.vs.hlsl")};
-        const bool OverridePixel{Mode == Engine::EViewMode::Unlit || Mode == Engine::EViewMode::WorldNormal};
+        const bool OverridePixel{!Landscape && (Mode == Engine::EViewMode::Unlit || Mode == Engine::EViewMode::WorldNormal)};
         const bool WritesGBuffer{!mForwardShading && !Translucent && (Shader->WritesGBuffer() || OverridePixel)};
         Core::FString PathError{};
         const auto PixelSource{OverridePixel ? mShaderDirectory / "Lit.hlsl" : mAssets->ResolvePath(RelativePath, PathError)};
@@ -1373,6 +1382,10 @@ namespace Renderer {
         if (ParticleMesh) {
             VertexDescription.mMacros.push_back({"MACAW_PARTICLE_COLOR", "1"});
         }
+
+		if (Landscape) {
+			VertexDescription.mMacros.push_back({"MacawLandscape", "1"});
+		}
 
         if (PixelMode == Engine::EViewMode::Lit_Gouraud) {
             VertexDescription.mMacros.push_back({"LIGHTING_MODEL_GOURAUD", "1"});
@@ -1456,10 +1469,11 @@ namespace Renderer {
     /**
      * @brief 그림자 아틀라스 깊이 패스에 사용할 깊이 전용 파이프라인을 반환합니다.
      */
-    Renderer::FMaterialPipeline* Renderer::FRenderer::GetDepthPipeline(bool Skinned, bool Cloth) {
+    Renderer::FMaterialPipeline* Renderer::FRenderer::GetDepthPipeline(bool Skinned, bool Cloth, bool Landscape) {
         Cloth = Cloth && Skinned;
+		Landscape = Landscape && !Skinned;
 
-        const Core::FString Key{Skinned ? (Cloth ? "shaders/depth.hlsl|depth|skinned|cloth" : "shaders/depth.hlsl|depth|skinned") : "shaders/depth.hlsl|depth"};
+        const Core::FString Key{Skinned ? (Cloth ? "shaders/depth.hlsl|depth|skinned|cloth" : "shaders/depth.hlsl|depth|skinned") : (Landscape ? "shaders/depth.hlsl|depth|landscape" : "shaders/depth.hlsl|depth")};
         const auto Existing{mMaterialPipelines.find(Key)};
 
         if (Existing != mMaterialPipelines.end()) {
@@ -1473,7 +1487,14 @@ namespace Renderer {
         RenderCore::FShaderDescription Description{};
         Description.mSourcePath = mShaderDirectory / "Depth.hlsl";
         Description.mIncludeDirectories = {Description.mSourcePath.parent_path(), mShaderDirectory};
-        Description.mMacros.push_back({Skinned ? "MacawSkinned" : "MacawInstanced", "1"});
+
+		if (Skinned) {
+			Description.mMacros.push_back({"MacawSkinned", "1"});
+		} else if (Landscape) {
+			Description.mMacros.push_back({"MacawLandscape", "1"});
+		} else {
+			Description.mMacros.push_back({"MacawInstanced", "1"});
+		}
 
         if (Cloth) {
             Description.mMacros.push_back({"MacawCloth", "1"});
@@ -1487,11 +1508,12 @@ namespace Renderer {
         Description.mCompileFlags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
 #endif
 
-        std::shared_ptr<Renderer::FShaderInstance> Vertex{GetShaderInstance(Description, Renderer::EMeshPass::ShadowDepth, !Skinned, Skinned)};
+		const bool Instanced{!Skinned && !Landscape};
+        std::shared_ptr<Renderer::FShaderInstance> Vertex{GetShaderInstance(Description, Renderer::EMeshPass::ShadowDepth, Instanced, Skinned)};
         std::unique_ptr<Renderer::FMaterialPipeline> Pipeline{};
 
         if (Vertex != nullptr) {
-            Pipeline = std::make_unique<Renderer::FMaterialPipeline>(Renderer::EMeshPass::ShadowDepth, std::move(Vertex), nullptr, true, !Skinned, Skinned);
+            Pipeline = std::make_unique<Renderer::FMaterialPipeline>(Renderer::EMeshPass::ShadowDepth, std::move(Vertex), nullptr, true, Instanced, Skinned);
 
             Core::FString Diagnostics{};
 
@@ -1749,6 +1771,7 @@ namespace Renderer {
         Renderer::FMaterialPipeline* LastPipeline{};
         Asset::UMaterial* LastMaterial{};
         Asset::UStaticMesh* LastMesh{};
+		const Renderer::FScenePrimitive* LastLandscapePixelPrimitive{};
         Uint32 LastStencil{};
         Uint32 DrawCalls{};
 
@@ -1796,6 +1819,18 @@ namespace Renderer {
                     Resources->second.mConstants.Bind(mContext.Get(), RenderCore::EShaderStage::Vertex, 5);
                 }
             }
+
+			if (Command.mLandscape.mIsLandscape && Command.mPrimitive->mProxy.mLandscape.has_value() && mLandscapeResources != nullptr) {
+				if (!mLandscapeResources->BindVertex(mDevice.Get(), mContext.Get(), *Command.mPrimitive->mProxy.mLandscape, Command.mLandscape)) {
+					First = End;
+					continue;
+				}
+
+				if (SurfacePass && LastLandscapePixelPrimitive != Command.mPrimitive) {
+					mLandscapeResources->BindPixel(mDevice.Get(), mContext.Get(), *Command.mPrimitive->mProxy.mLandscape, mDefaultMaterialTexture.get());
+					LastLandscapePixelPrimitive = Command.mPrimitive;
+				}
+			}
 
             if (LastPipeline != Command.mPipeline) {
                 if (SurfacePass) {
@@ -1873,6 +1908,10 @@ namespace Renderer {
         Asset::USkeletalMesh::UnbindClothVertices(mContext.Get(), 11);
         Renderer::FScenePrimitive::FClothParticleBuffer::Unbind(mContext.Get(), RenderCore::EShaderStage::Vertex, 12);
         RenderCore::TConstantBuffer<Renderer::FClothConstants>::Unbind(mContext.Get(), RenderCore::EShaderStage::Vertex, 5);
+
+		if (mLandscapeResources != nullptr) {
+			mLandscapeResources->Unbind(mContext.Get());
+		}
 
 
         if (SurfacePass) {

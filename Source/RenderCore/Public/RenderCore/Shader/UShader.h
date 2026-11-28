@@ -191,6 +191,9 @@ namespace RenderCore {
          */
         static RenderCore::UShader* GetUnlit();
 
+		// 내장 지형 셰이더 반환
+		static RenderCore::UShader* GetLandscape();
+
         /**
          * @brief GUID에 해당하는 내장 셰이더를 조회합니다.
          * @param[in] Guid 조회할 셰이더의 GUID입니다.

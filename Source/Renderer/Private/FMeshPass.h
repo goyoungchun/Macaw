@@ -9,6 +9,7 @@
 #include "Core/ReflectionMacros.h"
 #include "Core/Math/FMatrix.h"
 #include "EMeshPass.h"
+#include "FLandscapeLODSolver.h"
 #include "FMeshDrawCommand.h"
 #include "Core/Types.h"
 
@@ -148,6 +149,12 @@ namespace Renderer {
          * @brief 기본 프리미티브 종류별 공유 메시 배열의 비소유 주소입니다.
          */
         const Core::TStaticArray<std::unique_ptr<Asset::UStaticMesh>, 3>* mMeshes{};
+
+		// 현재 패스의 프러스텀 컬링용 뷰 투영 행렬
+		FMatrix mCurrentViewProjection{};
+
+		// 현재 패스의 지형 서브섹션 LOD 계산 결과
+		Renderer::FLandscapeLODSolver mLandscapeLODSolver{};
     };
 
 }

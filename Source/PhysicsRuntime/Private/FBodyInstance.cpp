@@ -7,6 +7,7 @@
 #include "Core/Types.h"
 #include "Core/Literals/UnitLiterals.h"
 #include "PhysicsRuntime/FBodyInstance.h"
+#include "PhysicsRuntime/FHeightFieldDesc.h"
 #include "PhysicsRuntime/FPhysicsRuntime.h"
 #include "PhysicsRuntime/FPhysicsScene.h"
 #include "PhysicsRuntime/FVehicleManager.h"
@@ -297,6 +298,126 @@ namespace PhysicsRuntime {
 
         return true;
     }
+
+	// 하이트필드 서술자로 정적 물리 바디 생성
+	bool PhysicsRuntime::FBodyInstance::InitHeightFieldBody(const PhysicsRuntime::FHeightFieldDesc& Desc, const FTransform& Transform, Engine::UPrimitiveComponent* OwnerComponent, PhysicsRuntime::FPhysicsScene& Scene) {
+		TermBody();
+
+		PhysicsRuntime::FPhysicsRuntime* Runtime{Scene.GetRuntime()};
+
+		if (!Scene.IsInitialized() || Runtime == nullptr) {
+			return false;
+		}
+
+		if (Desc.mRows < 2u || Desc.mColumns < 2u || !std::isfinite(Desc.mRowScale) || Desc.mRowScale <= 0.0f || !std::isfinite(Desc.mColumnScale) || Desc.mColumnScale <= 0.0f || !std::isfinite(Desc.mHeightScale) || Desc.mHeightScale <= 0.0f) {
+			return false;
+		}
+
+		const physx::PxTransform Pose{PhysicsRuntime::ToPxTransform(Transform)};
+
+		if (!Pose.isValid()) {
+			return false;
+		}
+
+		const std::unique_ptr<physx::PxHeightField, PhysicsRuntime::FPhysXRelease> HeightField{Runtime->CreateHeightField(Desc.mRows, Desc.mColumns, Desc.mSamples)};
+
+		if (HeightField == nullptr) {
+			return false;
+		}
+
+		physx::PxPhysics& Physics{*Runtime->GetPhysics()};
+		std::unique_ptr<physx::PxRigidStatic, PhysicsRuntime::FPhysXRelease> Actor{Physics.createRigidStatic(Pose)};
+
+		if (Actor == nullptr) {
+			return false;
+		}
+
+		Core::TArray<std::unique_ptr<physx::PxMaterial, PhysicsRuntime::FPhysXRelease>> OwnedMaterials{};
+		Core::TArray<physx::PxMaterial*> MaterialPointers{};
+
+		if (mOverridePhysicalMaterial && std::isfinite(mStaticFriction) && std::isfinite(mDynamicFriction) && std::isfinite(mRestitution)) {
+			std::unique_ptr<physx::PxMaterial, PhysicsRuntime::FPhysXRelease> OverrideMaterial{Physics.createMaterial(std::max(mStaticFriction, 0.0f), std::max(mDynamicFriction, 0.0f), std::clamp(mRestitution, 0.0f, 1.0f))};
+
+			if (OverrideMaterial != nullptr) {
+				MaterialPointers.push_back(OverrideMaterial.get());
+				OwnedMaterials.push_back(std::move(OverrideMaterial));
+			}
+		} else if (!Desc.mMaterials.empty()) {
+			OwnedMaterials.reserve(Desc.mMaterials.size());
+			MaterialPointers.reserve(Desc.mMaterials.size());
+
+			for (const PhysicsRuntime::FHeightFieldMaterialParams& Params : Desc.mMaterials) {
+				const float StaticFriction{std::isfinite(Params.mStaticFriction) ? std::max(Params.mStaticFriction, 0.0f) : 0.5f};
+				const float DynamicFriction{std::isfinite(Params.mDynamicFriction) ? std::max(Params.mDynamicFriction, 0.0f) : 0.5f};
+				const float Restitution{std::isfinite(Params.mRestitution) ? std::clamp(Params.mRestitution, 0.0f, 1.0f) : 0.2f};
+				std::unique_ptr<physx::PxMaterial, PhysicsRuntime::FPhysXRelease> Material{Physics.createMaterial(StaticFriction, DynamicFriction, Restitution)};
+
+				if (Material != nullptr) {
+					MaterialPointers.push_back(Material.get());
+					OwnedMaterials.push_back(std::move(Material));
+				} else if (Runtime->GetDefaultMaterial() != nullptr) {
+					MaterialPointers.push_back(Runtime->GetDefaultMaterial());
+				}
+			}
+		}
+
+		if (MaterialPointers.empty()) {
+			if (Runtime->GetDefaultMaterial() == nullptr) {
+				return false;
+			}
+
+			MaterialPointers.push_back(Runtime->GetDefaultMaterial());
+		}
+
+		const physx::PxHeightFieldGeometry Geometry{HeightField.get(), physx::PxMeshGeometryFlags{}, Desc.mHeightScale, Desc.mRowScale, Desc.mColumnScale};
+
+		if (!Geometry.isValid()) {
+			return false;
+		}
+
+		physx::PxShape* Shape{Physics.createShape(Geometry, MaterialPointers.data(), static_cast<physx::PxU16>(MaterialPointers.size()), true)};
+
+		if (Shape == nullptr) {
+			return false;
+		}
+
+		const physx::PxTransform LocalPose{PhysicsRuntime::ToPxVec3(Desc.mLocalPosition), PhysicsRuntime::ToPxQuat(Desc.mLocalRotation.Normalized())};
+
+		if (!LocalPose.isValid()) {
+			Shape->release();
+
+			return false;
+		}
+
+		Shape->setLocalPose(LocalPose);
+
+		if (!Actor->attachShape(*Shape)) {
+			Shape->release();
+
+			return false;
+		}
+
+		Shape->release();
+
+		Actor->userData = this;
+		mActor.reset(Actor.release());
+		mScene = &Scene;
+		mOwnerComponent = OwnerComponent;
+		mBodyScale = Transform.mScale;
+
+		ApplyCollisionSettings();
+
+		Core::TArray<physx::PxShape*> AttachedShapes(mActor->getNbShapes());
+		mActor->getShapes(AttachedShapes.data(), static_cast<physx::PxU32>(AttachedShapes.size()));
+
+		for (physx::PxShape* AttachedShape : AttachedShapes) {
+			PhysicsRuntime::FVehicleManager::SetDrivableSurface(*AttachedShape, Desc.mDrivableSurface);
+		}
+
+		Scene.GetScene()->addActor(*mActor);
+
+		return true;
+	}
 
     /**
      * @brief 실제 바디를 장면에서 제거하고 해제합니다.

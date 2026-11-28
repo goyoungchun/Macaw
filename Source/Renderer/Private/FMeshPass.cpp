@@ -92,6 +92,9 @@ namespace Renderer {
             return false;
         }
 
+		mCurrentViewProjection = ViewProjection;
+		mLandscapeLODSolver.Solve(Scene, Family.mView.mLocation);
+
         Commands.reserve(Scene.GetPrimitives().size());
 
         const auto AddPrimitive{[&](const Renderer::FScenePrimitive& Primitive) {

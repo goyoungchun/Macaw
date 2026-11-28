@@ -6,6 +6,8 @@
 
 #include "Core/Types.h"
 #include "Engine/ALevelSequenceActor.h"
+#include "Engine/ALandscape.h"
+#include "Asset/ULandscapeAsset.h"
 #include "Editor/Widget/FDetailsWidget.h"
 #include "Editor/Widget/FEditorQuantityInputWidget.h"
 #include "Editor/FEditorContext.h"
@@ -545,6 +547,258 @@ namespace Editor {
                 ImGui::TextDisabled("Select an actor or component to view its details.");
             } else {
                 DrawDetailLayout(Layout, Targets);
+
+				if (Engine::ALandscape* Landscape{CoreUObject::Cast<Engine::ALandscape>(Actor)}) {
+					const Uint32 CompRes{Landscape->GetComponentResolution()};
+					const Uint32 CompCount{Landscape->GetComponentCount()};
+					const Uint32 NumSub{Landscape->GetNumSubsections()};
+					const Uint32 TotalResX{Landscape->GetTotalResolutionX()};
+					const Uint32 TotalResY{Landscape->GetTotalResolutionY()};
+
+					if (BeginCategory("Landscape Info", true)) {
+						if (ImGui::BeginTable("##LandscapeInfoTable", 2, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchSame)) {
+							void (*InfoRow)(const char*, const Core::FString&){[](const char* Label, const Core::FString& ValueText) {
+								ImGui::TableNextRow();
+								ImGui::TableSetColumnIndex(0);
+								ImGui::TextUnformatted(Label);
+								ImGui::TableSetColumnIndex(1);
+								ImGui::TextUnformatted(ValueText.c_str());
+							}};
+
+							InfoRow("Component Resolution (Verts)", std::format("{} x {}", CompRes, CompRes));
+							InfoRow("Component Count", std::format("{} ({} x {})", CompCount, Landscape->GetComponentCountX(), Landscape->GetComponentCountY()));
+							InfoRow("Component Subsections", std::format("{} x {}", NumSub, NumSub));
+							InfoRow("Resolution (Verts)", std::format("{} x {}", TotalResX, TotalResY));
+							InfoRow("Landscape Proxy Count", "1");
+							InfoRow("Total Component Count", std::format("{}", CompCount));
+							InfoRow("Overall Resolution (Verts)", std::format("{} x {}", TotalResX, TotalResY));
+							InfoRow("Max LOD", std::format("{}", Landscape->GetMaxLOD()));
+							ImGui::EndTable();
+						}
+					}
+
+					if (BeginCategory("Landscape Layers", true)) {
+						ImGui::BeginDisabled(!Context->CanEditWorld());
+
+						static Core::TArray<Core::TStaticArray<char, 512>> WeightmapPathBuffers{};
+						static Core::FString LastLayerStatus{};
+
+						Core::TArray<Asset::FLandscapeLayerInfo> Layers{Landscape->GetLayers()};
+
+						if (WeightmapPathBuffers.size() < Layers.size()) {
+							WeightmapPathBuffers.resize(Layers.size());
+						}
+
+						bool LayersModified{};
+						Index_t RemoveIndex{InvalidIndex};
+
+						if (Layers.empty()) {
+							ImGui::TextDisabled("No layers configured.");
+						}
+
+						for (Index_t LayerIndex{}; LayerIndex < Layers.size(); ++LayerIndex) {
+							Asset::FLandscapeLayerInfo& Layer{Layers[LayerIndex]};
+							ImGui::PushID(static_cast<int>(LayerIndex));
+
+							const Core::FString HeaderLabel{std::format("Layer {}: {}", LayerIndex, Layer.mLayerName.empty() ? "Unnamed" : Layer.mLayerName)};
+
+							if (ImGui::TreeNodeEx("##LayerNode", ImGuiTreeNodeFlags_DefaultOpen, "%s", HeaderLabel.c_str())) {
+								Core::TStaticArray<char, 128> NameBuffer{};
+								std::copy_n(Layer.mLayerName.begin(), std::min(Layer.mLayerName.size(), NameBuffer.size() - 1u), NameBuffer.begin());
+
+								if (ImGui::InputText("Name", NameBuffer.data(), NameBuffer.size(), ImGuiInputTextFlags_EnterReturnsTrue)) {
+									Layer.mLayerName = NameBuffer.data();
+									LayersModified = true;
+								}
+
+								ImGui::AlignTextToFramePadding();
+								ImGui::TextUnformatted("Material");
+								ImGui::SameLine();
+
+								if (DrawAssetPicker("##LayerMaterial", Layer.mMaterialPath, Asset::EAssetType::Material, "Default Layer Color")) {
+									LayersModified = true;
+								}
+
+								Core::TStaticArray<float, 2> UVValues{Layer.mUVScale.x, Layer.mUVScale.y};
+
+								if (ImGui::DragFloat2("UV Scale", UVValues.data(), 0.01f, 0.001f, 64.0f, "%.3f")) {
+									Layer.mUVScale = {UVValues[0], UVValues[1]};
+									LayersModified = true;
+								}
+
+								if (ImGui::Checkbox("Weight Blended", &Layer.mWeightBlended)) {
+									LayersModified = true;
+								}
+
+								if (ImGui::DragFloat("Static Friction", &Layer.mStaticFriction, 0.01f, 0.0f, 10.0f)) {
+									LayersModified = true;
+								}
+
+								if (ImGui::DragFloat("Dynamic Friction", &Layer.mDynamicFriction, 0.01f, 0.0f, 10.0f)) {
+									LayersModified = true;
+								}
+
+								if (ImGui::DragFloat("Restitution", &Layer.mRestitution, 0.01f, 0.0f, 1.0f)) {
+									LayersModified = true;
+								}
+
+								ImGui::AlignTextToFramePadding();
+								ImGui::TextUnformatted("Weightmap");
+								ImGui::SameLine();
+
+								if (DrawAssetPicker("##LayerWeightmap", Layer.mWeightmapTexturePath, Asset::EAssetType::Texture, "None")) {
+									Core::FString Error{};
+
+									if (Landscape->ApplyWeightmapTextureAsset(LayerIndex, Layer.mWeightmapTexturePath, Error)) {
+										LastLayerStatus = "Applied weightmap asset";
+										Context->MarkSceneDirty();
+									} else {
+										LastLayerStatus = Error.empty() ? "Weightmap apply failed" : Error;
+									}
+								}
+
+								ImGui::InputTextWithHint("Weightmap File", "Source image or .masset", WeightmapPathBuffers[LayerIndex].data(), WeightmapPathBuffers[LayerIndex].size());
+
+								if (ImGui::Button("Import Weightmap")) {
+									Core::FString Error{};
+
+									if (Landscape->ImportWeightmapFile(LayerIndex, Core::FilePath::FromUtf8(WeightmapPathBuffers[LayerIndex].data()), Error)) {
+										if (mAssetCatalog != nullptr) {
+											Core::FString RefreshError{};
+											mAssetCatalog->Refresh(RefreshError);
+										}
+
+										LastLayerStatus = "Converted to .masset and applied weightmap";
+										Context->MarkSceneDirty();
+									} else {
+										LastLayerStatus = Error.empty() ? "Weightmap import failed" : Error;
+									}
+								}
+
+								if (Layers.size() > 1u) {
+									ImGui::SameLine();
+
+									if (ImGui::Button("Remove Layer")) {
+										RemoveIndex = LayerIndex;
+									}
+								}
+
+								ImGui::TreePop();
+							}
+
+							ImGui::PopID();
+						}
+
+						if (RemoveIndex != InvalidIndex) {
+							Landscape->RemoveLayer(RemoveIndex);
+							LastLayerStatus = "Removed layer";
+							Context->MarkSceneDirty();
+						} else if (LayersModified) {
+							Landscape->SetLayers(Layers);
+							Context->MarkSceneDirty();
+						}
+
+						if (ImGui::Button("Add Layer##LandscapeLayersAdd")) {
+							Asset::FLandscapeLayerInfo NewLayer{};
+							NewLayer.mLayerName = "Layer_" + std::to_string(Landscape->GetLayers().size());
+							Landscape->AddLayer(NewLayer);
+							LastLayerStatus = "Added layer";
+							Context->MarkSceneDirty();
+						}
+
+						if (!LastLayerStatus.empty()) {
+							ImGui::TextDisabled("%s", LastLayerStatus.c_str());
+						}
+
+						ImGui::EndDisabled();
+					}
+
+					if (BeginCategory("Landscape Tools", true)) {
+						ImGui::BeginDisabled(!Context->CanEditWorld());
+
+						static Int32 ProceduralSeed{1337};
+						static float ProceduralAmplitude{12.0f};
+						static float ProceduralFrequency{0.025f};
+						static Core::TStaticArray<char, 512> HeightmapPathBuffer{};
+						static Core::FString LastLandscapeStatus{};
+
+						ImGui::InputInt("Seed", &ProceduralSeed);
+						ImGui::DragFloat("Amplitude", &ProceduralAmplitude, 0.25f, 0.0f, 256.0f);
+						ImGui::DragFloat("Frequency", &ProceduralFrequency, 0.001f, 0.001f, 1.0f, "%.4f");
+
+						if (ImGui::Button("Generate Procedural Hills")) {
+							Landscape->GenerateProceduralHills(static_cast<Uint32>(std::max(ProceduralSeed, 0)), ProceduralAmplitude, ProceduralFrequency);
+							LastLandscapeStatus = "Generated procedural hills";
+						}
+
+						ImGui::SameLine();
+
+						if (ImGui::Button("Flatten")) {
+							if (Asset::ULandscapeAsset* ActiveAsset{Landscape->GetActiveLandscapeAsset()}) {
+								ActiveAsset->CreateFlat(Landscape->GetSubsectionSizeQuads(), Landscape->GetNumSubsections(), Landscape->GetComponentCountX(), Landscape->GetComponentCountY(), Landscape->GetQuadSize(), Landscape->GetHeightScale());
+								Landscape->RebuildLandscape();
+								LastLandscapeStatus = "Flattened landscape";
+							}
+						}
+
+						ImGui::SameLine();
+
+						if (ImGui::Button("Rebuild")) {
+							Landscape->RebuildLandscape();
+							LastLandscapeStatus = "Rebuilt landscape";
+						}
+
+						if (ImGui::Button("Add Layer")) {
+							Asset::FLandscapeLayerInfo NewLayer{};
+							NewLayer.mLayerName = "Layer_" + std::to_string(Landscape->GetLayers().size());
+							Landscape->AddLayer(NewLayer);
+							LastLandscapeStatus = "Added layer";
+						}
+
+						ImGui::Separator();
+						ImGui::InputTextWithHint("Heightmap File", "Source PNG / RAW / R16 or .masset", HeightmapPathBuffer.data(), HeightmapPathBuffer.size());
+
+						if (ImGui::Button("Import Heightmap")) {
+							Core::FString Error{};
+
+							if (Landscape->ImportHeightmapFile(Core::FilePath::FromUtf8(HeightmapPathBuffer.data()), Error)) {
+								if (mAssetCatalog != nullptr) {
+									Core::FString RefreshError{};
+									mAssetCatalog->Refresh(RefreshError);
+								}
+
+								LastLandscapeStatus = "Converted to .masset and applied heightmap";
+								Context->MarkSceneDirty();
+							} else {
+								LastLandscapeStatus = Error.empty() ? "Import failed" : Error;
+							}
+						}
+
+						ImGui::SameLine();
+
+						if (ImGui::Button("Save Landscape (.masset)")) {
+							Core::FString Error{};
+
+							if (Landscape->SaveLandscapeAsset({}, Error)) {
+								if (mAssetCatalog != nullptr) {
+									Core::FString RefreshError{};
+									mAssetCatalog->Refresh(RefreshError);
+								}
+
+								LastLandscapeStatus = "Saved " + Landscape->GetLandscapeAssetPath();
+								Context->MarkSceneDirty();
+							} else {
+								LastLandscapeStatus = Error.empty() ? "Save failed" : Error;
+							}
+						}
+
+						if (!LastLandscapeStatus.empty()) {
+							ImGui::TextDisabled("%s", LastLandscapeStatus.c_str());
+						}
+
+						ImGui::EndDisabled();
+					}
+				}
             }
         }
 
@@ -973,6 +1227,7 @@ namespace Editor {
 
         const bool SkeletalMesh{CommonClass->IsChildOf(Engine::USkeletalMeshComponent::StaticClass())};
         const bool LuaScript{CommonClass == Engine::ULuaScriptComponent::StaticClass()};
+		const bool LandscapeActor{CommonClass == Engine::ALandscape::StaticClass()};
         const auto IsGraphMode{[Context](CoreUObject::TObjectRef<CoreUObject::UObject> Target) {
             const auto* Component{CoreUObject::Cast<Engine::USkeletalMeshComponent>(Context->ResolveObject(Target))};
 
@@ -1000,6 +1255,10 @@ namespace Editor {
                 if (LuaScript && Name == "EditorTickable") {
                     continue;
                 }
+
+				if (LandscapeActor && Name == "Layers") {
+					continue;
+				}
 
                 if (SkeletalMesh && !AllAssetMode && (Name == "Animation" || Name == "Looping" || Name == "PlayRate")) {
                     continue;

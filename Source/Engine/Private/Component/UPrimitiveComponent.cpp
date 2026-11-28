@@ -679,4 +679,20 @@ namespace Engine {
         mBodyInstance.TermBody();
     }
 
+	bool Engine::UPrimitiveComponent::InitHeightFieldPhysicsState(const PhysicsRuntime::FHeightFieldDesc& Desc) {
+		PhysicsRuntime::FPhysicsScene* Scene{GetWorld() != nullptr ? GetWorld()->GetPhysicsScene() : nullptr};
+
+		if (Scene == nullptr) {
+			return false;
+		}
+
+		if (mBodyInstance.InitHeightFieldBody(Desc, GetTransform(), this, *Scene)) {
+			mOnBodyStateChanged.Broadcast(this, true);
+
+			return true;
+		}
+
+		return false;
+	}
+
 }

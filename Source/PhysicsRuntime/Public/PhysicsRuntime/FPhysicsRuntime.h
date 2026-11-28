@@ -131,6 +131,9 @@ namespace PhysicsRuntime {
          */
         physx::PxConvexMesh* CreateConvexMesh(const PhysicsRuntime::FKConvexElem& Element) const;
 
+		// 샘플 배열로 PhysX 하이트필드 쿠킹
+		physx::PxHeightField* CreateHeightField(Uint32 Rows, Uint32 Columns, std::span<const physx::PxHeightFieldSample> Samples) const;
+
     private:
 
         /**

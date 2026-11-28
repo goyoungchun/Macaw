@@ -26,6 +26,7 @@
 #include "Engine/AActor.h"
 #include "Engine/ADecalActor.h"
 #include "Engine/ALevelSequenceActor.h"
+#include "Engine/Component/ULandscapeComponent.h"
 #include "Engine/AParticleSystemActor.h"
 #include "Engine/APawn.h"
 #include "Engine/ASkyAtmosphereActor.h"
@@ -622,7 +623,12 @@ namespace Editor {
                             Shape->DrawDebug(mDrawInterface);
                         }
                     } else if (Primitive != nullptr && mShowFlags.mCollision) {
-                        Primitive->DrawCollision(mDrawInterface, Highlight, mLineThickness);
+						if (const Engine::ULandscapeComponent* LandscapeComp{CoreUObject::Cast<Engine::ULandscapeComponent>(Primitive)}) {
+							const FVector4 Color{Highlight ? FVector4{1.0f, 0.65f, 0.15f, 1.0f} : FVector4{0.35f, 0.85f, 0.55f, 1.0f}};
+							LandscapeComp->DrawHeightFieldCollision(mDrawInterface, Color, mLineThickness);
+						} else {
+							Primitive->DrawCollision(mDrawInterface, Highlight, mLineThickness);
+						}
                     }
 
                     if (auto* Light{CoreUObject::Cast<Engine::ULightComponentBase>(Component.get())}; Light != nullptr && mShowFlags.mLightVisualizers) {

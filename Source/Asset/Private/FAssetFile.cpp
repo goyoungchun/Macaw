@@ -90,7 +90,7 @@ namespace Asset {
             const Uint64 ActualHeaderSize{Version == ThumbnailAssetVersion ? ThumbnailHeaderSize : Version == GuidAssetVersion ? GuidHeaderSize : HeaderSize};
             const bool InvalidRedirector{TypeValue == static_cast<Uint32>(Asset::EAssetType::Redirector) && (Size > MaximumRedirectorPayload || Guid.IsValid() || ThumbnailSize != 0)};
 
-            if (!Input || Magic != AssetMagic || !ValidVersion || TypeValue < static_cast<Uint32>(Asset::EAssetType::Scene) || TypeValue > static_cast<Uint32>(Asset::EAssetType::Redirector) || InvalidRedirector || (Version == GuidAssetVersion && !Guid.IsValid()) || Size == 0 || Size > MaximumPayload || ThumbnailSize > MaximumThumbnail || FileSize != ActualHeaderSize + Size + ThumbnailSize) {
+            if (!Input || Magic != AssetMagic || !ValidVersion || TypeValue < static_cast<Uint32>(Asset::EAssetType::Scene) || TypeValue > static_cast<Uint32>(Asset::EAssetType::Landscape) || InvalidRedirector || (Version == GuidAssetVersion && !Guid.IsValid()) || Size == 0 || Size > MaximumPayload || ThumbnailSize > MaximumThumbnail || FileSize != ActualHeaderSize + Size + ThumbnailSize) {
                 Error = "Invalid asset header, version or type";
                 Guid = Core::FGuid::Null();
 
@@ -175,7 +175,7 @@ namespace Asset {
         Error.clear();
 
         const bool InvalidRedirector{Type == Asset::EAssetType::Redirector && (Payload.size() > MaximumRedirectorPayload || Guid.IsValid())};
-        if (Path.extension() != L".masset" || Payload.empty() || Payload.size() > MaximumPayload || Type < Asset::EAssetType::Scene || Type > Asset::EAssetType::Redirector || InvalidRedirector) {
+        if (Path.extension() != L".masset" || Payload.empty() || Payload.size() > MaximumPayload || Type < Asset::EAssetType::Scene || Type > Asset::EAssetType::Landscape || InvalidRedirector) {
             Error = "Invalid asset path, type or payload";
 
             return false;

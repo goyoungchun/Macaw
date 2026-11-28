@@ -75,6 +75,38 @@ namespace Renderer {
      * @brief SubMesh마다 머티리얼 없이 깊이 전용 파이프라인 드로를 추가합니다.
      */
     void Renderer::FShadowDepthPass::AddCommands(const Renderer::FScenePrimitive& Primitive, Asset::UStaticMesh& Mesh, const Engine::FSceneViewFamily&, Core::TArray<Renderer::FMeshDrawCommand>& Commands, const Engine::FParticleMeshBatch*) {
+		if (Primitive.mProxy.mLandscape.has_value() && Primitive.mProxy.mLandscape->mShared != nullptr) {
+			const Engine::FLandscapeComponentRenderData& Comp{*Primitive.mProxy.mLandscape};
+			const Engine::FLandscapeSharedRenderData& Shared{*Comp.mShared};
+			Renderer::FMaterialPipeline* LandscapePipeline{mRenderer->GetDepthPipeline(false, false, true)};
+
+			if (LandscapePipeline == nullptr || Shared.mLODRanges.empty()) {
+				return;
+			}
+
+			for (Uint32 SubY{}; SubY < Shared.mNumSubsections; ++SubY) {
+				for (Uint32 SubX{}; SubX < Shared.mNumSubsections; ++SubX) {
+					const Index_t SubLocalIndex{static_cast<Index_t>(SubY) * Shared.mNumSubsections + SubX};
+
+					if (SubLocalIndex < Comp.mSubsectionBounds.size() && !IsVisible(mCurrentViewProjection, Comp.mSubsectionBounds[SubLocalIndex])) {
+						continue;
+					}
+
+					const Uint32 GlobalSubX{Comp.mComponentIndexX * Shared.mNumSubsections + SubX};
+					const Uint32 GlobalSubY{Comp.mComponentIndexY * Shared.mNumSubsections + SubY};
+					const Renderer::FLandscapeSectionLODState SectionState{mLandscapeLODSolver.GetSectionState(Shared.mLandscapeId, GlobalSubX, GlobalSubY)};
+					const Uint32 ClampedLOD{SectionState.mLOD < Shared.mLODRanges.size() ? SectionState.mLOD : static_cast<Uint32>(Shared.mLODRanges.size() - 1u)};
+					const Asset::FLandscapeLODSectionRange& Range{Shared.mLODRanges[ClampedLOD]};
+
+					Renderer::FMeshDrawCommand DrawCommand{LandscapePipeline, nullptr, &Mesh, &Primitive, Range.mFirstIndex, Range.mIndexCount};
+					DrawCommand.SetLandscapeDrawInfo({true, SubX, SubY, ClampedLOD, SectionState.mMorphFactor, SectionState.mStitchMask});
+					Commands.push_back(DrawCommand);
+				}
+			}
+
+			return;
+		}
+
         const bool Skinned{Primitive.mProxy.mSkeletalMesh != nullptr};
         Renderer::FMaterialPipeline* SurfacePipeline{Skinned ? mRenderer->GetDepthPipeline(true) : mPipeline};
 

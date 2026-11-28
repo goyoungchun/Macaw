@@ -16,6 +16,7 @@
 #include "Engine/EPrimitiveType.h"
 #include "Engine/FDrawText.h"
 #include "Engine/FDrawSprite.h"
+#include "Engine/FLandscapeRenderData.h"
 #include "PhysicsRuntime/FClothSimulData.h"
 
 #include <memory>
@@ -144,6 +145,9 @@ namespace Engine {
          * @brief 파티클 컴포넌트가 매 Tick 만든 그리기 데이터이며 파티클이 아니면 비어 있습니다.
          */
         std::shared_ptr<const Engine::FParticleRenderData> mParticles{};
+
+		// 지형 컴포넌트 렌더 데이터
+		std::optional<Engine::FLandscapeComponentRenderData> mLandscape{};
     };
 
 }

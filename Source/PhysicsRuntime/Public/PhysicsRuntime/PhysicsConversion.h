@@ -68,4 +68,7 @@ namespace PhysicsRuntime {
      */
     physx::PxQuat GetSphylBasis();
 
+	// PhysX 하이트필드의 높이 축을 엔진 상향 축에 맞추는 회전 반환
+	physx::PxQuat GetHeightFieldZUpBasis();
+
 }

@@ -61,4 +61,9 @@ namespace PhysicsRuntime {
         return physx::PxQuat{-(90_deg).GetBase(), physx::PxVec3{0.0f, 1.0f, 0.0f}};
     }
 
+	// PhysX 하이트필드의 높이 축을 엔진 상향 축에 맞추는 회전 반환
+	physx::PxQuat GetHeightFieldZUpBasis() {
+		return physx::PxQuat{(90_deg).GetBase(), physx::PxVec3{1.0f, 0.0f, 0.0f}};
+	}
+
 }

@@ -233,6 +233,16 @@ namespace Renderer {
         Primitive.mProxy.mWorld = World;
         Primitive.mProxy.mBounds = Bounds;
 
+		if (Primitive.mProxy.mLandscape.has_value()) {
+			// 이동 및 스케일 변경 시 서브섹션 월드 경계도 함께 갱신
+			Engine::FLandscapeComponentRenderData& LandscapeData{*Primitive.mProxy.mLandscape};
+			LandscapeData.mSubsectionBounds.resize(LandscapeData.mLocalSubsectionBounds.size());
+
+			for (Index_t Index{}; Index < LandscapeData.mLocalSubsectionBounds.size(); ++Index) {
+				LandscapeData.mSubsectionBounds[Index] = LandscapeData.mLocalSubsectionBounds[Index].Transformed(World);
+			}
+		}
+
         Upload(Primitive);
 
         if (IsShadowCaster(Primitive.mProxy)) {

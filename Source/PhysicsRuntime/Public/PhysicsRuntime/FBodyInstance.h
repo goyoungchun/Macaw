@@ -32,6 +32,7 @@ namespace Engine {
 namespace PhysicsRuntime {
     class FPhysicsScene;
     class UBodySetup;
+	struct FHeightFieldDesc;
 }
 
 namespace PhysicsRuntime {
@@ -154,6 +155,9 @@ namespace PhysicsRuntime {
          * @note 움직이는 강체는 시뮬레이션 설정이 꺼져 있으면 키네마틱으로 만듭니다.
          */
         bool InitBody(const PhysicsRuntime::UBodySetup& Setup, const FTransform& Transform, Engine::UPrimitiveComponent* OwnerComponent, PhysicsRuntime::FPhysicsScene& Scene, const PhysicsRuntime::FInitBodySpawnParams& SpawnParams);
+
+		// 하이트필드 서술자로 정적 물리 바디 생성
+		bool InitHeightFieldBody(const PhysicsRuntime::FHeightFieldDesc& Desc, const FTransform& Transform, Engine::UPrimitiveComponent* OwnerComponent, PhysicsRuntime::FPhysicsScene& Scene);
 
         /**
          * @brief 실제 바디를 장면에서 제거하고 해제합니다.

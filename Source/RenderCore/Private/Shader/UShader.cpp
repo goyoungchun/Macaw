@@ -23,6 +23,7 @@ namespace {
     struct FBuiltinShaders {
         std::unique_ptr<UShader> mLit{};
         std::unique_ptr<UShader> mUnlit{};
+		std::unique_ptr<UShader> mLandscape{};
     };
 
     FBuiltinShaders& GetBuiltinShaders() {
@@ -259,7 +260,7 @@ bool UShader::SetWritesGBuffer(bool WritesGBuffer) {
 bool UShader::IsBuiltin() const {
     const Core::FString Identity{GetGuid().ToString()};
 
-    return Identity == "6D414341-5753-4844-8000-000000000001" || Identity == "6D414341-5753-4844-8000-000000000002";
+    return Identity == "6D414341-5753-4844-8000-000000000001" || Identity == "6D414341-5753-4844-8000-000000000002" || Identity == "6D414341-5753-4844-8000-000000000003";
 }
 
 /**
@@ -288,11 +289,23 @@ UShader* UShader::GetUnlit() {
     return Shader.get();
 }
 
+// 내장 지형 셰이더 반환
+UShader* UShader::GetLandscape() {
+	std::unique_ptr<UShader>& Shader{GetBuiltinShaders().mLandscape};
+
+	if (Shader == nullptr) {
+		Shader = CreateBuiltin("6D414341-5753-4844-8000-000000000003", "Landscape", "/Engine/Shaders/Landscape.hlsl", false);
+	}
+
+	return Shader.get();
+}
+
 void UShader::ReleaseBuiltins() {
     auto& Shaders{GetBuiltinShaders()};
 
     Shaders.mLit.reset();
     Shaders.mUnlit.reset();
+	Shaders.mLandscape.reset();
 }
 
 /**
@@ -303,7 +316,11 @@ UShader* UShader::FindBuiltin(const Core::FGuid& Guid) {
         return GetDefault();
     }
 
-    return Guid == GetUnlit()->GetGuid() ? GetUnlit() : nullptr;
+	if (Guid == GetUnlit()->GetGuid()) {
+		return GetUnlit();
+	}
+
+	return Guid == GetLandscape()->GetGuid() ? GetLandscape() : nullptr;
 }
 
 /**
@@ -315,6 +332,10 @@ UShader* UShader::FindBuiltin(const Core::FString& SourcePath) {
     if (Path == "/engine/shaders/lit.hlsl" || Path == "/engine/shaders/mesh.hlsl" || Path == "shaders/lit.hlsl" || Path == "shaders/mesh.hlsl") {
         return GetDefault();
     }
+
+	if (Path == "/engine/shaders/landscape.hlsl" || Path == "shaders/landscape.hlsl") {
+		return GetLandscape();
+	}
 
     return Path == "/engine/shaders/unlit.hlsl" || Path == "shaders/unlit.hlsl" ? GetUnlit() : nullptr;
 }

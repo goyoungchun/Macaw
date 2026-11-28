@@ -8,6 +8,7 @@
 
 #include "Core/ReflectionMacros.h"
 #include "Core/Types.h"
+#include "FLandscapeConstants.h"
 
 namespace Asset {
     class UMaterial;
@@ -41,6 +42,9 @@ namespace Renderer {
          * @param[in] ClothAssetIndex 천 섹션이면 그 섹션의 천 에셋 번호이고, 아니면 InvalidIndex입니다.
          */
         FMeshDrawCommand(Renderer::FMaterialPipeline* Pipeline, Asset::UMaterial* Material, Asset::UStaticMesh* Mesh, const Renderer::FScenePrimitive* Primitive, Index_t FirstIndex, Uint32 IndexCount, Index_t ClothAssetIndex = InvalidIndex);
+
+		// 지형 서브섹션 드로 정보 설정
+		void SetLandscapeDrawInfo(const Renderer::FLandscapeDrawInfo& LandscapeInfo);
 
     private:
         /**
@@ -95,6 +99,9 @@ namespace Renderer {
          * @brief 천 섹션이면 입자 버퍼를 찾을 천 에셋 번호이고, 아니면 InvalidIndex입니다.
          */
         Index_t mClothAssetIndex{InvalidIndex};
+
+		// 지형 서브섹션 변위 및 LOD 드로 정보
+		Renderer::FLandscapeDrawInfo mLandscape{};
     };
 
 }

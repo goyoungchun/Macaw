@@ -336,6 +336,38 @@ namespace PhysicsRuntime {
         return Mesh;
     }
 
+	// 샘플 배열로 PhysX 하이트필드 쿠킹
+	physx::PxHeightField* PhysicsRuntime::FPhysicsRuntime::CreateHeightField(Uint32 Rows, Uint32 Columns, std::span<const physx::PxHeightFieldSample> Samples) const {
+		if (!IsInitialized() || Rows < 2u || Columns < 2u) {
+			return nullptr;
+		}
+
+		const Uint64 ExpectedCount{static_cast<Uint64>(Rows) * Columns};
+
+		if (Samples.size() != ExpectedCount) {
+			return nullptr;
+		}
+
+		physx::PxHeightFieldDesc Desc{};
+		Desc.format = physx::PxHeightFieldFormat::eS16_TM;
+		Desc.nbRows = Rows;
+		Desc.nbColumns = Columns;
+		Desc.samples.data = Samples.data();
+		Desc.samples.stride = sizeof(physx::PxHeightFieldSample);
+
+		if (!Desc.isValid()) {
+			return nullptr;
+		}
+
+		physx::PxHeightField* HeightField{mCooking->createHeightField(Desc, mPhysics->getPhysicsInsertionCallback())};
+
+		if (HeightField == nullptr) {
+			MACAW_LOG(LogPhysics, Warning, "Cannot cook a heightfield of size {}x{}.", Rows, Columns);
+		}
+
+		return HeightField;
+	}
+
     /**
      * @brief PVD 객체를 만들고 로컬 PVD 프로그램에 연결을 시도합니다.
      */

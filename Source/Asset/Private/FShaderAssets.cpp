@@ -10,6 +10,7 @@
 #include "Asset/Animation/UBlendSpace.h"
 #include "Asset/Animation/UBlendSpace1D.h"
 #include "Asset/Animation/UAnimGraph.h"
+#include "Asset/ULandscapeAsset.h"
 #include "Asset/Sequence/ULevelSequence.h"
 #include "PhysicsRuntime/UPhysicsAsset.h"
 #include "Core/FilePath.h"
@@ -133,7 +134,7 @@ CoreUObject::UObject* FAssetManager::LoadAsset(const Core::FGuid& Guid, Core::FS
     }
 
     CoreUObject::UObject* Object{};
-    const CoreUObject::UClass* ActualClass{Type == EAssetType::Shader ? UShader::StaticClass() : Type == EAssetType::Material ? UMaterial::StaticClass() : Type == EAssetType::Mesh ? UStaticMesh::StaticClass() : Type == EAssetType::SkeletalMesh ? USkeletalMesh::StaticClass() : Type == EAssetType::Skeleton ? USkeleton::StaticClass() : Type == EAssetType::Texture ? UTexture2D::StaticClass() : Type == EAssetType::AnimSequence ? UAnimSequence::StaticClass() : Type == EAssetType::Sequence ? ULevelSequence::StaticClass() : Type == EAssetType::BlendSpace ? UBlendSpace1D::StaticClass() : Type == EAssetType::AnimGraph ? UAnimGraph::StaticClass() : Type == EAssetType::PhysicsAsset ? PhysicsRuntime::UPhysicsAsset::StaticClass() : nullptr};
+    const CoreUObject::UClass* ActualClass{Type == EAssetType::Shader ? UShader::StaticClass() : Type == EAssetType::Material ? UMaterial::StaticClass() : Type == EAssetType::Mesh ? UStaticMesh::StaticClass() : Type == EAssetType::SkeletalMesh ? USkeletalMesh::StaticClass() : Type == EAssetType::Skeleton ? USkeleton::StaticClass() : Type == EAssetType::Texture ? UTexture2D::StaticClass() : Type == EAssetType::AnimSequence ? UAnimSequence::StaticClass() : Type == EAssetType::Sequence ? ULevelSequence::StaticClass() : Type == EAssetType::BlendSpace ? UBlendSpace1D::StaticClass() : Type == EAssetType::AnimGraph ? UAnimGraph::StaticClass() : Type == EAssetType::PhysicsAsset ? PhysicsRuntime::UPhysicsAsset::StaticClass() : Type == EAssetType::Landscape ? ULandscapeAsset::StaticClass() : nullptr};
 
     if (ActualClass == nullptr) {
         if (const FAssetTypeHandler* Handler{FindAssetTypeHandler(Type)}) {
@@ -181,6 +182,9 @@ CoreUObject::UObject* FAssetManager::LoadAsset(const Core::FGuid& Guid, Core::FS
     case EAssetType::PhysicsAsset:
         Object = LoadPhysicsAsset(Path, Error);
         break;
+	case EAssetType::Landscape:
+		Object = LoadLandscape(Path, Error);
+		break;
     default:
         if (FindAssetTypeHandler(Type) != nullptr) {
             Object = LoadRegisteredAsset(Path, Type, Error);

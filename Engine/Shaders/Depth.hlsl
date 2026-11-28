@@ -6,6 +6,7 @@
 #include "ViewConstants.hlsli"
 #include "Skinning.hlsl"
 #include "Cloth.hlsl"
+#include "LandscapeVertex.hlsli"
 
 /**
  * @brief 비인스턴스 드로에서 사용하는 메시 객체의 월드 행렬 상수입니다.
@@ -78,6 +79,9 @@ float4 VertexMain(FDepthInput Input) : SV_POSITION {
 #ifdef MacawCloth
     // 천 섹션의 그림자도 본체와 같은 천 모양을 따릅니다.
     Input.mPosition = BlendClothPosition(Input.mVertexId, Input.mPosition);
+#endif
+#ifdef MacawLandscape
+	Input.mPosition = DisplaceLandscapePosition(Input.mPosition);
 #endif
 #ifdef MacawInstanced
     row_major float4x4 ObjectWorld = {float4x4(Input.mWorld0, Input.mWorld1, Input.mWorld2, Input.mWorld3)};

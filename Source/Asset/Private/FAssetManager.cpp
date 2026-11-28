@@ -19,6 +19,7 @@
 #include "Asset/Animation/UAnimSequence.h"
 #include "Asset/Animation/UBlendSpace1D.h"
 #include "Asset/Animation/UAnimGraph.h"
+#include "Asset/ULandscapeAsset.h"
 #include "PhysicsRuntime/UPhysicsAsset.h"
 #include "Core/Base/ErrorHandler.h"
 #include "FMaterialFile.h"
@@ -1628,6 +1629,51 @@ namespace Asset {
         return Result;
     }
 
+	Asset::ULandscapeAsset* Asset::FAssetManager::LoadLandscape(const std::filesystem::path& Path, Core::FString& Error) {
+		Core::FString Key{};
+		const std::filesystem::path ResolvedPath{ResolveAssetLoadPath(Path, Key, Error)};
+
+		if (Key.empty()) {
+			return nullptr;
+		}
+
+		const Core::TMap<Core::FString, std::unique_ptr<Asset::ULandscapeAsset>>::const_iterator Existing{mLandscapes.find(Key)};
+
+		if (Existing != mLandscapes.end()) {
+			Asset::AssetStats::AssetCacheHits.Add();
+
+			return Existing->second.get();
+		}
+
+		Core::TArray<Uint8> Payload{};
+
+		if (!Asset::FAssetFile::Load(ResolvedPath, Asset::EAssetType::Landscape, Payload, Error)) {
+			return nullptr;
+		}
+
+		Serialization::FMemoryArchive Archive{static_cast<const Core::TArray<Uint8>&>(Payload)};
+		std::unique_ptr<Asset::ULandscapeAsset> Landscape{CoreUObject::NewObject<Asset::ULandscapeAsset>()};
+
+		if (Landscape == nullptr || !Landscape->SerializeBinary(Archive) || Archive.HasError() || Archive.GetRemainingBytes() != 0u) {
+			Error = Archive.HasError() ? Archive.GetError() : "Invalid landscape asset data";
+
+			return nullptr;
+		}
+
+		if (!RestoreAssetIdentity(ResolvedPath, *Landscape, Error)) {
+			return nullptr;
+		}
+
+		Core::FString MaterialError{};
+		Landscape->ResolveLayerMaterials(*this, MaterialError);
+
+		Asset::ULandscapeAsset* Result{Landscape.get()};
+		Landscape->SetName(Core::FilePath::ToUtf8(ResolvedPath.stem()));
+		mLandscapes.emplace(Key, std::move(Landscape));
+
+		return Result;
+	}
+
     Asset::UAnimSequence* Asset::FAssetManager::LoadAnimSequence(const std::filesystem::path& Path, Core::FString& Error) {
         Core::FString Key{};
         const auto ResolvedPath{ResolveAssetLoadPath(Path, Key, Error)};
@@ -1927,6 +1973,52 @@ namespace Asset {
 
         return true;
     }
+
+	bool Asset::FAssetManager::SaveLandscape(const std::filesystem::path& Path, const Asset::ULandscapeAsset& Landscape, Core::FString& Error) {
+		const std::filesystem::path Target{ResolveWritablePath(Path, Error)};
+
+		if (!ValidateAssetIdentity(Target, Landscape.GetGuid(), Error)) {
+			return false;
+		}
+
+		if (Target.empty() || !Landscape.IsValid()) {
+			if (Error.empty()) {
+				Error = "Cannot save an invalid landscape asset";
+			}
+
+			return false;
+		}
+
+		Core::TArray<Uint8> Payload{};
+		Serialization::FMemoryArchive Archive{Payload};
+
+		// 저장 방향의 직렬화는 데이터를 읽기만 수행
+		if (!const_cast<Asset::ULandscapeAsset&>(Landscape).SerializeBinary(Archive) || Archive.HasError()) {
+			Error = Archive.HasError() ? Archive.GetError() : "Failed to serialize landscape asset";
+
+			return false;
+		}
+
+		if (!CheckCacheSlot(mLandscapes, CacheKey(GetRelativePath(Path, Error)), &Landscape, Error)) {
+			return false;
+		}
+
+		return SaveAssetFile(Target, Asset::EAssetType::Landscape, Payload, Error, GetSaveIdentity(Target, Landscape.GetGuid()));
+	}
+
+	Core::FString Asset::FAssetManager::GetLandscapePath(const Asset::ULandscapeAsset* Landscape) const {
+		if (Landscape == nullptr) {
+			return {};
+		}
+
+		for (const auto& Entry : mLandscapes) {
+			if (Entry.second.get() == Landscape) {
+				return Entry.first;
+			}
+		}
+
+		return {};
+	}
 
     bool Asset::FAssetManager::SaveAnimSequence(const std::filesystem::path& Path, const Asset::UAnimSequence& Sequence, Core::FString& Error) {
         const auto Target{ResolveWritablePath(Path, Error)};
@@ -2530,6 +2622,7 @@ namespace Asset {
         Retire(mSequences);
         Retire(mBlendSpaces);
         Retire(mAnimGraphs);
+		Retire(mLandscapes);
         Retire(mRegisteredAssets);
     }
 

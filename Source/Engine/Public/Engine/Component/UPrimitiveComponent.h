@@ -22,6 +22,7 @@ namespace Asset {
 
 namespace PhysicsRuntime {
     class UBodySetup;
+	struct FHeightFieldDesc;
 }
 
 struct FBox;
@@ -448,6 +449,9 @@ namespace Engine {
          * @brief 바디를 물리 장면에서 해제합니다.
          */
         void OnDestroyPhysicsState() override;
+
+		// 파생 컴포넌트가 하이트필드 정적 바디를 초기화하는 보조 함수
+		bool InitHeightFieldPhysicsState(const PhysicsRuntime::FHeightFieldDesc& Desc);
 
     private:
 

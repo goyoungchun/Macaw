@@ -41,7 +41,8 @@ namespace {
         {Asset::EAssetType::BlendSpace, {"Blend Space", "블렌드 스페이스", MacawContentAnimationSequenceIconResource, EEditorIcon::Sequence, IM_COL32(106, 218, 189, 255), IM_COL32(120, 214, 236, 255)}},
         {Asset::EAssetType::AnimGraph, {"Anim Graph", "애니메이션 그래프", MacawContentAnimationSequenceIconResource, EEditorIcon::Sequence, IM_COL32(150, 165, 255, 255), IM_COL32(150, 165, 255, 255)}},
         {Asset::EAssetType::ParticleSystem, {"Particle System", "파티클 시스템", MacawContentParticleSystemIconResource, EEditorIcon::Sprite, IM_COL32(238, 187, 106, 255)}},
-        {Asset::EAssetType::Shader, {"Shader", "셰이더", MacawContentLuaIconResource, EEditorIcon::Component, IM_COL32(120, 214, 236, 255)}}
+        {Asset::EAssetType::Shader, {"Shader", "셰이더", MacawContentLuaIconResource, EEditorIcon::Component, IM_COL32(120, 214, 236, 255)}},
+		{Asset::EAssetType::Landscape, {"Landscape", "랜드스케이프", MacawContentMeshIconResource, EEditorIcon::World, IM_COL32(128, 206, 128, 255)}}
     };
 
     constexpr float ImageInset{4.0f};

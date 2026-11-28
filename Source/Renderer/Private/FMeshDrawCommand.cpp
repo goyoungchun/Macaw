@@ -22,4 +22,8 @@ namespace Renderer {
 		  mClothAssetIndex{ClothAssetIndex} {
     }
 
+	void Renderer::FMeshDrawCommand::SetLandscapeDrawInfo(const Renderer::FLandscapeDrawInfo& LandscapeInfo) {
+		mLandscape = LandscapeInfo;
+	}
+
 }

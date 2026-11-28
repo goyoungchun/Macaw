@@ -25,6 +25,7 @@
 #include "Core/Input.h"
 #include "Core/Math.h"
 #include "Engine/Component/UPrimitiveComponent.h"
+#include "Engine/Component/ULandscapeComponent.h"
 #include "Engine/Collision/FHitResult.h"
 #include "Engine/AStaticMeshActor.h"
 #include "Engine/ULevel.h"
@@ -589,6 +590,17 @@ namespace Engine {
 
             for (const auto& Component : Actor->GetComponents()) {
                 auto* Primitive{CoreUObject::Cast<Engine::UPrimitiveComponent>(Component.get())};
+
+				if (Engine::ULandscapeComponent* LandscapeComp{CoreUObject::Cast<Engine::ULandscapeComponent>(Primitive)}) {
+					FVector HitNormal{};
+
+					if (LandscapeComp->RaycastComponent(NormalizedRay, Closest, HitNormal)) {
+						Hit = {CoreUObject::MakeObjectRef(Actor), CoreUObject::MakeObjectRef(Primitive), NormalizedRay.mOrigin + NormalizedRay.mDirection * Closest, Core::FLength::FromBase(Closest)};
+						Found = true;
+					}
+
+					continue;
+				}
 
                 if (Primitive != nullptr && Engine::RaycastMesh(&Primitive->GetMeshData(), Primitive->GetWorldMatrix(), NormalizedRay, Closest)) {
                     Hit = {CoreUObject::MakeObjectRef(Actor), CoreUObject::MakeObjectRef(Primitive), NormalizedRay.mOrigin + NormalizedRay.mDirection * Closest, Core::FLength::FromBase(Closest)};

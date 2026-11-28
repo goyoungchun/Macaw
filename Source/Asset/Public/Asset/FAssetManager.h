@@ -44,6 +44,7 @@ namespace Asset {
     class UAnimSequence;
     class UBlendSpace;
     class UAnimGraph;
+	class ULandscapeAsset;
 
     /**
      * @brief 이 모듈이 모르는 에셋 종류를 소유 모듈이 등록할 때 쓰는 생성·로드 방법입니다.
@@ -454,6 +455,11 @@ namespace Asset {
          */
         bool SavePhysicsAsset(const std::filesystem::path& Path, const PhysicsRuntime::UPhysicsAsset& PhysicsAsset, Core::FString& Error);
 
+		// 지형 에셋 로드와 저장 및 캐시 경로 조회
+		Asset::ULandscapeAsset* LoadLandscape(const std::filesystem::path& Path, Core::FString& Error);
+		bool SaveLandscape(const std::filesystem::path& Path, const Asset::ULandscapeAsset& Landscape, Core::FString& Error);
+		Core::FString GetLandscapePath(const Asset::ULandscapeAsset* Landscape) const;
+
         /**
          * @brief 애니메이션 시퀀스의 트랙과 시간 정보를 에셋 파일에 저장하고 같은 경로의 캐시 객체를 갱신합니다.
          * @param[in] Path 저장할 시퀀스 에셋의 경로입니다.
@@ -611,6 +617,9 @@ namespace Asset {
          * @brief 경로별로 캐시한 애니메이션 그래프의 소유 저장소입니다.
          */
         Core::TMap<Core::FString, std::unique_ptr<Asset::UAnimGraph>> mAnimGraphs{};
+
+		// 경로별로 캐시한 지형 에셋 저장소
+		Core::TMap<Core::FString, std::unique_ptr<Asset::ULandscapeAsset>> mLandscapes{};
 
         /**
          * @brief 다른 모듈이 등록한 에셋 종류별 생성·로드 방법입니다.
