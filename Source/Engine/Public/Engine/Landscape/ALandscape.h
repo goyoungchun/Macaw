@@ -49,7 +49,7 @@ namespace Engine {
         Int32 mComponentCountY{ 8 };
 
         UPROPERTY(Edit, Serialize, Category = "Landscape", Getter = GetProxySizeInComponents, Setter = SetProxySizeInComponents)
-        Int32 mProxySizeInComponents{ 4 };
+        Int32 mProxySizeInComponents{ 2 };
 
         UPROPERTY(Edit, Serialize, Category = "Landscape", Getter = GetSectionsPerComponent, Setter = SetSectionsPerComponent)
         Engine::ELandscapeSectionsPerComponent mSectionsPerComponent{ Engine::ELandscapeSectionsPerComponent::One };

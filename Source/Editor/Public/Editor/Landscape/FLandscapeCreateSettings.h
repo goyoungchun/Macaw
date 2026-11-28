@@ -9,7 +9,7 @@ namespace Editor {
         FVector mLocation{};
         Int32 mComponentCountX{8};
         Int32 mComponentCountY{8};
-        Int32 mProxySizeInComponents{4};
+        Int32 mProxySizeInComponents{2};
         Engine::ELandscapeSectionsPerComponent mSectionsPerComponent{Engine::ELandscapeSectionsPerComponent::One};
         Int32 mQuadsPerSection{63};
     };
