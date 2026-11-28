@@ -133,12 +133,6 @@ namespace Renderer {
         std::size_t GetPrimitiveCount() const override;
 
         /**
-         * @brief 프리미티브 추가, 제거 또는 변환 갱신 시 증가하는 장면 개정 번호를 반환합니다.
-         * @return 프리미티브 추가, 제거 또는 변환 갱신 시 증가하는 장면 개정 번호입니다.
-         */
-        Uint64 GetRevision() const override;
-
-        /**
          * @brief 장면이 소유한 렌더 프리미티브를 반환합니다.
          * @return 소유 객체가 유지하는 값의 참조입니다.
          */
@@ -238,11 +232,6 @@ namespace Renderer {
          * @brief 프리미티브 GUID에서 밀집 배열 인덱스로의 조회 맵입니다.
          */
         Core::TMap<Core::FGuid, Index_t, Core::FGuidHash> mIndices{};
-
-        /**
-         * @brief 프리미티브 추가·제거 또는 변환 갱신 시 증가하는 장면 개정 번호입니다.
-         */
-        Uint64 mRevision{};
 
         /**
          * @brief 소비 전 누적된 객체 상수 버퍼 갱신 수입니다.

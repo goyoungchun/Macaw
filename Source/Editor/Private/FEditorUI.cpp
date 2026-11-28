@@ -7,6 +7,7 @@
 #include "FEditorUI.h"
 #include "FLevelEditorToolkit.h"
 #include "FEditorAnimation.h"
+#include "FTextureImageTools.h"
 #include "Core/FilePath.h"
 #include "Core/Stats.h"
 #include "Editor/FEditorContext.h"
@@ -80,6 +81,7 @@ bool FEditorUI::Initialize(RenderCore::IRendererModule* Renderer, Platform::FWin
         return false;
     }
 
+    TextureImageTools::Initialize(static_cast<ID3D11Device*>(Renderer->GetNativeDevice()), static_cast<ID3D11DeviceContext*>(Renderer->GetNativeContext()));
     mToolkit = std::make_unique<FLevelEditorToolkit>(mContext, mViewport, mPlaySession);
     if (!mToolkit->Initialize(Renderer, Platform, mIniPath)) {
         Shutdown();
@@ -130,6 +132,7 @@ void FEditorUI::Shutdown() {
     }
 
     if (mDxReady) {
+        TextureImageTools::Shutdown();
         ImGui_ImplDX11_Shutdown();
         mDxReady = false;
     }
@@ -178,6 +181,7 @@ bool FEditorUI::EndFrame(float DeltaTime) {
     ImGui::Render();
     mContext->GetRenderer()->BeginUiRender();
     ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+    TextureImageTools::EndFrame();
     return true;
 }
 

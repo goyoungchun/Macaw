@@ -20,6 +20,10 @@
 #include "Editor/EEditorIcon.h"
 #include "Editor/FEditorContext.h"
 #include "Editor/FEditorToolkitHost.h"
+#include "Editor/Widget/FEditorButtonWidget.h"
+#include "Editor/Widget/FEditorCheckBoxWidget.h"
+#include "Editor/Widget/FEditorComboWidget.h"
+#include "Editor/Widget/FEditorSliderWidget.h"
 #include "Engine/Component/USkeletalMeshComponent.h"
 #include "Engine/FPrimitiveDrawInterface.h"
 #include "Engine/FSceneView.h"
@@ -31,7 +35,6 @@
 #include "PhysicsRuntime/UPhysicsAsset.h"
 
 #include <imgui.h>
-#include <imgui_node_editor.h>
 #include <algorithm>
 #include <cmath>
 #include <functional>
@@ -42,6 +45,8 @@ using namespace Core::Literals;
 using namespace Editor;
 
 namespace {
+    constexpr const char* AngularMotionNames[]{"Free", "Limited", "Locked"};
+
     /**
      * @brief 주 축과 보조 축으로 만든 프레임 방향을 오일러 회전(도)으로 바꿉니다.
      * @param[in] Primary 프레임의 X축으로 쓰는 주 축입니다.
@@ -107,7 +112,7 @@ namespace {
         ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - ImGui::GetFrameHeight());
         ImGui::PushID(Id);
 
-        const bool Clicked{ImGui::ArrowButton("##Reset", ImGuiDir_Left)};
+        const bool Clicked{FEditorButtonWidget::Press("##Reset", EEditorButtonStyle::ArrowLeft)};
 
         ImGui::PopID();
 
@@ -156,7 +161,7 @@ namespace {
             ImGui::SetNextItemWidth(Width);
 
             // 서식에 변환 지정자가 없으면 값 대신 그 문자열이 그대로 표시되고, 값은 드래그와 직접 입력으로만 바뀐다.
-            if (ImGui::DragFloat("##Value", &Values[Component], Speed, Min, Max, Mixed[Component] ? "Multiple Values" : Format)) {
+            if (FEditorSliderWidget::EditValue("##Value", Values[Component], Min, Max, Mixed[Component] ? "Multiple Values" : Format, Speed)) {
                 Values[Component] = std::clamp(Values[Component], Min, Max);
                 Changed |= 1u << Component;
             }
@@ -414,15 +419,9 @@ FPhysicsAssetEditorToolkit::FPhysicsAssetEditorToolkit(FEditorContext* Context, 
     }
 }
 
-FPhysicsAssetEditorToolkit::~FPhysicsAssetEditorToolkit() {
-    if (mGraphEditor != nullptr) {
-        ax::NodeEditor::DestroyEditor(mGraphEditor);
-    }
-}
+FPhysicsAssetEditorToolkit::~FPhysicsAssetEditorToolkit() = default;
 
 void FPhysicsAssetEditorToolkit::DrawGraph() {
-    namespace ed = ax::NodeEditor;
-
     PhysicsRuntime::UPhysicsAsset* PhysicsAsset{GetPhysicsAsset()};
 
     if (PhysicsAsset == nullptr || mSkeleton == nullptr || mContent == nullptr || !mContent->IsReady()) {
@@ -462,15 +461,13 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     // 같은 바디가 다른 구역에도 나올 수 있으므로 구역 번호가 ID에 들어간다.
     enum EGraphId : std::uintptr_t {
         BodyNode,
+        RelatedBodyNode,
         ConstraintNode,
-        BodyPin,
-        ConstraintLeftPin,
-        ConstraintRightPin,
         LeftLink,
         RightLink
     };
     constexpr std::uintptr_t KindCount{8};
-    constexpr std::uintptr_t IndexStride{100000};
+    constexpr std::uintptr_t IndexStride{std::uintptr_t{1} << 32};
     const auto MakeId{[](EGraphId Kind, Index_t Index, Index_t Section) {
         return (static_cast<std::uintptr_t>(Section) * IndexStride + Index) * KindCount + Kind + 1;
     }};
@@ -483,10 +480,7 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     }};
 
     if (mGraphEditor == nullptr) {
-        ed::Config Config{};
-
-        Config.SettingsFile = nullptr;
-        mGraphEditor = ed::CreateEditor(&Config);
+        mGraphEditor = std::make_unique<TGL::FGraphEditor>();
     }
 
     // 중심 바디마다 별개의 구역을 만든다. 구역은 그 바디의 뼈가 양 끝 중 하나인 관절과 반대편 바디로 이루어진다.
@@ -523,118 +517,101 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     if (Relayout) {
         mGraphLaidOutFocus = Focus;
         mGraphFitFrames = 3;
+        mGraphEditor->ResetLayout();
     }
 
-    ed::SetCurrentEditor(mGraphEditor);
-    ed::Begin("PhysicsAssetGraph", ImGui::GetContentRegionAvail());
-
-    // 노드 크기(글꼴 크기에 따라 가로 약 300px, 세로 약 90px)보다 넉넉하게 간격을 둔다.
-    const float RowHeight{115.0f};
-    const float SectionGap{70.0f};
-    const float ConstraintX{270.0f};
-    const float OtherBodyX{680.0f};
-
-    // 바디 노드는 이름과 항목 수를 보여 주고, 핀은 관절과 잇는 쪽에 둔다.
-    const auto DrawBodyNode{[&](Index_t BodyIndex, Index_t Section, float X, float Y, bool PinOnRight) {
-        const PhysicsRuntime::UBodySetup& Setup{*PhysicsAsset->mSkeletalBodySetups[BodyIndex]};
-        const ed::NodeId Id{MakeId(BodyNode, BodyIndex, Section)};
-
-        if (Relayout) {
-            ed::SetNodePosition(Id, {X, Y});
-        }
-
-        ed::PushStyleColor(ed::StyleColor_NodeBg, ImColor{150, 100, 90, 230});
-        ed::BeginNode(Id);
-
-        if (!PinOnRight) {
-            ed::BeginPin(ed::PinId{MakeId(BodyPin, BodyIndex, Section)}, ed::PinKind::Output);
-            ImGui::TextUnformatted("o");
-            ed::EndPin();
-            ImGui::SameLine();
-        }
-
-        ImGui::TextUnformatted("Body");
-
-        if (PinOnRight) {
-            ImGui::SameLine();
-            ed::BeginPin(ed::PinId{MakeId(BodyPin, BodyIndex, Section)}, ed::PinKind::Output);
-            ImGui::TextUnformatted("o");
-            ed::EndPin();
-        }
-
-        ImGui::TextUnformatted(Setup.GetBoneName().c_str());
-        ImGui::Text("%zu shape(s)", PhysicsAssetEditing::GetTotalShapeCount(Setup));
-        ed::EndNode();
-        ed::PopStyleColor();
+    const ImU32 Tint{ImGui::ColorConvertFloat4ToU32(TGL::Canvas::ConnectionColor(TGL::Canvas::EConnectionRole::Relationship))};
+    const auto GetConstraintTitle{[](const PhysicsRuntime::FConstraintInstance& Instance) {
+        return Instance.mConstraintBone1 + " : " + Instance.mConstraintBone2;
     }};
+    float BodyWidth{160.0f};
+    float ConstraintWidth{160.0f};
 
-    // 그려진 노드를 모아 두고 선택 동기화에 쓴다. (바디 노드는 바디 번호, 관절 노드는 관절 번호와 함께)
+    for (Index_t Section{}; Section < Focus.size(); ++Section) {
+        const auto& Body{*PhysicsAsset->mSkeletalBodySetups[Focus[Section]]};
+        BodyWidth = std::max(BodyWidth, ImGui::CalcTextSize(Body.GetBoneName().c_str()).x + 12.0f);
+
+        for (const FGraphLink& Link : Sections[Section]) {
+            const Core::FString Title{GetConstraintTitle(PhysicsAsset->mConstraintSetup[Link.mConstraint]->mDefaultInstance)};
+            ConstraintWidth = std::max(ConstraintWidth, ImGui::CalcTextSize(Title.c_str()).x + 12.0f);
+        }
+    }
+
+    // 노드 크기보다 넉넉하게 간격을 둔다.
+    const TGL::Canvas::Style Style{};
+    const ImVec4 Padding{Style.mNodePadding};
+    const float ColumnGap{95.0f + Padding.x + Padding.z};
+    const float RowHeight{std::max(144.0f, ImGui::GetTextLineHeightWithSpacing() * 5.0f + Padding.y + Padding.w + 38.0f)};
+    const float SectionGap{70.0f};
+    const float ConstraintX{BodyWidth + ColumnGap};
+    const float OtherBodyX{ConstraintX + ConstraintWidth + ColumnGap};
+    const TGL::FPinId LeftPin{1};
+    const TGL::FPinId RightPin{2};
+    std::vector<TGL::FNodeView> Nodes{};
+    std::vector<TGL::FLinkView> Links{};
     Core::TArray<std::pair<std::uintptr_t, Index_t>> DrawnBodyNodes{};
     Core::TArray<std::pair<std::uintptr_t, Index_t>> DrawnConstraintNodes{};
+
+    // 바디 노드는 이름과 항목 수를 보여 주고, 핀은 관절과 잇는 쪽에 둔다.
+    const auto AddBodyNode{[&](Index_t BodyIndex, Index_t Section, TGL::FPoint Position, bool Center) {
+        const PhysicsRuntime::UBodySetup& Setup{*PhysicsAsset->mSkeletalBodySetups[BodyIndex]};
+        const TGL::FNodeId Id{MakeId(Center ? BodyNode : RelatedBodyNode, BodyIndex, Section)};
+        TGL::FNodeView Node{Id, Position, Setup.GetBoneName(), {}, "Body"};
+        Node.mDeletable = false;
+        Node.mPins.push_back({Center ? RightPin : LeftPin, Center ? TGL::EPinDirection::Output : TGL::EPinDirection::Input, "Constraint", "Constraint", {}, Tint});
+        Node.mProperties.push_back({"Shapes", "Shapes", static_cast<std::int64_t>(PhysicsAssetEditing::GetTotalShapeCount(Setup)), {}, true});
+        Nodes.push_back(std::move(Node));
+        DrawnBodyNodes.push_back({Id.Get(), BodyIndex});
+
+        return Id;
+    }};
+
     float SectionY{};
 
     for (Index_t Section{}; Section < Focus.size(); ++Section) {
-        const Core::TArray<FGraphLink>& Links{Sections[Section]};
-        const float CenterY{SectionY + (static_cast<float>(std::max<Index_t>(Links.size(), 1)) - 1.0f) * RowHeight * 0.5f};
-
-        DrawBodyNode(Focus[Section], Section, 0.0f, CenterY, true);
-        DrawnBodyNodes.push_back({MakeId(BodyNode, Focus[Section], Section), Focus[Section]});
-
+        const auto& SectionLinks{Sections[Section]};
+        const float CenterY{SectionY + (static_cast<float>(std::max<Index_t>(SectionLinks.size(), 1)) - 1.0f) * RowHeight * 0.5f};
+        const TGL::FNodeId Center{AddBodyNode(Focus[Section], Section, {0.0f, CenterY}, true)};
         Core::TArray<Index_t> DrawnOthers{};
 
-        for (Index_t Row{}; Row < Links.size(); ++Row) {
-            const auto [ConstraintIndex, OtherBody] = Links[Row];
-            const PhysicsRuntime::FConstraintInstance& Instance{PhysicsAsset->mConstraintSetup[ConstraintIndex]->mDefaultInstance};
-            const ed::NodeId Id{MakeId(ConstraintNode, ConstraintIndex, Section)};
+        for (Index_t Row{}; Row < SectionLinks.size(); ++Row) {
+            const auto [ConstraintIndex, OtherBody] = SectionLinks[Row];
+            const auto& Instance{PhysicsAsset->mConstraintSetup[ConstraintIndex]->mDefaultInstance};
+            const TGL::FNodeId Id{MakeId(ConstraintNode, ConstraintIndex, Section)};
             const float Y{SectionY + static_cast<float>(Row) * RowHeight};
-
-            if (Relayout) {
-                ed::SetNodePosition(Id, {ConstraintX, Y});
-            }
+            const bool FromChild{PhysicsAsset->mSkeletalBodySetups[Focus[Section]]->GetBoneName() == Instance.mConstraintBone1};
 
             // 관절 노드의 제목은 UE처럼 "자식 : 부모"이다.
-            ed::PushStyleColor(ed::StyleColor_NodeBg, ImColor{150, 140, 80, 230});
-            ed::BeginNode(Id);
-            ed::BeginPin(ed::PinId{MakeId(ConstraintLeftPin, ConstraintIndex, Section)}, ed::PinKind::Input);
-            ImGui::TextUnformatted("o");
-            ed::EndPin();
-            ImGui::SameLine();
-            ImGui::TextUnformatted("Constraint");
-            ImGui::SameLine();
-            ed::BeginPin(ed::PinId{MakeId(ConstraintRightPin, ConstraintIndex, Section)}, ed::PinKind::Output);
-            ImGui::TextUnformatted("o");
-            ed::EndPin();
-            ImGui::Text("%s : %s", Instance.mConstraintBone1.c_str(), Instance.mConstraintBone2.c_str());
-            ed::EndNode();
-            ed::PopStyleColor();
+            TGL::FNodeView Node{Id, {ConstraintX, Y}, GetConstraintTitle(Instance), {}, "Constraint"};
+            Node.mDeletable = false;
+            Node.mPins.push_back({LeftPin, TGL::EPinDirection::Input, FromChild ? "Child" : "Parent", "Constraint", {}, Tint});
+            Node.mPins.push_back({RightPin, TGL::EPinDirection::Output, FromChild ? "Parent" : "Child", "Constraint", {}, Tint});
+            Nodes.push_back(std::move(Node));
             DrawnConstraintNodes.push_back({Id.Get(), ConstraintIndex});
-
-            ed::Link(ed::LinkId{MakeId(LeftLink, ConstraintIndex, Section)}, ed::PinId{MakeId(BodyPin, Focus[Section], Section)}, ed::PinId{MakeId(ConstraintLeftPin, ConstraintIndex, Section)}, ImVec4{0.85f, 0.85f, 0.85f, 1.0f}, 2.0f);
+            Links.push_back({{MakeId(LeftLink, ConstraintIndex, Section)}, TGL::FPinRef{Center, RightPin}, TGL::FPinRef{Id, LeftPin}, {}, {}, Tint, false, false});
 
             if (!IsValidBody(OtherBody)) {
                 continue;
             }
 
             // 같은 바디에 관절이 여러 개 걸려도 구역 안에서 바디 노드는 한 번만 그린다.
-            if (std::find(DrawnOthers.begin(), DrawnOthers.end(), OtherBody) == DrawnOthers.end()) {
+            if (std::ranges::find(DrawnOthers, OtherBody) == DrawnOthers.end()) {
                 DrawnOthers.push_back(OtherBody);
-                DrawBodyNode(OtherBody, Section, OtherBodyX, Y, false);
-                DrawnBodyNodes.push_back({MakeId(BodyNode, OtherBody, Section), OtherBody});
+                AddBodyNode(OtherBody, Section, {OtherBodyX, Y}, false);
             }
 
-            ed::Link(ed::LinkId{MakeId(RightLink, ConstraintIndex, Section)}, ed::PinId{MakeId(ConstraintRightPin, ConstraintIndex, Section)}, ed::PinId{MakeId(BodyPin, OtherBody, Section)}, ImVec4{0.85f, 0.85f, 0.85f, 1.0f}, 2.0f);
+            const TGL::FNodeId Other{MakeId(RelatedBodyNode, OtherBody, Section)};
+            Links.push_back({{MakeId(RightLink, ConstraintIndex, Section)}, TGL::FPinRef{Id, RightPin}, TGL::FPinRef{Other, LeftPin}, {}, {}, Tint, false, false});
         }
 
-        SectionY += static_cast<float>(std::max<Index_t>(Links.size(), 1)) * RowHeight + SectionGap;
+        SectionY += static_cast<float>(std::max<Index_t>(SectionLinks.size(), 1)) * RowHeight + SectionGap;
     }
+
+    mGraphDocument.Replace(std::move(Nodes), std::move(Links));
 
     // 툴킷의 선택과 노드 에디터의 선택을 맞춘다. 바깥에서 선택이 바뀌면 노드를 고르고, 노드를 직접 누르면 툴킷의 선택을 바꾼다.
     // 같은 바디나 관절이 여러 구역에 그려져 있으면 모두 고른다.
     // 노드가 아닌 빈 공간을 누르면 선택을 모두 푼다. (그래프의 중심은 그대로 둔다.)
-    if (ed::IsBackgroundClicked()) {
-        ClearSelection();
-    }
-
     Core::TArray<std::uintptr_t> Ours{};
 
     for (const auto& [Id, ConstraintIndex] : DrawnConstraintNodes) {
@@ -654,22 +631,40 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     std::sort(Ours.begin(), Ours.end());
 
     if (Ours != mGraphSyncedKeys || Relayout) {
-        ed::ClearSelection();
+        std::vector<TGL::FSelectionItem> Items{};
 
         for (const std::uintptr_t Id : Ours) {
-            ed::SelectNode(ed::NodeId{Id}, true);
+            Items.emplace_back(TGL::FNodeId{Id});
         }
 
+        mGraphEditor->SetSelection(Items);
         mGraphSyncedKeys = Ours;
-    } else {
+    }
+
+    if (mGraphFitFrames > 0) {
+        mGraphEditor->Fit();
+    }
+
+    const TGL::FGraphEvents Events{mGraphEditor->Draw("PhysicsAssetGraph", mGraphDocument, mGraphSchema)};
+
+    if (!Events.mVisible) {
+        return;
+    }
+
+    if (mGraphFitFrames > 0) {
+        --mGraphFitFrames;
+    }
+
+    if (Events.mBackgroundClicked) {
+        ClearSelection();
+    } else if (Events.mSelectionChanged) {
         // 노드 에디터에서 사용자가 선택을 바꿨으면 툴킷의 선택에 반영한다. (Ctrl+클릭으로 여러 노드도 고를 수 있다.)
-        constexpr int MaxPicked{64};
-        ed::NodeId PickedNodes[MaxPicked]{};
-        const int PickedCount{ed::GetSelectedNodes(PickedNodes, MaxPicked)};
         Core::TArray<std::uintptr_t> Picked{};
 
-        for (int Index{}; Index < PickedCount; ++Index) {
-            Picked.push_back(PickedNodes[Index].Get());
+        for (const TGL::FSelectionItem& Item : mGraphEditor->GetSelection()) {
+            if (const auto* Node{std::get_if<TGL::FNodeId>(&Item)}; Node != nullptr && TGL::FindNode(mGraphDocument.ReadView(), *Node) != nullptr) {
+                Picked.push_back(Node->Get());
+            }
         }
 
         std::sort(Picked.begin(), Picked.end());
@@ -687,7 +682,7 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
 
                 DecodeId(Id, Kind, Index);
 
-                if (Kind == BodyNode && IsValidBody(Index)) {
+                if ((Kind == BodyNode || Kind == RelatedBodyNode) && IsValidBody(Index)) {
                     if (std::find(PickedBodies.begin(), PickedBodies.end(), Index) == PickedBodies.end()) {
                         PickedBodies.push_back(Index);
                     }
@@ -717,25 +712,19 @@ void FPhysicsAssetEditorToolkit::DrawGraph() {
     }
 
     // 바디 노드를 더블클릭하면 그 바디를 그래프의 새 중심 하나로 삼는다.
-    if (const std::uintptr_t Double{ed::GetDoubleClickedNode().Get()}; Double != 0) {
+    const auto* Activated{Events.mActivated ? std::get_if<TGL::FNodeId>(&*Events.mActivated) : nullptr};
+
+    if (Activated != nullptr && TGL::FindNode(mGraphDocument.ReadView(), *Activated) != nullptr) {
         std::uintptr_t Kind{};
         Index_t Index{};
 
-        DecodeId(Double, Kind, Index);
+        DecodeId(Activated->Get(), Kind, Index);
 
-        if (Kind == BodyNode && IsValidBody(Index)) {
+        if ((Kind == BodyNode || Kind == RelatedBodyNode) && IsValidBody(Index)) {
             mGraphFocus = {Index};
             SelectBody(Index, PhysicsAssetEditing::FShapeRef{}, false);
         }
     }
-
-    if (mGraphFitFrames > 0) {
-        ed::NavigateToContent(0.0f);
-        --mGraphFitFrames;
-    }
-
-    ed::End();
-    ed::SetCurrentEditor(nullptr);
 }
 
 void FPhysicsAssetEditorToolkit::UpdateEditor(float) {
@@ -1001,17 +990,16 @@ void FPhysicsAssetEditorToolkit::DrawHierarchy() {
         return;
     }
 
-    ImGui::Checkbox("Show Bodies", &mShowBodies);
+    FEditorCheckBoxWidget::EditValue("Show Bodies", mShowBodies);
 
     // 오른쪽 위의 설정 드롭다운.
     const float SettingsWidth{ImGui::CalcTextSize("Settings").x + ImGui::GetFrameHeight() + ImGui::GetStyle().FramePadding.x * 2.0f};
 
     ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - SettingsWidth));
 
-    if (ImGui::BeginCombo("##HierarchySettings", "Settings", ImGuiComboFlags_WidthFitPreview)) {
-        ImGui::Checkbox("Show All Bones", &mShowAllBones);
-        ImGui::EndCombo();
-    }
+    FEditorComboWidget::DrawPopup("##HierarchySettings", "Settings", [&]() {
+        FEditorCheckBoxWidget::EditValue("Show All Bones", mShowAllBones);
+    }, ImGuiComboFlags_WidthFitPreview);
 
     ImGui::Separator();
 
@@ -1125,29 +1113,25 @@ Asset::USkeleton* FPhysicsAssetEditorToolkit::FindDefaultSkeleton(Core::FString&
 void FPhysicsAssetEditorToolkit::DrawSkeletonPicker() {
     const char* Label{mSkeleton == nullptr ? "None" : mSkeletonPath.empty() ? "Embedded Skeleton" : mSkeletonPath.c_str()};
 
-    if (!ImGui::BeginCombo("Skeleton", Label)) {
-        return;
-    }
-
     Asset::FAssetManager* Assets{mContext->GetProject()->GetAssets()};
     Core::FString Error{};
     Core::FString SelectedPath{};
     bool Selected{};
 
-    for (const auto& Candidate : Assets->GetAssetPaths(Error)) {
-        Asset::EAssetType Type{};
+    FEditorComboWidget::DrawPopup("Skeleton", Label, [&]() {
+        for (const auto& Candidate : Assets->GetAssetPaths(Error)) {
+            Asset::EAssetType Type{};
 
-        if (Asset::FAssetFile::GetType(Assets->ResolvePath(Candidate, Error), Type, Error) && Type == Asset::EAssetType::Skeleton) {
-            const Core::FString Relative{Core::FilePath::ToGenericUtf8(Candidate)};
+            if (Asset::FAssetFile::GetType(Assets->ResolvePath(Candidate, Error), Type, Error) && Type == Asset::EAssetType::Skeleton) {
+                const Core::FString Relative{Core::FilePath::ToGenericUtf8(Candidate)};
 
-            if (ImGui::Selectable(Relative.c_str(), Relative == mSkeletonPath)) {
-                SelectedPath = Relative;
-                Selected = true;
+                if (FEditorButtonWidget::Press(Relative.c_str(), EEditorButtonStyle::Selectable, Relative == mSkeletonPath)) {
+                    SelectedPath = Relative;
+                    Selected = true;
+                }
             }
         }
-    }
-
-    ImGui::EndCombo();
+    });
 
     if (!Selected || SelectedPath == mSkeletonPath) {
         return;
@@ -1179,13 +1163,13 @@ void FPhysicsAssetEditorToolkit::DrawViewport() {
         return;
     }
 
-    if (EditorStyle::Button("Reset View")) {
+    if (FEditorButtonWidget::Press("Reset View")) {
         mNeedsFrame = true;
     }
 
     ImGui::SameLine();
 
-    if (EditorStyle::Button(mSimulating ? "Stop" : "Simulate")) {
+    if (FEditorButtonWidget::Press(mSimulating ? "Stop" : "Simulate")) {
         if (mSimulating) {
             StopSimulation();
         } else {
@@ -1196,14 +1180,14 @@ void FPhysicsAssetEditorToolkit::DrawViewport() {
     if (mSimulating) {
         ImGui::SameLine();
 
-        if (EditorStyle::Button("Restart")) {
+        if (FEditorButtonWidget::Press("Restart")) {
             StartSimulation();
         }
     }
 
     ImGui::SameLine();
 
-    if (EditorStyle::Button(mDirty ? "Save *" : "Save")) {
+    if (FEditorButtonWidget::Press(mDirty ? "Save *" : "Save")) {
         SaveAsset();
     }
 
@@ -1556,7 +1540,7 @@ void FPhysicsAssetEditorToolkit::DrawDetails() {
     if (!mPhysicsAssetPath.empty() && mMesh != nullptr && mMesh->GetPhysicsAssetPath() != mPhysicsAssetPath) {
         ImGui::BeginDisabled(mDirty);
 
-        if (ImGui::Button("Assign To Mesh")) {
+        if (FEditorButtonWidget::Press("Assign To Mesh")) {
             AssignToMesh();
         }
 
@@ -1616,7 +1600,7 @@ void FPhysicsAssetEditorToolkit::DrawConstraintEditor() {
 
     ImGui::Text("%s -> %s", Constraint.mConstraintBone1.c_str(), Constraint.mConstraintBone2.c_str());
 
-    if (ImGui::Button("Delete Constraint")) {
+    if (FEditorButtonWidget::Press("Delete Constraint")) {
         Component->DestroyPhysicsState();
         PhysicsAssetEditing::DeleteConstraint(*PhysicsAsset, mSelectedConstraint);
         mSelectedConstraint = InvalidIndex;
@@ -1636,7 +1620,7 @@ void FPhysicsAssetEditorToolkit::DrawConstraintEditor() {
 
         ImGui::PushID(Label);
 
-        if (ImGui::Combo(Label, &Mode, "Free\0Limited\0Locked\0")) {
+        if (FEditorComboWidget::EditIndex(Label, Mode, AngularMotionNames)) {
             Motion = static_cast<PhysicsRuntime::EAngularConstraintMotion>(Mode);
             Changed = true;
         }
@@ -1649,7 +1633,7 @@ void FPhysicsAssetEditorToolkit::DrawConstraintEditor() {
         if (Motion == PhysicsRuntime::EAngularConstraintMotion::Limited) {
             float LimitDegrees{Core::Math::ToDegrees(Limit)};
 
-            if (ImGui::DragFloat("Limit (deg)", &LimitDegrees, 0.5f, 0.0f, 180.0f, "%.1f")) {
+            if (FEditorSliderWidget::EditValue("Limit (deg)", LimitDegrees, 0.0f, 180.0f, "%.1f", 0.5f)) {
                 Limit = LimitDegrees * 1_deg;
                 Changed = true;
             }
@@ -1667,8 +1651,9 @@ void FPhysicsAssetEditorToolkit::DrawConstraintEditor() {
     const auto EditLinear{[&Changed](const char* Label, PhysicsRuntime::ELinearConstraintMotion& Motion, PhysicsRuntime::ELinearConstraintMotion DefaultMotion) {
         int Mode{Motion == PhysicsRuntime::ELinearConstraintMotion::Free ? 0 : 1};
         const bool DefaultFree{DefaultMotion == PhysicsRuntime::ELinearConstraintMotion::Free};
+        constexpr const char* MotionNames[]{"Free", "Locked"};
 
-        if (ImGui::Combo(Label, &Mode, "Free\0Locked\0")) {
+        if (FEditorComboWidget::EditIndex(Label, Mode, MotionNames)) {
             Motion = Mode == 0 ? PhysicsRuntime::ELinearConstraintMotion::Free : PhysicsRuntime::ELinearConstraintMotion::Locked;
             Changed = true;
         }
@@ -1689,7 +1674,7 @@ void FPhysicsAssetEditorToolkit::DrawConstraintEditor() {
     const auto EditPosition{[&Changed](const char* Label, FVector& Value, const FVector& Default) {
         float Fields[3]{Value.x, Value.y, Value.z};
 
-        if (ImGui::DragFloat3(Label, Fields, 0.001f, -100.0f, 100.0f, "%.4f")) {
+        if (FEditorSliderWidget::EditValue(Label, Fields, -100.0f, 100.0f, "%.4f", 0.001f)) {
             Value = FVector{Fields[0], Fields[1], Fields[2]};
             Changed = true;
         }
@@ -1704,7 +1689,7 @@ void FPhysicsAssetEditorToolkit::DrawConstraintEditor() {
     const auto EditRotation{[&Changed](FRotator& Rotation, FVector& Primary, FVector& Secondary, const FVector& DefaultPrimary, const FVector& DefaultSecondary) {
         float Fields[3]{Rotation.pitch, Rotation.yaw, Rotation.roll};
 
-        if (ImGui::DragFloat3("Rotation (P/Y/R)", Fields, 0.5f, -360.0f, 360.0f, "%.1f")) {
+        if (FEditorSliderWidget::EditValue("Rotation (P/Y/R)", Fields, -360.0f, 360.0f, "%.1f", 0.5f)) {
             Rotation = FRotator{Fields[0], Fields[1], Fields[2]};
 
             const FQuat Quaternion{Rotation.Quaternion()};
@@ -2079,7 +2064,7 @@ void FPhysicsAssetEditorToolkit::DrawCollisionPairs() {
             ImGui::TextUnformatted(Partner->c_str());
             ImGui::SameLine();
 
-            if (ImGui::SmallButton("Enable collision")) {
+            if (FEditorButtonWidget::Press("Enable collision", EEditorButtonStyle::Small)) {
                 ToEnable = *Partner;
             }
 
@@ -2093,25 +2078,23 @@ void FPhysicsAssetEditorToolkit::DrawCollisionPairs() {
         }
 
         // 충돌을 끌 상대 추가
-        if (ImGui::BeginCombo("Disable collision with", "Select a body...")) {
+        FEditorComboWidget::DrawPopup("Disable collision with", "Select a body...", [&]() {
             for (const auto& Other : PhysicsAsset->mSkeletalBodySetups) {
                 if (Other == nullptr || Other->GetBoneName() == Bone || PhysicsAsset->IsCollisionDisabled(Bone, Other->GetBoneName())) {
                     continue;
                 }
 
-                if (ImGui::Selectable(Other->GetBoneName().c_str())) {
+                if (FEditorButtonWidget::Press(Other->GetBoneName().c_str(), EEditorButtonStyle::Selectable)) {
                     Component->DestroyPhysicsState();
                     PhysicsAsset->SetCollisionDisabled(Bone, Other->GetBoneName(), true);
                     ApplyEdit();
                 }
             }
-
-            ImGui::EndCombo();
-        }
+        });
     } else if (SelectedBones.size() >= 2) {
         // 선택한 바디 사이의 모든 쌍을 한 번에 끄거나 켠다.
         for (const bool Disable : {true, false}) {
-            if (Disable ? ImGui::Button("Disable Collision Between Selected") : ImGui::Button("Enable Collision Between Selected")) {
+            if (FEditorButtonWidget::Press(Disable ? "Disable Collision Between Selected" : "Enable Collision Between Selected")) {
                 Component->DestroyPhysicsState();
 
                 for (Index_t First{}; First < SelectedBones.size(); ++First) {
@@ -2132,7 +2115,7 @@ void FPhysicsAssetEditorToolkit::DrawCollisionPairs() {
     // 현재 자세에서 겹치는데 이어져 있지 않은 쌍을 자동으로 끈다. 시뮬레이션 전 기준 자세에서 실행한다.
     ImGui::BeginDisabled(mSimulating || mContent == nullptr || mContent->GetWorld() == nullptr || mContent->GetWorld()->GetPhysicsScene() == nullptr);
 
-    if (ImGui::Button("Auto-Disable Overlapping Pairs")) {
+    if (FEditorButtonWidget::Press("Auto-Disable Overlapping Pairs")) {
         Core::TArray<std::pair<Index_t, Index_t>> Overlaps{};
 
         PhysicsAssetEditing::FindOverlappingBodyPairs(*mContent->GetWorld()->GetPhysicsScene(), Overlaps);
@@ -2182,7 +2165,7 @@ void FPhysicsAssetEditorToolkit::DrawCollisionPairs() {
     ImGui::EndDisabled();
     ImGui::SameLine();
 
-    if (ImGui::Button("Clear All Pairs") && !PhysicsAsset->mCollisionDisabledPairs.empty()) {
+    if (FEditorButtonWidget::Press("Clear All Pairs") && !PhysicsAsset->mCollisionDisabledPairs.empty()) {
         Component->DestroyPhysicsState();
         PhysicsAsset->mCollisionDisabledPairs.clear();
         mCollisionMessage = "Cleared all disabled pairs.";
@@ -2224,7 +2207,7 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
         }
 
         // 선택한 뼈에 바디가 없으면 정점 분포에 맞춘 기본 캡슐 바디를 추가할 수 있다.
-        if (ImGui::Button("Add Body To Bone")) {
+        if (FEditorButtonWidget::Press("Add Body To Bone")) {
             Component->DestroyPhysicsState();
 
             const Index_t NewBody{PhysicsAssetEditing::AddBodyForBone(*PhysicsAsset, *mMesh, *mSkeleton, mSelectedBone)};
@@ -2254,7 +2237,7 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
         ImGui::TextWrapped("%s%s", Names.c_str(), Count > 4 ? ", ..." : "");
     }
 
-    if (ImGui::Button(Count == 1 ? "Delete Body" : "Delete Bodies")) {
+    if (FEditorButtonWidget::Press(Count == 1 ? "Delete Body" : "Delete Bodies")) {
         // 바디를 지우면 그 뼈를 잇던 관절 설정도 함께 지워지고 번호가 당겨지므로, 큰 번호부터 지우고 선택을 해제한다.
         Component->DestroyPhysicsState();
         std::sort(BodyIndices.begin(), BodyIndices.end(), std::greater<Index_t>{});
@@ -2272,7 +2255,7 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
 
     // 관절이 없는 바디 하나를 골랐으면 바디가 있는 가장 가까운 조상과 잇는 관절을 추가할 수 있다. 추가하면 그 관절이 선택된다.
     if (Count == 1 && mSelectedBone != InvalidIndex && PhysicsAsset->FindConstraintIndex(Setups.front()->GetBoneName()) == InvalidIndex) {
-        if (ImGui::Button("Add Constraint To Parent Body")) {
+        if (FEditorButtonWidget::Press("Add Constraint To Parent Body")) {
             Component->DestroyPhysicsState();
 
             const Index_t NewIndex{PhysicsAssetEditing::AddConstraintForBone(*PhysicsAsset, *mSkeleton, mSelectedBone)};
@@ -2296,9 +2279,9 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
         })};
         constexpr const char* TypeNames[]{"Kinematic", "Dynamic"};
 
-        if (ImGui::BeginCombo("Physics Type", MixedValue ? "Multiple Values" : TypeNames[First ? 1 : 0])) {
+        FEditorComboWidget::DrawPopup("Physics Type", MixedValue ? "Multiple Values" : TypeNames[First ? 1 : 0], [&]() {
             for (int Type{}; Type < 2; ++Type) {
-                if (ImGui::Selectable(TypeNames[Type], !MixedValue && (Type == 1) == First)) {
+                if (FEditorButtonWidget::Press(TypeNames[Type], EEditorButtonStyle::Selectable, !MixedValue && (Type == 1) == First)) {
                     Component->DestroyPhysicsState();
 
                     for (PhysicsRuntime::UBodySetup* Setup : Setups) {
@@ -2308,9 +2291,7 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
                     ApplyEdit();
                 }
             }
-
-            ImGui::EndCombo();
-        }
+        });
 
         // 기준(마지막으로 저장하거나 연 시점)의 값과 다르면 되돌리는 화살표를 보인다. 기준에 없는 바디는 Dynamic이 기본이다.
         const auto BaselineSimulate{[this](const PhysicsRuntime::UBodySetup* Setup) {
@@ -2342,9 +2323,9 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
         })};
         constexpr const char* CollisionNames[]{"Disabled", "Enabled"};
 
-        if (ImGui::BeginCombo("Collision", MixedCollision ? "Multiple Values" : CollisionNames[FirstEnabled ? 1 : 0])) {
+        FEditorComboWidget::DrawPopup("Collision", MixedCollision ? "Multiple Values" : CollisionNames[FirstEnabled ? 1 : 0], [&]() {
             for (int Value{}; Value < 2; ++Value) {
-                if (ImGui::Selectable(CollisionNames[Value], !MixedCollision && (Value == 1) == FirstEnabled)) {
+                if (FEditorButtonWidget::Press(CollisionNames[Value], EEditorButtonStyle::Selectable, !MixedCollision && (Value == 1) == FirstEnabled)) {
                     Component->DestroyPhysicsState();
 
                     for (PhysicsRuntime::UBodySetup* Setup : Setups) {
@@ -2354,9 +2335,7 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
                     ApplyEdit();
                 }
             }
-
-            ImGui::EndCombo();
-        }
+        });
 
         const auto BaselineCollision{[this](const PhysicsRuntime::UBodySetup* Setup) {
             const FBaselineBody* Body{FindBaselineBody(Setup->GetBoneName())};
@@ -2464,7 +2443,7 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
     for (const auto& [Label, Type] : {std::pair{"Sphere", PhysicsAssetEditing::EShapeType::Sphere}, std::pair{"Box", PhysicsAssetEditing::EShapeType::Box}, std::pair{"Capsule", PhysicsAssetEditing::EShapeType::Sphyl}}) {
         ImGui::SameLine();
 
-        if (ImGui::Button(Label)) {
+        if (FEditorButtonWidget::Press(Label)) {
             Component->DestroyPhysicsState();
 
             // 바디마다 새 항목은 맨 뒤에 붙는다. 대표 바디의 새 항목을 선택한다.
@@ -2519,7 +2498,7 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
 
             RowLabel += "##Shape" + std::to_string(static_cast<int>(Type)) + "_" + std::to_string(Index);
 
-            if (ImGui::Selectable(RowLabel.c_str(), IsSelected)) {
+            if (FEditorButtonWidget::Press(RowLabel.c_str(), EEditorButtonStyle::Selectable, IsSelected)) {
                 mSelectedShape = PhysicsAssetEditing::FShapeRef{Type, Index};
             }
         }
@@ -2551,7 +2530,7 @@ void FPhysicsAssetEditorToolkit::DrawBodyEditor() {
 
     ImGui::BeginDisabled(std::none_of(Setups.begin(), Setups.end(), CanDelete));
 
-    if (ImGui::Button("Delete Shape")) {
+    if (FEditorButtonWidget::Press("Delete Shape")) {
         Component->DestroyPhysicsState();
 
         for (PhysicsRuntime::UBodySetup* Setup : Setups) {
@@ -2586,27 +2565,28 @@ void FPhysicsAssetEditorToolkit::DrawRegenerate() {
         }
     }
 
-    if (ImGui::Combo("Primitive", &Geom, GeomNames, 3)) {
+    if (FEditorComboWidget::EditIndex("Primitive", Geom, GeomNames)) {
         mRegenParams.mGeomType = GeomTypes[Geom];
     }
 
+    constexpr const char* WeightNames[]{"Any", "Dominant"};
     int Weight{mRegenParams.mVertWeight == Asset::EPhysAssetFitVertWeight::AnyWeight ? 0 : 1};
 
-    if (ImGui::Combo("Vertex Weight", &Weight, "Any\0Dominant\0")) {
+    if (FEditorComboWidget::EditIndex("Vertex Weight", Weight, WeightNames)) {
         mRegenParams.mVertWeight = Weight == 0 ? Asset::EPhysAssetFitVertWeight::AnyWeight : Asset::EPhysAssetFitVertWeight::DominantWeight;
     }
 
-    ImGui::DragFloat("Min Bone Size", &mRegenParams.mMinBoneSize, 0.005f, 0.0f, 10.0f, "%.3f");
-    ImGui::Checkbox("Create Constraints", &mRegenParams.mCreateConstraints);
-    ImGui::Checkbox("Body For All Bones", &mRegenParams.mBodyForAll);
+    FEditorSliderWidget::EditValue("Min Bone Size", mRegenParams.mMinBoneSize, 0.0f, 10.0f, "%.3f", 0.005f);
+    FEditorCheckBoxWidget::EditValue("Create Constraints", mRegenParams.mCreateConstraints);
+    FEditorCheckBoxWidget::EditValue("Body For All Bones", mRegenParams.mBodyForAll);
 
     int Angular{static_cast<int>(mRegenParams.mAngularConstraintMode)};
 
-    if (ImGui::Combo("Angular Motion", &Angular, "Free\0Limited\0Locked\0")) {
+    if (FEditorComboWidget::EditIndex("Angular Motion", Angular, AngularMotionNames)) {
         mRegenParams.mAngularConstraintMode = static_cast<PhysicsRuntime::EAngularConstraintMotion>(Angular);
     }
 
-    if (ImGui::Button("Regenerate...")) {
+    if (FEditorButtonWidget::Press("Regenerate...")) {
         mOpenRegeneratePopup = true;
     }
 
@@ -2619,7 +2599,7 @@ void FPhysicsAssetEditorToolkit::DrawRegenerate() {
         ImGui::TextUnformatted("All bodies, shapes and constraints will be replaced.");
         ImGui::TextUnformatted("This cannot be undone.");
 
-        if (ImGui::Button("Regenerate")) {
+        if (FEditorButtonWidget::Press("Regenerate")) {
             Engine::USkeletalMeshComponent* Component{mContent != nullptr ? mContent->GetComponent() : nullptr};
 
             if (Component != nullptr) {
@@ -2640,7 +2620,7 @@ void FPhysicsAssetEditorToolkit::DrawRegenerate() {
 
         ImGui::SameLine();
 
-        if (ImGui::Button("Cancel")) {
+        if (FEditorButtonWidget::Press("Cancel")) {
             ImGui::CloseCurrentPopup();
         }
 
@@ -2988,14 +2968,14 @@ bool FPhysicsAssetEditorToolkit::UpdateGizmo(const Engine::FSceneView& View, con
 }
 
 void FPhysicsAssetEditorToolkit::DrawViewportToolbar() {
-    if (ImGui::RadioButton("Move (W)", mGizmoMode == Editor::EGizmoMode::Translate)) {
+    if (FEditorButtonWidget::Press("Move (W)", EEditorButtonStyle::Radio, mGizmoMode == Editor::EGizmoMode::Translate)) {
         mGizmo.EndDrag();
         mGizmoMode = Editor::EGizmoMode::Translate;
     }
 
     ImGui::SameLine();
 
-    if (ImGui::RadioButton("Rotate (E)", mGizmoMode == Editor::EGizmoMode::Rotate)) {
+    if (FEditorButtonWidget::Press("Rotate (E)", EEditorButtonStyle::Radio, mGizmoMode == Editor::EGizmoMode::Rotate)) {
         mGizmo.EndDrag();
         mGizmoMode = Editor::EGizmoMode::Rotate;
     }
@@ -3003,11 +2983,12 @@ void FPhysicsAssetEditorToolkit::DrawViewportToolbar() {
     ImGui::SameLine();
 
     // World: 월드 축 / Bone: 뼈의 축(Details 필드의 X, Y, Z와 같은 방향) / Local: 형상이나 관절 프레임 자체의 축.
+    constexpr const char* SpaceNames[]{"World", "Bone", "Local"};
     int Space{static_cast<int>(mGizmoAxes)};
 
     ImGui::SetNextItemWidth(90.0f * ImGui::GetStyle().FontScaleMain);
 
-    if (ImGui::Combo("##GizmoSpace", &Space, "World\0Bone\0Local\0")) {
+    if (FEditorComboWidget::EditIndex("##GizmoSpace", Space, SpaceNames)) {
         mGizmoAxes = static_cast<EGizmoAxes>(std::clamp(Space, 0, 2));
     }
 
@@ -3021,14 +3002,14 @@ void FPhysicsAssetEditorToolkit::DrawViewportToolbar() {
     if (PhysicsAsset != nullptr && mSelectedConstraint < PhysicsAsset->mConstraintSetup.size() && PhysicsAsset->mConstraintSetup[mSelectedConstraint] != nullptr) {
         ImGui::SameLine();
 
-        if (ImGui::RadioButton("Frame 1", mGizmoConstraintFrame == 0)) {
+        if (FEditorButtonWidget::Press("Frame 1", EEditorButtonStyle::Radio, mGizmoConstraintFrame == 0)) {
             mGizmo.EndDrag();
             mGizmoConstraintFrame = 0;
         }
 
         ImGui::SameLine();
 
-        if (ImGui::RadioButton("Frame 2", mGizmoConstraintFrame == 1)) {
+        if (FEditorButtonWidget::Press("Frame 2", EEditorButtonStyle::Radio, mGizmoConstraintFrame == 1)) {
             mGizmo.EndDrag();
             mGizmoConstraintFrame = 1;
         }
@@ -3052,37 +3033,35 @@ void FPhysicsAssetEditorToolkit::DrawViewportToolbar() {
 
     ImGui::SetNextItemWidth(120.0f * ImGui::GetStyle().FontScaleMain);
 
-    if (ImGui::BeginCombo("##ViewMode", CurrentName)) {
+    FEditorComboWidget::DrawPopup("##ViewMode", CurrentName, [&]() {
         for (const FViewModeEntry& Entry : ViewModes) {
-            if (ImGui::Selectable(Entry.mName, Entry.mMode == mViewMode)) {
+            if (FEditorButtonWidget::Press(Entry.mName, EEditorButtonStyle::Selectable, Entry.mMode == mViewMode)) {
                 mViewMode = Entry.mMode;
             }
         }
-
-        ImGui::EndCombo();
-    }
+    });
 
     ImGui::SameLine();
 
-    if (ImGui::Button("Show")) {
+    if (FEditorButtonWidget::Press("Show")) {
         ImGui::OpenPopup("##ShowFlags");
     }
 
     if (ImGui::BeginPopup("##ShowFlags")) {
         Engine::FEngineShowFlags& Flags{mViewer.GetShowFlags()};
 
-        ImGui::Checkbox("Show Bodies", &mShowBodies);
-        ImGui::Checkbox("Grid", &Flags.mGrid);
-        ImGui::Checkbox("World Axes", &Flags.mAxes);
-        ImGui::Checkbox("Sky", &Flags.mSky);
-        ImGui::Checkbox("Shadows", &Flags.mShadows);
-        ImGui::Checkbox("FXAA", &Flags.mFXAA);
+        FEditorCheckBoxWidget::EditValue("Show Bodies", mShowBodies);
+        FEditorCheckBoxWidget::EditValue("Grid", Flags.mGrid);
+        FEditorCheckBoxWidget::EditValue("World Axes", Flags.mAxes);
+        FEditorCheckBoxWidget::EditValue("Sky", Flags.mSky);
+        FEditorCheckBoxWidget::EditValue("Shadows", Flags.mShadows);
+        FEditorCheckBoxWidget::EditValue("FXAA", Flags.mFXAA);
         ImGui::EndPopup();
     }
 
     ImGui::SameLine();
 
-    if (ImGui::Button("Gizmo")) {
+    if (FEditorButtonWidget::Press("Gizmo")) {
         ImGui::OpenPopup("##GizmoSettings");
     }
 
@@ -3092,21 +3071,21 @@ void FPhysicsAssetEditorToolkit::DrawViewportToolbar() {
         float RotationStep{Core::Math::ToDegrees(Settings.mRotationStep)};
         bool Changed{};
 
-        Changed |= ImGui::Checkbox("Translation Snap", &Settings.mTranslationSnap);
+        Changed |= FEditorCheckBoxWidget::EditValue("Translation Snap", Settings.mTranslationSnap);
 
-        if (ImGui::DragFloat("Step (m)", &TranslationStep, 0.001f, 0.001f, 10.0f, "%.3f")) {
+        if (FEditorSliderWidget::EditValue("Step (m)", TranslationStep, 0.001f, 10.0f, "%.3f", 0.001f)) {
             Settings.mTranslationStep = TranslationStep * 1_m;
             Changed = true;
         }
 
-        Changed |= ImGui::Checkbox("Rotation Snap", &Settings.mRotationSnap);
+        Changed |= FEditorCheckBoxWidget::EditValue("Rotation Snap", Settings.mRotationSnap);
 
-        if (ImGui::DragFloat("Step (deg)", &RotationStep, 0.5f, 0.5f, 90.0f, "%.1f")) {
+        if (FEditorSliderWidget::EditValue("Step (deg)", RotationStep, 0.5f, 90.0f, "%.1f", 0.5f)) {
             Settings.mRotationStep = RotationStep * 1_deg;
             Changed = true;
         }
 
-        Changed |= ImGui::SliderFloat("Size", &Settings.mSize, 0.5f, 2.0f, "%.2f");
+        Changed |= FEditorSliderWidget::EditValue("Size", Settings.mSize, 0.5f, 2.0f, "%.2f");
 
         if (Changed) {
             mGizmo.SetSettings(Settings);

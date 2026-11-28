@@ -451,7 +451,7 @@ namespace Asset {
          * @param Path 처리할 에셋 또는 파일 경로입니다.
          * @param PhysicsAsset 호출자가 수명을 보장하는 물리 에셋입니다.
          * @param Error 실패 원인을 기록할 출력 문자열입니다.
-         * @return 저장에 성공하면 true이며 실패 원인은 Error에 기록합니다.
+         * @return 저장에 성공하면 
          */
         bool SavePhysicsAsset(const std::filesystem::path& Path, const PhysicsRuntime::UPhysicsAsset& PhysicsAsset, Core::FString& Error);
 
@@ -477,6 +477,7 @@ namespace Asset {
          * @return 요청한 처리를 완료하면 true, 실패하면 false입니다.
          */
         bool SaveTexture(const std::filesystem::path& Path, const Asset::UTexture2D& Texture, Core::FString& Error);
+        bool SaveTexture(const std::filesystem::path& Path, Asset::UTexture2D& Texture, Asset::UTexture2D& Updated, Core::FString& Error);
 
         /**
          * @brief 기본 임포트 옵션으로 외부 에셋을 새 폴더에 가져오고 생성한 에셋 경로를 반환합니다.

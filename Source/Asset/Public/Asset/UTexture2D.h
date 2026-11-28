@@ -24,6 +24,7 @@ namespace DirectX {
 }
 
 namespace Asset {
+    class FAssetManager;
 
     /**
      * @brief 2차원 텍스처의 CPU 픽셀과 Direct3D 리소스 관리를 담당합니다.
@@ -81,6 +82,8 @@ namespace Asset {
          * @return 객체가 보유한 데이터의 참조이며 소유 객체의 수명 동안 유효합니다.
          */
         const Core::TArray<Uint8>& GetDDSData() const;
+        const Core::FString& GetEditorLayerData() const;
+        void SetEditorLayerData(Core::FString Data);
 
         /**
          * @brief 크기·형식·용도·색 공간을 검증하여 텍스처 생성 구성을 설정합니다.
@@ -222,6 +225,10 @@ namespace Asset {
         std::size_t GetResourceBytes() const;
 
     private:
+        friend class Asset::FAssetManager;
+
+        void SwapImageData(Asset::UTexture2D& Other);
+
         /**
          * @brief DirectX 이미지에서 지원 형식의 픽셀과 DDS 데이터를 구성합니다.
          * @param[in,out] SourceImage 변환하거나 복사할 원본 DirectX 이미지입니다.
@@ -335,6 +342,7 @@ namespace Asset {
          * @brief 밉 레벨과 형식을 유지하기 위해 보존한 DDS 이미지 바이트입니다.
          */
         Core::TArray<Uint8> mDDSData{};
+        Core::FString mEditorLayerData{};
 
         /**
          * @brief 픽셀을 sRGB 색 공간으로 해석하는지 나타냅니다.

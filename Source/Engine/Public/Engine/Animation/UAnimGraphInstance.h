@@ -108,6 +108,11 @@ namespace Engine {
          * @return 인스턴스가 보관하는 경로의 읽기 전용 참조입니다.
          */
         const Core::FString& GetAnimGraph() const;
+        /**
+         * @brief 이 인스턴스가 실행 그래프를 구성할 때 읽은 에셋 리비전을 조회합니다.
+         * @return 현재 실행 그래프에 대응하는 소스 리비전입니다. 원본이 연결되기 전에는 기본 리비전을 반환합니다.
+         */
+        Core::FRevision GetCompiledGraphRevision() const;
 
         /**
          * @brief 실행할 애니메이션 그래프 경로를 지정하고 그래프를 재구성합니다.

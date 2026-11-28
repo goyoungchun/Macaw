@@ -102,12 +102,6 @@ namespace Engine {
          * @return 현재 장면에 등록된 프리미티브 개수입니다.
          */
         virtual std::size_t GetPrimitiveCount() const = 0;
-
-        /**
-         * @brief 프리미티브 추가, 제거 또는 변환 갱신 시 증가하는 장면 개정 번호를 반환합니다.
-         * @return 프리미티브 추가, 제거 또는 변환 갱신 시 증가하는 장면 개정 번호입니다.
-         */
-        virtual Uint64 GetRevision() const = 0;
     };
 
 }

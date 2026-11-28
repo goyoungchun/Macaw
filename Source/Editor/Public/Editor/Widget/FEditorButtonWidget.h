@@ -10,7 +10,11 @@ namespace Editor {
         Normal,
         Small,
         Icon,
-        Label
+        Label,
+        Radio,
+        ArrowLeft,
+        Selectable,
+        MenuItem
     };
 
     class FEditorButtonWidget final : public Editor::FEditorWidget {
@@ -19,6 +23,8 @@ namespace Editor {
         ~FEditorButtonWidget() override;
 
     public:
+        static bool Press(const char* Label, Editor::EEditorButtonStyle Style = Editor::EEditorButtonStyle::Normal, bool Selected = false, bool Enabled = true);
+
         void SetLabel(Core::FString Label);
         void SetIcon(Editor::EEditorIcon Icon);
         void SetStyle(Editor::EEditorButtonStyle Style);

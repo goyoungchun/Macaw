@@ -23,6 +23,8 @@
 #include "Engine/Particles/ParticleAssets.h"
 #include "Serialization/JsonArchive.h"
 #include "Asset/UMaterial.h"
+#include "Asset/UTexture2D.h"
+#include "RenderCore/IRendererModule.h"
 #include "RenderCore/Shader/UShader.h"
 #include "CoreUObject/Reflection/NewObject.h"
 #include "Viewer/FAssetViewer.h"
@@ -36,8 +38,10 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstring>
 #include <format>
 #include <fstream>
+#include <new>
 #include <string_view>
 
 using namespace Editor;
@@ -49,6 +53,7 @@ namespace {
 
     constexpr char ContentMovePayload[]{"MacawContentMove"};
     constexpr float CutContentOpacity{0.65f};
+    constexpr int MaximumImageDimension{D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION};
 
     bool IsShaderSource(const std::filesystem::path& Path) {
         const auto Extension{Core::FilePath::ToLowerExtension(Path)};
@@ -277,6 +282,13 @@ void FContentBrowserWidget::DrawContent() {
         mRefreshContent = true;
     }
 
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!mContext->CanEditWorld() || mContentDirectory.has_root_directory());
+    if (EditorStyle::SmallButton("New Image")) {
+        BeginNewImage(mContentDirectory);
+    }
+    ImGui::EndDisabled();
+
     ImGui::Separator();
     DrawContentBreadcrumbs();
     ImGui::SetNextItemWidth(120.0f);
@@ -355,6 +367,7 @@ void FContentBrowserWidget::DrawContent() {
 
     DrawContentClipboardShortcuts(FolderPaneFocused);
     DrawContentActionPopup();
+    DrawNewImagePopup();
 }
 
 void FContentBrowserWidget::DrawContentClipboardShortcuts(bool FolderPaneFocused) {
@@ -1144,6 +1157,10 @@ void FContentBrowserWidget::DrawContentContextMenu(const std::filesystem::path& 
 
     if (ImGui::MenuItem("New Material", nullptr, false, CanEdit)) {
         CreateMaterial();
+    }
+
+    if (ImGui::MenuItem("New Image", nullptr, false, CanEdit && !PasteDirectory.has_root_directory())) {
+        BeginNewImage(PasteDirectory);
     }
 
     if (ImGui::MenuItem("New Blend Space 1D", nullptr, false, CanEdit)) {
@@ -1940,6 +1957,147 @@ void FContentBrowserWidget::CreateMaterialIn(const std::filesystem::path& Direct
     mSelectedContentPath = Path;
 
     mAssetEditors.OpenContentAsset(Path, Asset::EAssetType::Material);
+}
+
+void FContentBrowserWidget::BeginNewImage(const std::filesystem::path& Directory) {
+    mNewImage = {};
+    mNewImage.mDirectory = Directory;
+    constexpr char DefaultName[]{"NewImage"};
+    std::copy(std::begin(DefaultName), std::end(DefaultName), mNewImage.mName.begin());
+    mOpenNewImage = true;
+}
+
+void FContentBrowserWidget::DrawNewImagePopup() {
+    constexpr const char* Popup{"New Image###CreateContentImage"};
+    if (mOpenNewImage) {
+        ImGui::OpenPopup(Popup);
+        mOpenNewImage = false;
+    }
+    if (!ImGui::IsPopupOpen(Popup)) {
+        return;
+    }
+
+    const float PreferredWidth{ImGui::GetFontSize() * 24.0f};
+    const float AvailableWidth{ImGui::GetWindowViewport()->WorkSize.x - 2.0f * ImGui::GetStyle().DisplaySafeAreaPadding.x};
+    const float DialogWidth{AvailableWidth > 0.0f ? std::min(PreferredWidth, AvailableWidth) : PreferredWidth};
+    ImGui::SetNextWindowSize({DialogWidth, 0.0f}, ImGuiCond_Always);
+    if (!ImGui::BeginPopupModal(Popup, nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+        return;
+    }
+
+    const Core::FString Directory{Core::FilePath::ToGenericUtf8(std::filesystem::path{L"Content"} / mNewImage.mDirectory)};
+    ImGui::TextWrapped("%s", Directory.c_str());
+    EditorStyle::DrawFieldLabel("Name");
+    if (ImGui::IsWindowAppearing()) {
+        ImGui::SetKeyboardFocusHere();
+    }
+    const bool Confirmed{ImGui::InputText("##ImageName", mNewImage.mName.data(), mNewImage.mName.size(), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue)};
+    EditorStyle::DrawFieldLabel("Width (px)");
+    ImGui::InputInt("##ImageWidth", &mNewImage.mWidth, 1, 64);
+    EditorStyle::DrawFieldLabel("Height (px)");
+    ImGui::InputInt("##ImageHeight", &mNewImage.mHeight, 1, 64);
+    EditorStyle::DrawFieldLabel("Background");
+    ImGui::Combo("##ImageBackground", &mNewImage.mBackground, "Transparent\0White\0Black\0Custom\0");
+    if (mNewImage.mBackground == 3) {
+        EditorStyle::DrawFieldLabel("Color");
+        ImGui::ColorEdit4("##ImageColor", mNewImage.mColor.data(), ImGuiColorEditFlags_AlphaBar);
+    }
+
+    const bool ValidName{std::string_view{mNewImage.mName.data()}.find_first_not_of(" \t\r\n") != std::string_view::npos};
+    const bool ValidSize{mNewImage.mWidth > 0 && mNewImage.mWidth <= MaximumImageDimension && mNewImage.mHeight > 0 && mNewImage.mHeight <= MaximumImageDimension};
+    const bool FitsAsset{ValidSize && static_cast<Uint64>(mNewImage.mWidth) * mNewImage.mHeight * 4 < Asset::FAssetFile::GetMaximumPayloadSize()};
+    if (!ValidSize) {
+        ImGui::TextWrapped("Width and height must be between 1 and %d pixels.", MaximumImageDimension);
+    } else if (!FitsAsset) {
+        ImGui::TextWrapped("The image exceeds the texture asset size limit.");
+    }
+    if (!mNewImage.mError.empty()) {
+        ImGui::TextWrapped("%s", mNewImage.mError.c_str());
+    }
+
+    const bool CanCreate{mContext->CanEditWorld() && ValidName && FitsAsset};
+    ImGui::BeginDisabled(!CanCreate);
+    const bool Create{ImGui::Button("Create")};
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel") || (CanCreate && (Create || Confirmed) && CreateImage())) {
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+}
+
+bool FContentBrowserWidget::CreateImage() {
+    auto* Assets{mContext->GetProject()->GetAssets()};
+    auto Name{Core::FString{mNewImage.mName.data()}};
+    const auto InputPath{Core::FilePath::FromUtf8(Name)};
+    if (Core::FilePath::ToLowerExtension(InputPath) == L".masset") {
+        Name = Core::FilePath::ToUtf8(InputPath.stem());
+    }
+
+    const auto Target{Assets->MakeUniqueAssetPath(mNewImage.mDirectory, Name, mNewImage.mError)};
+    if (Target.empty()) {
+        return false;
+    }
+
+    std::error_code Code{};
+    if (!std::filesystem::is_directory(Target.parent_path(), Code)) {
+        mNewImage.mError = "Cannot find the destination folder.";
+        return false;
+    }
+    const auto Relative{Assets->GetRelativePath(Target, mNewImage.mError)};
+    if (Relative.empty()) {
+        return false;
+    }
+    const auto Path{Core::FilePath::FromUtf8(Relative)};
+
+    Core::TStaticArray<Uint8, 4> Color{};
+    if (mNewImage.mBackground == 1) {
+        Color.fill(255);
+    } else if (mNewImage.mBackground == 2) {
+        Color[3] = 255;
+    } else if (mNewImage.mBackground == 3) {
+        const auto& RGBA{mNewImage.mColor};
+        const ImU32 Packed{ImGui::ColorConvertFloat4ToU32({RGBA[0], RGBA[1], RGBA[2], RGBA[3]})};
+        Color = {static_cast<Uint8>(Packed >> IM_COL32_R_SHIFT), static_cast<Uint8>(Packed >> IM_COL32_G_SHIFT), static_cast<Uint8>(Packed >> IM_COL32_B_SHIFT), static_cast<Uint8>(Packed >> IM_COL32_A_SHIFT)};
+    }
+
+    try {
+        const auto Width{static_cast<Uint32>(mNewImage.mWidth)};
+        const auto Height{static_cast<Uint32>(mNewImage.mHeight)};
+        Core::TArray<Uint8> Pixels{};
+        Pixels.resize(static_cast<std::size_t>(Width) * Height * Color.size());
+        if (std::ranges::any_of(Color, [](Uint8 Channel) { return Channel != 0; })) {
+            std::memcpy(Pixels.data(), Color.data(), Color.size());
+            for (std::size_t Filled{Color.size()}; Filled < Pixels.size();) {
+                const auto Count{std::min(Filled, Pixels.size() - Filled)};
+                std::memcpy(Pixels.data() + Filled, Pixels.data(), Count);
+                Filled += Count;
+            }
+        }
+
+        auto Texture{CoreUObject::NewObject<Asset::UTexture2D>()};
+        auto* Device{static_cast<ID3D11Device*>(mContext->GetRenderer()->GetNativeDevice())};
+        if (!Texture || !Texture->SetPixels(Width, Height, Asset::ETextureFormat::RGBA8, std::move(Pixels)) || !Texture->CreateResources(Device)) {
+            mNewImage.mError = "Cannot allocate the image at this size.";
+            return false;
+        }
+
+        Texture->SetName(Core::FilePath::ToUtf8(Path.stem()));
+        if (!Assets->SaveTexture(Path, *Texture, mNewImage.mError)) {
+            return false;
+        }
+    } catch (const std::bad_alloc&) {
+        mNewImage.mError = "There is not enough memory to create the image.";
+        return false;
+    }
+
+    mContentFilter.reset();
+    mContentSearch.fill('\0');
+    NavigateContent(Path.parent_path());
+    mSelectedContentPath = Path;
+    mRefreshContent = true;
+    mAssetEditors.OpenContentAsset(Path, Asset::EAssetType::Texture);
+    return true;
 }
 
 void FContentBrowserWidget::CreateAnimGraph() {
