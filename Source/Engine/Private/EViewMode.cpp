@@ -15,7 +15,7 @@ namespace Engine {
      */
     bool IsBufferVisualization(Engine::EViewMode Mode) {
         return Mode == Engine::EViewMode::WorldNormal || Mode == Engine::EViewMode::SceneDepth ||
-            Mode == Engine::EViewMode::DepthOfFieldWeights || RequiresDeferredShading(Mode);
+            Mode == Engine::EViewMode::DepthOfFieldWeights || Mode == Engine::EViewMode::LandscapeWeightmap || RequiresDeferredShading(Mode);
     }
 
     bool RequiresDeferredShading(Engine::EViewMode Mode) {

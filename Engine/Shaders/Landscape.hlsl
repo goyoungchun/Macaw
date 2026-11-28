@@ -135,6 +135,39 @@ float3 ApplyLayerNormalMap(float3 BaseNormal, float4 Tangent, float3 Sampled, fl
 	return SafeNormal(T * Map.x + B * Map.y + N * Map.z);
 }
 
+float3 GetLandscapeLayerDebugColor(uint Slot) {
+	// 레이어 슬롯별 구분 색상 반환
+	if (Slot == 0u) {
+		return float3(0.18f, 0.82f, 0.28f);
+	}
+
+	if (Slot == 1u) {
+		return float3(0.22f, 0.48f, 0.96f);
+	}
+
+	if (Slot == 2u) {
+		return float3(0.96f, 0.76f, 0.16f);
+	}
+
+	if (Slot == 3u) {
+		return float3(0.94f, 0.22f, 0.28f);
+	}
+
+	if (Slot == 4u) {
+		return float3(0.16f, 0.86f, 0.88f);
+	}
+
+	if (Slot == 5u) {
+		return float3(0.86f, 0.26f, 0.90f);
+	}
+
+	if (Slot == 6u) {
+		return float3(0.96f, 0.48f, 0.14f);
+	}
+
+	return float3(0.92f, 0.92f, 0.92f);
+}
+
 FLandscapeSurface EvaluateLandscapeSurface(FPixelInput Input, bool IsFrontFace) {
 	FLandscapeSurface Surface = {(FLandscapeSurface)0};
 	float3 BaseNormal = {SafeNormal(Input.mNormal)};
@@ -146,6 +179,12 @@ FLandscapeSurface EvaluateLandscapeSurface(FPixelInput Input, bool IsFrontFace) 
 	const uint LayerCount = {min(LandscapeLayerMeta.x, 8u)};
 
 	if (LayerCount == 0u) {
+#if defined(LANDSCAPE_WEIGHTMAP)
+		Surface.mColor = float4(0.15f, 0.15f, 0.15f, 1.0f);
+		Surface.mNormal = BaseNormal;
+
+		return Surface;
+#else
 		const float2 FallbackUV = {Input.mWorldPosition.xy * 0.25f};
 		Surface.mColor = BaseColor * Input.mColor * BaseColorTexture.Sample(MaterialSampler, FallbackUV);
 		Surface.mNormal = BaseNormal;
@@ -155,6 +194,7 @@ FLandscapeSurface EvaluateLandscapeSurface(FPixelInput Input, bool IsFrontFace) 
 		Surface.mEmissive = EmissiveColor.rgb;
 
 		return Surface;
+#endif
 	}
 
 	const float2 WeightUV = {Input.mUV * LandscapeWeightmapScaleBias.xy + LandscapeWeightmapScaleBias.zw};
@@ -178,6 +218,27 @@ FLandscapeSurface EvaluateLandscapeSurface(FPixelInput Input, bool IsFrontFace) 
 
 	const float InvWeightSum = {1.0f / WeightSum};
 
+#if defined(LANDSCAPE_WEIGHTMAP)
+	// 활성 레이어 가중치를 색상으로 합성하고 지형 음영 보정 적용
+	float3 DebugColor = {float3(0.0f, 0.0f, 0.0f)};
+
+	[unroll]
+	for (uint Slot = {0u}; Slot < 8u; ++Slot) {
+		if (Slot >= LayerCount) {
+			break;
+		}
+
+		const float Weight = {Weights[Slot] * InvWeightSum};
+		DebugColor += GetLandscapeLayerDebugColor(Slot) * Weight;
+	}
+
+	const float3 ShadeDir = {normalize(float3(0.4f, 0.5f, 0.8f))};
+	const float HillShade = {0.78f + 0.22f * saturate(dot(BaseNormal, ShadeDir))};
+	Surface.mColor = float4(DebugColor * HillShade, 1.0f);
+	Surface.mNormal = BaseNormal;
+
+	return Surface;
+#else
 	float3 BlendedColor = {float3(0.0f, 0.0f, 0.0f)};
 	float3 BlendedNormal = {float3(0.0f, 0.0f, 0.0f)};
 	float3 BlendedSpecular = {float3(0.0f, 0.0f, 0.0f)};
@@ -221,6 +282,7 @@ FLandscapeSurface EvaluateLandscapeSurface(FPixelInput Input, bool IsFrontFace) 
 	Surface.mEmissive = EmissiveColor.rgb;
 
 	return Surface;
+#endif
 }
 
 #if defined(MACAW_GBUFFER)
@@ -239,7 +301,7 @@ FGBufferOutput PixelMain(FPixelInput Input, bool IsFrontFace : SV_IsFrontFace) {
 	Output.mColor = Surface.mColor;
 	Output.mNormal = float4(Surface.mNormal, Surface.mShininess);
 
-#if defined(MACAW_UNLIT)
+#if defined(MACAW_UNLIT) || defined(LANDSCAPE_WEIGHTMAP)
 	Output.mNormal.w = -1.0f;
 #elif defined(LIGHTING_MODEL_GOURAUD)
 	Output.mAmbient.rgb = Input.mDiffuse;
@@ -262,7 +324,7 @@ float4 PixelMain(FPixelInput Input, bool IsFrontFace : SV_IsFrontFace) : SV_TARG
 
 #if defined(WORLD_NORMAL)
 	return float4(Surface.mNormal * 0.5f + 0.5f, 1.0f);
-#elif defined(MACAW_UNLIT)
+#elif defined(MACAW_UNLIT) || defined(LANDSCAPE_WEIGHTMAP)
 	return Surface.mColor;
 #else
 #if defined(LIGHTING_MODEL_GOURAUD)

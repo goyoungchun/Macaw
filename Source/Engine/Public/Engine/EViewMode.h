@@ -105,6 +105,9 @@ namespace Engine {
 
         PhysicsBodies = 18,
 
+		// 지형 레이어 웨이트맵을 레이어별 색상으로 시각화
+		LandscapeWeightmap = 19,
+
         /**
          * @brief 재질과 기본 조명을 사용하여 면을 채웁니다.
          */

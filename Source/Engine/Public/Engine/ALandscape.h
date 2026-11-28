@@ -164,7 +164,7 @@ namespace Engine {
 		float mQuadSize{1.0f};
 
 		UPROPERTY(Edit, Serialize, Category = "Topology", Getter = GetHeightScale, Setter = SetHeightScale)
-		float mHeightScale{128.0f};
+		float mHeightScale{32.0f};
 
 		UPROPERTY(Edit, Serialize, Category = "LOD", Getter = GetLODDistanceFactor, Setter = SetLODDistanceFactor)
 		float mLODDistanceFactor{1.0f};

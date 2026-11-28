@@ -131,8 +131,9 @@ namespace Engine {
 
 	bool ULandscapeComponent::ShouldCreateRenderState() const {
 		const Engine::ALandscape* Landscape{GetLandscapeActor()};
+		const Asset::ULandscapeAsset* Asset{Landscape != nullptr ? Landscape->GetActiveLandscapeAsset() : nullptr};
 
-		return Landscape != nullptr && Landscape->GetActiveLandscapeAsset() != nullptr && Landscape->GetActiveLandscapeAsset()->IsValid() && Landscape->GetSharedGridMesh() != nullptr;
+		return Landscape != nullptr && Asset != nullptr && Asset->IsValid() && mComponentIndexX < Asset->GetComponentCountX() && mComponentIndexY < Asset->GetComponentCountY() && Landscape->GetSharedGridMesh() != nullptr;
 	}
 
 	bool ULandscapeComponent::ShouldCreatePhysicsState() const {
@@ -141,8 +142,9 @@ namespace Engine {
 		}
 
 		const Engine::ALandscape* Landscape{GetLandscapeActor()};
+		const Asset::ULandscapeAsset* Asset{Landscape != nullptr ? Landscape->GetActiveLandscapeAsset() : nullptr};
 
-		return Landscape != nullptr && Landscape->GetActiveLandscapeAsset() != nullptr && Landscape->GetActiveLandscapeAsset()->IsValid();
+		return Landscape != nullptr && Asset != nullptr && Asset->IsValid() && mComponentIndexX < Asset->GetComponentCountX() && mComponentIndexY < Asset->GetComponentCountY();
 	}
 
 	void ULandscapeComponent::ConfigureSection(Uint32 ComponentIndexX, Uint32 ComponentIndexY, Uint32 SectionBaseX, Uint32 SectionBaseY) {

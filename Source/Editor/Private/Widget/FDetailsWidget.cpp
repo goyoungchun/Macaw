@@ -659,6 +659,29 @@ namespace Editor {
 
 								ImGui::InputTextWithHint("Weightmap File", "Source image or .masset", WeightmapPathBuffers[LayerIndex].data(), WeightmapPathBuffers[LayerIndex].size());
 
+								if (mAssetCatalog != nullptr && ImGui::BeginDragDropTarget()) {
+									if (const ImGuiPayload* Payload{ImGui::AcceptDragDropPayload(Editor::EditorAssetDragDrop::TexturePayload)}; Payload != nullptr && Payload->Data != nullptr && Payload->DataSize > 1 && static_cast<const char*>(Payload->Data)[Payload->DataSize - 1] == '\0') {
+										const Core::FString Candidate{static_cast<const char*>(Payload->Data), static_cast<std::size_t>(Payload->DataSize - 1)};
+										const Editor::FEditorAssetEntry* Entry{mAssetCatalog->Find(Core::FilePath::FromUtf8(Candidate))};
+
+										if (Entry != nullptr && Entry->GetType() == Asset::EAssetType::Texture) {
+											const Core::FString DroppedPath{Core::FilePath::ToGenericUtf8(Entry->GetPath())};
+											WeightmapPathBuffers[LayerIndex].fill('\0');
+											std::copy_n(DroppedPath.begin(), std::min(DroppedPath.size(), WeightmapPathBuffers[LayerIndex].size() - 1u), WeightmapPathBuffers[LayerIndex].begin());
+											Core::FString Error{};
+
+											if (Landscape->ApplyWeightmapTextureAsset(LayerIndex, DroppedPath, Error)) {
+												LastLayerStatus = "Applied dropped weightmap";
+												Context->MarkSceneDirty();
+											} else {
+												LastLayerStatus = Error.empty() ? "Weightmap apply failed" : Error;
+											}
+										}
+									}
+
+									ImGui::EndDragDropTarget();
+								}
+
 								if (ImGui::Button("Import Weightmap")) {
 									Core::FString Error{};
 
@@ -756,7 +779,49 @@ namespace Editor {
 						}
 
 						ImGui::Separator();
-						ImGui::InputTextWithHint("Heightmap File", "Source PNG / RAW / R16 or .masset", HeightmapPathBuffer.data(), HeightmapPathBuffer.size());
+						ImGui::AlignTextToFramePadding();
+						ImGui::TextUnformatted("Heightmap");
+						ImGui::SameLine();
+
+						Core::FString HeightmapAssetPath{Landscape->GetHeightmapTexturePath()};
+
+						if (DrawAssetPicker("##ToolsHeightmapTexture", HeightmapAssetPath, Asset::EAssetType::Texture, "Drop Texture (.masset)")) {
+							Core::FString Error{};
+
+							if (Landscape->ApplyHeightmapTextureAsset(HeightmapAssetPath, Error)) {
+								HeightmapPathBuffer.fill('\0');
+								std::copy_n(HeightmapAssetPath.begin(), std::min(HeightmapAssetPath.size(), HeightmapPathBuffer.size() - 1u), HeightmapPathBuffer.begin());
+								LastLandscapeStatus = HeightmapAssetPath.empty() ? "Cleared heightmap asset" : "Applied heightmap asset";
+								Context->MarkSceneDirty();
+							} else {
+								LastLandscapeStatus = Error.empty() ? "Heightmap apply failed" : Error;
+							}
+						}
+
+						ImGui::InputTextWithHint("Heightmap File", "Source PNG / RAW / R16 or drop .masset", HeightmapPathBuffer.data(), HeightmapPathBuffer.size());
+
+						if (mAssetCatalog != nullptr && ImGui::BeginDragDropTarget()) {
+							if (const ImGuiPayload* Payload{ImGui::AcceptDragDropPayload(Editor::EditorAssetDragDrop::TexturePayload)}; Payload != nullptr && Payload->Data != nullptr && Payload->DataSize > 1 && static_cast<const char*>(Payload->Data)[Payload->DataSize - 1] == '\0') {
+								const Core::FString Candidate{static_cast<const char*>(Payload->Data), static_cast<std::size_t>(Payload->DataSize - 1)};
+								const Editor::FEditorAssetEntry* Entry{mAssetCatalog->Find(Core::FilePath::FromUtf8(Candidate))};
+
+								if (Entry != nullptr && Entry->GetType() == Asset::EAssetType::Texture) {
+									const Core::FString DroppedPath{Core::FilePath::ToGenericUtf8(Entry->GetPath())};
+									HeightmapPathBuffer.fill('\0');
+									std::copy_n(DroppedPath.begin(), std::min(DroppedPath.size(), HeightmapPathBuffer.size() - 1u), HeightmapPathBuffer.begin());
+									Core::FString Error{};
+
+									if (Landscape->ApplyHeightmapTextureAsset(DroppedPath, Error)) {
+										LastLandscapeStatus = "Applied dropped heightmap";
+										Context->MarkSceneDirty();
+									} else {
+										LastLandscapeStatus = Error.empty() ? "Heightmap apply failed" : Error;
+									}
+								}
+							}
+
+							ImGui::EndDragDropTarget();
+						}
 
 						if (ImGui::Button("Import Heightmap")) {
 							Core::FString Error{};

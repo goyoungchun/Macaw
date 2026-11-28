@@ -17,7 +17,7 @@ namespace Editor::BufferVisualization {
     /**
      * @brief 버퍼 시각화 메뉴에 표시할 렌더 모드 목록입니다.
      */
-    inline constexpr Core::TStaticArray<Engine::EViewMode, 13> Modes{
+    inline constexpr Core::TStaticArray<Engine::EViewMode, 14> Modes{
         Engine::EViewMode::Lit_Phong,
         Engine::EViewMode::BaseColor,
         Engine::EViewMode::WorldNormal,
@@ -30,7 +30,8 @@ namespace Editor::BufferVisualization {
         Engine::EViewMode::ReceiveShadows,
         Engine::EViewMode::SceneDepth,
         Engine::EViewMode::SceneStencil,
-        Engine::EViewMode::DepthOfFieldWeights
+        Engine::EViewMode::DepthOfFieldWeights,
+		Engine::EViewMode::LandscapeWeightmap
     };
 
     /**
@@ -49,7 +50,8 @@ namespace Editor::BufferVisualization {
         "Receive Shadows",
         "Scene Depth",
         "Scene Stencil",
-        "Depth of Field Weights"
+        "Depth of Field Weights",
+		"Landscape Weightmap"
     };
 
 }

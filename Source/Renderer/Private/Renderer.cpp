@@ -489,7 +489,7 @@ namespace Renderer {
         const bool ShowDecals{!Visualization || Family.mViewMode == Engine::EViewMode::WorldNormal || Family.mViewMode == Engine::EViewMode::BaseColor || Family.mViewMode == Engine::EViewMode::BaseColorAlpha};
         const bool DrawDecals{!mForwardShading && Family.mShowFlags.mPrimitives && !Scene->GetDecals().empty() && ShowDecals && Family.mViewMode != Engine::EViewMode::Wireframe};
         const bool MarkDecalReceivers{DrawDecals || Family.mViewMode == Engine::EViewMode::SceneStencil};
-        const bool NeedsLighting{Family.mViewMode != Engine::EViewMode::Unlit && Family.mViewMode != Engine::EViewMode::WorldNormal};
+        const bool NeedsLighting{Family.mViewMode != Engine::EViewMode::Unlit && Family.mViewMode != Engine::EViewMode::WorldNormal && Family.mViewMode != Engine::EViewMode::LandscapeWeightmap};
 
         if (PhysicsBodies) {
             mContext->RSSetViewports(1, &SceneTarget.mViewport);
@@ -1321,7 +1321,7 @@ namespace Renderer {
         ParticleMesh = ParticleMesh && !Skinned && !Landscape;
 		Landscape = Landscape && !Skinned;
 
-        if (Engine::IsBufferVisualization(Mode) && Mode != Engine::EViewMode::WorldNormal && Mode != Engine::EViewMode::SceneDepth) {
+        if (Engine::IsBufferVisualization(Mode) && Mode != Engine::EViewMode::WorldNormal && Mode != Engine::EViewMode::SceneDepth && Mode != Engine::EViewMode::LandscapeWeightmap) {
             Mode = Engine::EViewMode::Lit_Phong;
         }
 
@@ -1337,8 +1337,9 @@ namespace Renderer {
             return static_cast<char>(std::tolower(Character));
         });
 
-        const bool Unlit{Mode == Engine::EViewMode::Unlit || (Shader->IsUnlit() && Mode != Engine::EViewMode::WorldNormal)};
-        const Engine::EViewMode PixelMode{Unlit ? Engine::EViewMode::Unlit : Mode == Engine::EViewMode::Lit_Gouraud || Mode == Engine::EViewMode::Lit_Lambert || Mode == Engine::EViewMode::WorldNormal ? Mode : Engine::EViewMode::Lit_Phong};
+		const bool LandscapeWeightmapMode{Landscape && Mode == Engine::EViewMode::LandscapeWeightmap};
+        const bool Unlit{Mode == Engine::EViewMode::Unlit || (!Landscape && Mode == Engine::EViewMode::LandscapeWeightmap) || (Shader->IsUnlit() && Mode != Engine::EViewMode::WorldNormal && !LandscapeWeightmapMode)};
+        const Engine::EViewMode PixelMode{Unlit ? Engine::EViewMode::Unlit : LandscapeWeightmapMode ? Engine::EViewMode::LandscapeWeightmap : Mode == Engine::EViewMode::Lit_Gouraud || Mode == Engine::EViewMode::Lit_Lambert || Mode == Engine::EViewMode::WorldNormal ? Mode : Engine::EViewMode::Lit_Phong};
         const bool Shadowed{ReceiveShadows && !Unlit && (Mode == Engine::EViewMode::Lit_Lambert || Mode == Engine::EViewMode::Lit_Phong)};
         const bool NormalMap{Material.GetNormalMapTexture() != nullptr};
         const bool Translucent{Material.GetBlendMode() != Asset::EBlendMode::Opaque};
@@ -1357,7 +1358,7 @@ namespace Renderer {
         }
 
         const std::filesystem::path VertexSource{mShaderDirectory / (ParticleMesh ? "ParticleMesh.vs.hlsl" : Skinned ? "SkinnedMesh.vs.hlsl" : "StaticMesh.vs.hlsl")};
-        const bool OverridePixel{!Landscape && (Mode == Engine::EViewMode::Unlit || Mode == Engine::EViewMode::WorldNormal)};
+        const bool OverridePixel{!Landscape && (Mode == Engine::EViewMode::Unlit || Mode == Engine::EViewMode::WorldNormal || Mode == Engine::EViewMode::LandscapeWeightmap)};
         const bool WritesGBuffer{!mForwardShading && !Translucent && (Shader->WritesGBuffer() || OverridePixel)};
         Core::FString PathError{};
         const auto PixelSource{OverridePixel ? mShaderDirectory / "Lit.hlsl" : mAssets->ResolvePath(RelativePath, PathError)};
@@ -1415,6 +1416,8 @@ namespace Renderer {
             PixelDescription.mMacros.push_back({"MACAW_UNLIT", "1"});
         } else if (PixelMode == Engine::EViewMode::WorldNormal) {
             PixelDescription.mMacros.push_back({"WORLD_NORMAL", "1"});
+		} else if (PixelMode == Engine::EViewMode::LandscapeWeightmap) {
+			PixelDescription.mMacros.push_back({"LANDSCAPE_WEIGHTMAP", "1"});
         } else {
             const char* Model{PixelMode == Engine::EViewMode::Lit_Gouraud ? "LIGHTING_MODEL_GOURAUD" : PixelMode == Engine::EViewMode::Lit_Lambert ? "LIGHTING_MODEL_LAMBERT" : "LIGHTING_MODEL_PHONG"};
 

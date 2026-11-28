@@ -194,25 +194,30 @@ namespace Engine {
 			return false;
 		}
 
-		if (mExternalAsset.Get() == nullptr && mOwnedAsset != nullptr) {
-			const bool TopologyChanged{
-				mOwnedAsset->GetSubsectionSizeQuads() != mSubsectionSizeQuads ||
-				mOwnedAsset->GetNumSubsections() != mNumSubsections ||
-				mOwnedAsset->GetComponentCountX() != mComponentCountX ||
-				mOwnedAsset->GetComponentCountY() != mComponentCountY};
+		const bool TopologyChanged{
+			ActiveAsset->GetSubsectionSizeQuads() != mSubsectionSizeQuads ||
+			ActiveAsset->GetNumSubsections() != mNumSubsections ||
+			ActiveAsset->GetComponentCountX() != mComponentCountX ||
+			ActiveAsset->GetComponentCountY() != mComponentCountY};
 
-			if (TopologyChanged) {
-				if (!mOwnedAsset->CreateFlat(mSubsectionSizeQuads, mNumSubsections, mComponentCountX, mComponentCountY, mQuadSize, mHeightScale)) {
-					return false;
-				}
-			} else {
-				mOwnedAsset->SetQuadSize(mQuadSize);
-				mOwnedAsset->SetHeightScale(mHeightScale);
+		if (TopologyChanged) {
+			if (!ActiveAsset->CreateFlat(mSubsectionSizeQuads, mNumSubsections, mComponentCountX, mComponentCountY, mQuadSize, mHeightScale)) {
+				return false;
 			}
 
-			SyncLayersToAsset(*mOwnedAsset);
+			if (!mHeightmapTexturePath.empty() && GetWorld() != nullptr && GetWorld()->GetAssets() != nullptr) {
+				Core::FString Error{};
+
+				if (Asset::UTexture2D* Texture{GetWorld()->GetAssets()->LoadTexture(Core::FilePath::FromUtf8(mHeightmapTexturePath), Error)}) {
+					ActiveAsset->ApplyHeightmapFromTexture(*Texture, Error);
+				}
+			}
+		} else {
+			ActiveAsset->SetQuadSize(mQuadSize);
+			ActiveAsset->SetHeightScale(mHeightScale);
 		}
 
+		SyncLayersToAsset(*ActiveAsset);
 		ResolveMaterials();
 		RebuildSharedRenderResources();
 		RebuildComponentGrid();
@@ -727,7 +732,13 @@ namespace Engine {
 			mHeightScale = HeightScale;
 
 			if (GetRootComponent() != nullptr) {
-				RebuildLandscape();
+				EnsureRuntimeResources();
+
+				if (Asset::ULandscapeAsset* ActiveAsset{GetActiveLandscapeAsset()}) {
+					ActiveAsset->SetHeightScale(mHeightScale);
+					RebuildSharedRenderResources();
+					RefreshExistingComponents();
+				}
 			}
 		}
 
@@ -923,41 +934,71 @@ namespace Engine {
 		}
 
 		Core::TArray<Engine::ULandscapeComponent*> Existing{GetLandscapeComponents()};
-
-		for (Engine::ULandscapeComponent* Component : Existing) {
-			RemoveComponent(Component);
-		}
-
 		Engine::USceneComponent* Root{GetRootComponent()};
 		const FTransform RootTransform{GetActorTransform()};
 		const FMatrix RootMatrix{RootTransform.ToMatrix()};
 		const Uint32 CompSizeQuads{ActiveAsset->GetComponentSizeQuads()};
 		const float QuadSize{ActiveAsset->GetQuadSize()};
+		const Index_t NeededCount{static_cast<Index_t>(ActiveAsset->GetComponentCountX()) * ActiveAsset->GetComponentCountY()};
 
+		Index_t ReuseIndex{};
+
+		// 기존 컴포넌트를 제자리에서 재사용하고 부족한 만큼만 추가
 		for (Uint32 CompY{}; CompY < ActiveAsset->GetComponentCountY(); ++CompY) {
 			for (Uint32 CompX{}; CompX < ActiveAsset->GetComponentCountX(); ++CompX) {
-				std::unique_ptr<Engine::ULandscapeComponent> Comp{CoreUObject::NewObject<Engine::ULandscapeComponent>()};
-				Comp->SetName("LandscapeComponent_" + std::to_string(CompX) + "_" + std::to_string(CompY));
-
 				const Uint32 BaseX{CompX * CompSizeQuads};
 				const Uint32 BaseY{CompY * CompSizeQuads};
-				Comp->ConfigureSection(CompX, CompY, BaseX, BaseY);
+				const Core::FString CompName{"LandscapeComponent_" + std::to_string(CompX) + "_" + std::to_string(CompY)};
 
 				FTransform CompTransform{RootTransform};
 				const FVector LocalOffset{static_cast<float>(BaseX) * QuadSize, static_cast<float>(BaseY) * QuadSize, 0.0f};
 				CompTransform.mLocation = RootMatrix.TransformPosition(LocalOffset);
-				Comp->SetTransform(CompTransform);
 
-				Engine::ULandscapeComponent* RawComp{Comp.get()};
+				Engine::ULandscapeComponent* TargetComp{};
 
-				if (AddComponent(std::move(Comp))) {
-					if (Root != nullptr) {
-						RawComp->SetAttachParent(Root);
+				if (ReuseIndex < Existing.size()) {
+					TargetComp = Existing[ReuseIndex];
+					TargetComp->SetName(CompName);
+					TargetComp->ConfigureSection(CompX, CompY, BaseX, BaseY);
+					TargetComp->SetTransform(CompTransform);
+
+					if (Root != nullptr && TargetComp->GetAttachParent() != Root) {
+						TargetComp->SetAttachParent(Root);
 					}
+				} else {
+					std::unique_ptr<Engine::ULandscapeComponent> Comp{CoreUObject::NewObject<Engine::ULandscapeComponent>()};
+					Comp->SetName(CompName);
+					Comp->ConfigureSection(CompX, CompY, BaseX, BaseY);
+					Comp->SetTransform(CompTransform);
 
-					RawComp->RebuildComponentData();
-					RawComp->RecreatePhysicsState();
+					Engine::ULandscapeComponent* RawComp{Comp.get()};
+
+					if (AddComponent(std::move(Comp))) {
+						if (Root != nullptr) {
+							RawComp->SetAttachParent(Root);
+						}
+
+						TargetComp = RawComp;
+					}
 				}
+
+				if (TargetComp != nullptr) {
+					TargetComp->RebuildComponentData();
+					TargetComp->RecreatePhysicsState();
+				}
+
+				++ReuseIndex;
+			}
+		}
+
+		// 남는 컴포넌트는 제거하거나 디스패치 중이면 비활성화
+		for (Index_t ExtraIndex{NeededCount}; ExtraIndex < Existing.size(); ++ExtraIndex) {
+			Engine::ULandscapeComponent* ExtraComp{Existing[ExtraIndex]};
+
+			if (!RemoveComponent(ExtraComp)) {
+				ExtraComp->ConfigureSection(std::numeric_limits<Uint32>::max(), std::numeric_limits<Uint32>::max(), 0u, 0u);
+				ExtraComp->RebuildComponentData();
+				ExtraComp->RecreatePhysicsState();
 			}
 		}
 	}
