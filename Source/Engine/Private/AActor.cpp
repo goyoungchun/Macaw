@@ -54,7 +54,8 @@ namespace Engine {
             return;
         }
 
-        Engine::UWorld::FDispatchScope Scope{mWorld};
+        Engine::UWorld* PreviousWorld{ mWorld };
+        Engine::UWorld::FDispatchScope Scope{PreviousWorld};
 
         mChangingWorld = true;
 
@@ -84,7 +85,14 @@ namespace Engine {
             }
         }
 
+        OnWorldChanged(PreviousWorld);
         mChangingWorld = false;
+    }
+
+    void Engine::AActor::OnWorldChanged(Engine::UWorld*) {
+    }
+
+    void Engine::AActor::OnActorTransformChanged(const FTransform&) {
     }
 
     /**

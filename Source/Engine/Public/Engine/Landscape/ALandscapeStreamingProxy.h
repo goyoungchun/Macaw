@@ -29,6 +29,9 @@ namespace Engine {
         bool SetRegionSizeY(Int32 Y);
 
     private:
+        void OnWorldChanged(Engine::UWorld* PreviousWorld) override;
+
+    private:
         UPROPERTY(Serialize)
         CoreUObject::TObjectRef<Engine::ALandscape> mLandscapeActorRef{};
 

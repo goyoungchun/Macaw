@@ -363,6 +363,8 @@ namespace Engine {
             SerializeActors(Archive, Sources, Actors, &Objects);
 
             if (Archive.IsLoading() && !Archive.HasError()) {
+                BindObjectReferences(Objects);
+
                 for (auto& Actor : Actors) {
                     if (!Level->AddActor(std::move(Actor))) {
                         Archive.SetError("Actor ownership is invalid");
@@ -376,10 +378,6 @@ namespace Engine {
         }
 
         SerializeWorldReferences(Archive, World, &Objects);
-
-        if (Archive.IsLoading() && !Archive.HasError()) {
-            BindObjectReferences(Objects);
-        }
 
         Archive.EndObject();
     }

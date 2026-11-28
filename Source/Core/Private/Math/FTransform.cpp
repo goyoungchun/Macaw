@@ -32,6 +32,10 @@ FTransform& FTransform::operator*=(const FTransform& Other) {
     return *this;
 }
 
+FTransform FTransform::GetRelativeTransform(const FTransform& Parent) const {
+    return { Parent.InverseTransformPosition(mLocation), Parent.mRotation.Inverse() * mRotation, mScale / Parent.mScale };
+}
+
 /**
  * @brief 위치에 스케일, 회전과 이동을 적용합니다.
  */

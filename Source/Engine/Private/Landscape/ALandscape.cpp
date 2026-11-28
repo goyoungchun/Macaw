@@ -3,7 +3,7 @@
 
 #include "CoreUObject/Reflection/Cast.h"
 #include "CoreUObject/Reflection/NewObject.h"
-#include "Engine/ULevel.h"
+#include "Engine/Component/USceneComponent.h"
 #include "Engine/UWorld.h"
 
 #include <algorithm>
@@ -15,17 +15,18 @@ namespace Engine {
 
     Core::TArray<CoreUObject::TObjectRef<Engine::ALandscapeStreamingProxy>> ALandscape::GetStreamingProxies() const {
         const Engine::UWorld* World{ GetWorld() };
-        const Engine::ULevel* Level{ World != nullptr ? World->GetPersistentLevel() : nullptr };
+        const Engine::FLandscapeInfo* Info{ World != nullptr && !IsPendingDestroy() ? World->FindLandscapeInfo(*this) : nullptr };
 
-        if (Level == nullptr || IsPendingDestroy()) {
+        if (Info == nullptr) {
             return {};
         }
 
         Core::TArray<CoreUObject::TObjectRef<Engine::ALandscapeStreamingProxy>> Proxies{};
+        Proxies.reserve(Info->GetStreamingProxies().size());
 
-        for (const auto& Actor : Level->GetActors()) {
-            if (auto* Proxy{ CoreUObject::Cast<Engine::ALandscapeStreamingProxy>(Actor.get()) }; Proxy != nullptr && Proxy->GetWorld() == World && !Proxy->IsPendingDestroy() && Proxy->GetLandscapeActor().Get() == this) {
-                Proxies.push_back(CoreUObject::MakeObjectRef(Proxy));
+        for (const auto& ProxyRef : Info->GetStreamingProxies()) {
+            if (const auto* Proxy{ ProxyRef.Get() }; Proxy != nullptr && !Proxy->IsPendingDestroy()) {
+                Proxies.push_back(ProxyRef);
             }
         }
 
@@ -179,6 +180,46 @@ namespace Engine {
 
     Uint64 ALandscape::GetSizeYInQuads() const {
         return static_cast<Uint64>(mComponentCountY) * GetQuadsPerComponentSide();
+    }
+
+    void ALandscape::OnActorTransformChanged(const FTransform& PreviousTransform) {
+        const FTransform CurrentTransform{ GetActorTransform() };
+
+        if (mSynchronizingProxies || PreviousTransform.Equals(CurrentTransform, 0.0f)) {
+            return;
+        }
+
+        const auto Proxies{ GetStreamingProxies() };
+
+        if (Proxies.empty()) {
+            return;
+        }
+
+        Core::TArray<const Engine::AActor*> AttachAncestors{};
+        const Engine::USceneComponent* Parent{ GetRootComponent()->GetAttachParent() };
+
+        while (Parent != nullptr) {
+            const Engine::AActor* Owner{ Parent->GetOwner() };
+            const Engine::USceneComponent* Root{ Owner != nullptr ? Owner->GetRootComponent() : nullptr };
+            AttachAncestors.push_back(Owner);
+            Parent = Root != nullptr ? Root->GetAttachParent() : nullptr;
+        }
+
+        mSynchronizingProxies = true;
+
+        for (const auto& ProxyRef : Proxies) {
+            auto* Proxy{ ProxyRef.Get() };
+            const Engine::USceneComponent* Root{ Proxy != nullptr ? Proxy->GetRootComponent() : nullptr };
+
+            if (Root == nullptr || Root->GetAttachParent() != nullptr || std::find(AttachAncestors.begin(), AttachAncestors.end(), Proxy) != AttachAncestors.end()) {
+                continue;
+            }
+
+            const FTransform ProxyTransform{ Root->GetTransform() };
+            Proxy->SetActorTransform(ProxyTransform.Equals(PreviousTransform, 0.0f) ? CurrentTransform : ProxyTransform.GetRelativeTransform(PreviousTransform) * CurrentTransform);
+        }
+
+        mSynchronizingProxies = false;
     }
 
     bool ALandscape::InitializeStreamingProxy(Engine::ALandscapeStreamingProxy& Proxy, Int32 StartX, Int32 StartY, Int32 SizeX, Int32 SizeY, const Core::TArray<Engine::FLandscapeSection>& Sections) {

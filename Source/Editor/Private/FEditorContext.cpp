@@ -2105,12 +2105,26 @@ namespace Editor {
 
         Core::TArray<CoreUObject::TObjectRef<Engine::USceneComponent>> Result{};
 
-        for (CoreUObject::TObjectRef<Engine::AActor> Handle : GetSelectedActors()) {
-            const auto* Actor{CoreUObject::Cast<Engine::AActor>(ResolveObject(Handle))};
+        const auto SelectedActors{ GetSelectedActors() };
 
-            if (Actor->GetRootComponent() != nullptr) {
-                Result.push_back(CoreUObject::MakeObjectRef(Actor->GetRootComponent()));
+        for (CoreUObject::TObjectRef<Engine::AActor> Handle : SelectedActors) {
+            const auto* Actor{CoreUObject::Cast<Engine::AActor>(ResolveObject(Handle))};
+            Engine::USceneComponent* Root{ Actor != nullptr ? Actor->GetRootComponent() : nullptr };
+
+            if (Root == nullptr) {
+                continue;
             }
+
+            if (const auto* Proxy{ CoreUObject::Cast<Engine::ALandscapeStreamingProxy>(Actor) }; Proxy != nullptr && Root->GetAttachParent() == nullptr) {
+                const auto LandscapeRef{ Proxy->GetLandscapeActor() };
+                const auto* Landscape{ LandscapeRef.Get() };
+
+                if (Landscape != nullptr && Landscape->GetRootComponent() != nullptr && std::find(SelectedActors.begin(), SelectedActors.end(), LandscapeRef) != SelectedActors.end()) {
+                    continue;
+                }
+            }
+
+            Result.push_back(CoreUObject::MakeObjectRef(Root));
         }
 
         return Result;

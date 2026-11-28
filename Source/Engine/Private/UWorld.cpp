@@ -28,6 +28,8 @@
 #include "Engine/Collision/FHitResult.h"
 #include "Engine/AStaticMeshActor.h"
 #include "Engine/ULevel.h"
+#include "Engine/Landscape/ALandscape.h"
+#include "Engine/Landscape/ALandscapeStreamingProxy.h"
 #include "Engine/FWorldHit.h"
 #include "CoreUObject/TObjectRef.h"
 #include "Core/Math/FMatrix.h"
@@ -1118,6 +1120,34 @@ namespace Engine {
 
         if (CanBeginActor()) {
             Actor->DispatchBeginPlay();
+        }
+    }
+
+    const Engine::FLandscapeInfo* Engine::UWorld::FindLandscapeInfo(const Engine::ALandscape& Landscape) const {
+        const auto Info{ mLandscapeInfos.find(Landscape.GetHandle()) };
+
+        return Info != mLandscapeInfos.end() ? &Info->second : nullptr;
+    }
+
+    void Engine::UWorld::RegisterLandscapeProxy(Engine::ALandscapeStreamingProxy& Proxy) {
+        const auto* Landscape{ Proxy.GetLandscapeActor().Get() };
+
+        if (Landscape != nullptr && !Landscape->IsPendingDestroy() && (Landscape->GetWorld() == nullptr || Landscape->GetWorld() == this)) {
+            mLandscapeInfos[Landscape->GetHandle()].RegisterProxy(CoreUObject::MakeObjectRef(&Proxy));
+        }
+    }
+
+    void Engine::UWorld::UnregisterLandscapeProxy(Engine::ALandscapeStreamingProxy& Proxy) {
+        const auto Info{ mLandscapeInfos.find(Proxy.GetLandscapeActor().GetHandle()) };
+
+        if (Info == mLandscapeInfos.end()) {
+            return;
+        }
+
+        Info->second.UnregisterProxy(CoreUObject::MakeObjectRef(&Proxy));
+
+        if (Info->second.GetStreamingProxies().empty()) {
+            mLandscapeInfos.erase(Info);
         }
     }
 

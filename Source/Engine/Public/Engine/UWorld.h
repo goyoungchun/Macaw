@@ -15,6 +15,7 @@
 #include "Engine/EWorldType.h"
 #include "Engine/EWorldPlayState.h"
 #include "Engine/FWorldHandle.h"
+#include "Engine/Landscape/FLandscapeInfo.h"
 #include "Engine/Tick/FTickTaskManager.h"
 #include "Engine/FWindField.h"
 
@@ -43,6 +44,8 @@ namespace Engine {
 
     class ULevel;
     class AActor;
+    class ALandscape;
+    class ALandscapeStreamingProxy;
     class UEngine;
     class FWorldContext;
     class FLuaRuntime;
@@ -436,6 +439,8 @@ namespace Engine {
          * @brief 액터가 월드의 전달 범위와 실행 가능 상태를 검사하도록 허용합니다.
          */
         friend class AActor;
+        friend class ALandscape;
+        friend class ALandscapeStreamingProxy;
 
         /**
          * @brief 컴포넌트가 등록과 실행 콜백의 안전한 전달 범위를 사용하도록 허용합니다.
@@ -485,6 +490,10 @@ namespace Engine {
          * @param[in,out] Actor 영속 레벨에 추가된 액터입니다.
          */
         void NotifyActorAdded(Engine::AActor* Actor);
+
+        const Engine::FLandscapeInfo* FindLandscapeInfo(const Engine::ALandscape& Landscape) const;
+        void RegisterLandscapeProxy(Engine::ALandscapeStreamingProxy& Proxy);
+        void UnregisterLandscapeProxy(Engine::ALandscapeStreamingProxy& Proxy);
 
         /**
          * @brief 월드가 새 액터나 컴포넌트 등록을 수락할 수 있는지 검사합니다.
@@ -568,6 +577,7 @@ namespace Engine {
          * @brief 월드가 소유한 영속 레벨입니다.
          */
         std::unique_ptr<Engine::ULevel> mPersistentLevel{};
+        CoreUObject::ObjectHashMap<CoreUObject::FObjectHandle, Engine::FLandscapeInfo> mLandscapeInfos{};
 
         /** @brief 영속 레벨을 갱신할 때 사용할 일반 및 일시정지 프레임의 실행 큐를 관리합니다. */
         Engine::FTickTaskManager mTickTaskManager{};

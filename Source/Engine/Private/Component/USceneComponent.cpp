@@ -50,7 +50,10 @@ namespace Engine {
         const FTransform Previous{mTransform};
         mTransform = Transform;
 
-        if (const Engine::AActor* Owner{GetOwner()}; Owner != nullptr && Owner->GetRootComponent() == this) {
+        Engine::AActor* Owner{ GetOwner() };
+        const bool IsRoot{ Owner != nullptr && Owner->GetRootComponent() == this };
+
+        if (IsRoot) {
             for (const auto& Component : Owner->GetComponents()) {
                 auto* Scene{CoreUObject::Cast<Engine::USceneComponent>(Component.get())};
 
@@ -62,6 +65,10 @@ namespace Engine {
 
         for (Engine::USceneComponent* Child : mAttachChildren) {
             Child->ApplyParentTransform(Previous, mTransform);
+        }
+
+        if (IsRoot) {
+            Owner->OnActorTransformChanged(Previous);
         }
 
         return true;
@@ -137,9 +144,7 @@ namespace Engine {
     }
 
     void Engine::USceneComponent::ApplyParentTransform(const FTransform& Previous, const FTransform& Current) {
-        const FTransform Relative{Previous.InverseTransformPosition(mTransform.mLocation), Previous.mRotation.Inverse() * mTransform.mRotation, mTransform.mScale / Previous.mScale};
-
-        SetTransform(Relative * Current);
+        SetTransform(mTransform.GetRelativeTransform(Previous) * Current);
     }
 
     void Engine::USceneComponent::DetachExternalAttachments() {

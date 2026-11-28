@@ -240,6 +240,11 @@ namespace Engine {
         Engine::UActorComponent* FindDefaultComponent(const CoreUObject::UClass* Class, const Core::FName& Name) const;
 
     private:
+        friend class USceneComponent;
+
+        virtual void OnWorldChanged(Engine::UWorld* PreviousWorld);
+        virtual void OnActorTransformChanged(const FTransform& PreviousTransform);
+
         /**
          * @brief 객체가 소속된 월드 연결을 지정합니다.
          * @param[in] World 연결할 월드이며, nullptr이면 연결을 해제합니다.

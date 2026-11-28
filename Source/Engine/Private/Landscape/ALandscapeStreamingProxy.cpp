@@ -1,5 +1,6 @@
 #include "Engine/Landscape/ALandscapeStreamingProxy.h"
 #include "Engine/Landscape/ALandscape.h"
+#include "Engine/UWorld.h"
 
 namespace Engine {
 
@@ -8,7 +9,17 @@ namespace Engine {
     }
 
     void ALandscapeStreamingProxy::SetLandscapeActor(CoreUObject::TObjectRef<Engine::ALandscape> LandscapeActor) {
+        Engine::UWorld* World{ GetWorld() };
+
+        if (World != nullptr) {
+            World->UnregisterLandscapeProxy(*this);
+        }
+
         mLandscapeActorRef = LandscapeActor;
+
+        if (World != nullptr && !IsPendingDestroy()) {
+            World->RegisterLandscapeProxy(*this);
+        }
     }
 
     CoreUObject::TObjectRef<Engine::AActor> ALandscapeStreamingProxy::GetSceneOutlinerParent() const {
@@ -76,6 +87,16 @@ namespace Engine {
         mRegionSizeY = Y;
 
         return true;
+    }
+
+    void ALandscapeStreamingProxy::OnWorldChanged(Engine::UWorld* PreviousWorld) {
+        if (PreviousWorld != nullptr) {
+            PreviousWorld->UnregisterLandscapeProxy(*this);
+        }
+
+        if (Engine::UWorld* World{ GetWorld() }; World != nullptr) {
+            World->RegisterLandscapeProxy(*this);
+        }
     }
 
 }

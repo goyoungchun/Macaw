@@ -79,6 +79,8 @@ public:
      */
     FTransform& operator*=(const FTransform& Other);
 
+    FTransform GetRelativeTransform(const FTransform& Parent) const;
+
     /**
      * @brief 위치에 스케일, 회전과 이동을 적용합니다.
      * @param[in] Position 변환하거나 투영할 위치입니다.

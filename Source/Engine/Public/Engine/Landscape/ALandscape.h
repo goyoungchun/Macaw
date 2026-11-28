@@ -38,10 +38,13 @@ namespace Engine {
         Uint64 GetSizeYInQuads() const;
 
     private:
+        void OnActorTransformChanged(const FTransform& PreviousTransform) override;
         bool InitializeStreamingProxy(Engine::ALandscapeStreamingProxy& Proxy, Int32 StartX, Int32 StartY, Int32 SizeX, Int32 SizeY, const Core::TArray<Engine::FLandscapeSection>& Sections);
         Uint64 GetQuadsPerComponentSide() const;
 
     private:
+        bool mSynchronizingProxies{};
+
         UPROPERTY(Edit, Serialize, Category = "Landscape", Getter = GetComponentCountX, Setter = SetComponentCountX)
         Int32 mComponentCountX{ 8 };
 
