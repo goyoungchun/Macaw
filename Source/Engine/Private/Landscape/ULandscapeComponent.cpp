@@ -1,15 +1,12 @@
 #include "Engine/Landscape/ULandscapeComponent.h"
 
 #include "Asset/UStaticMesh.h"
-#include "Core/Literals.h"
 #include "CoreUObject/Reflection/Cast.h"
 #include "Engine/EPrimitiveType.h"
 #include "Engine/Landscape/ALandscape.h"
 #include "Engine/Landscape/FLandscapeComponentSceneProxy.h"
 
 #include <utility>
-
-using namespace Core::Literals;
 
 namespace Engine {
 
@@ -108,7 +105,7 @@ namespace Engine {
         }
 
         // 전체 격자 기준 타일 좌표에 타일 크기를 곱하고 소유 프록시의 회전과 스케일을 적용합니다.
-        const float TileSize{(1.0_m).GetBase() * mQuadsPerSide};
+        const float TileSize{Engine::LandscapeQuadSize.GetBase() * mQuadsPerSide};
         FTransform Transform{GetOwner()->GetActorTransform()};
         Transform.mLocation = Transform.ToMatrix().TransformPosition({TileSize * mTileX, TileSize * mTileY, 0.0f});
         SetTransform(Transform);

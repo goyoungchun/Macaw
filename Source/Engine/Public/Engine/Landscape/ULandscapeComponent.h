@@ -1,10 +1,13 @@
 #pragma once
 
+#include "Core/Literals/QuantityTypes.h"
 #include "Engine/Component/UPrimitiveComponent.h"
 #include "Engine/Landscape/FLandscapeSection.h"
 #include "ULandscapeComponent.generated.h"
 
 namespace Engine {
+
+    inline constexpr Core::FLength LandscapeQuadSize{Core::FLength::FromBase(1.0f)};
 
     class FLandscapeRenderResources;
 

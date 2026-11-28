@@ -2242,7 +2242,7 @@ namespace Editor {
             return false;
         }
 
-        const FTransform Placement{Settings.mLocation, {}, {1.0f, 1.0f, 1.0f}};
+        FTransform Placement{Settings.mLocation, {}, {1.0f, 1.0f, 1.0f}};
         if (!Placement.IsValid()) {
             Error = "Enter a valid Landscape location.";
 
@@ -2270,6 +2270,10 @@ namespace Editor {
 
             return false;
         }
+
+        constexpr float HalfQuadSize{Engine::LandscapeQuadSize.GetBase() * 0.5f};
+        const FVector HalfSize{static_cast<float>(Landscape->GetSizeXInQuads()) * HalfQuadSize, static_cast<float>(Landscape->GetSizeYInQuads()) * HalfQuadSize, 0.0f};
+        Placement.mLocation -= Placement.ToMatrix().TransformVector(HalfSize);
 
         if (!ApplySpawnPlacement(Landscape, Placement)) {
             Error = "Could not set the Landscape location.";

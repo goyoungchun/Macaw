@@ -1,18 +1,17 @@
 #include "Engine/Landscape/FLandscapeComponentSceneProxy.h"
+#include "Engine/Landscape/ULandscapeComponent.h"
 #include "Asset/UStaticMesh.h"
 #include "Asset/UTexture2D.h"
-#include "Core/Literals.h"
 #include "CoreUObject/Reflection/NewObject.h"
 
 #include <mutex>
 #include <utility>
 
-using namespace Core::Literals;
 using namespace Engine;
 
 namespace {
     Asset::FMeshData BuildGrid(Uint32 Quads) {
-        constexpr float QuadSize{(1.0_m).GetBase()};
+        constexpr float QuadSize{Engine::LandscapeQuadSize.GetBase()};
         // 격자 양 끝을 포함하므로 한 변의 정점 수는 Quad 수보다 하나 많습니다.
         const Uint32 Side{Quads + 1};
         const Uint32 Vertices{Side * Side};
