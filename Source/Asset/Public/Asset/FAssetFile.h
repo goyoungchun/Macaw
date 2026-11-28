@@ -125,6 +125,8 @@ namespace Asset {
 
         static bool Migrate(const std::filesystem::path& Path, Asset::EAssetType& Type, bool& Migrated, Core::FString& Error);
 
+        static Uint64 GetMaximumPayloadSize();
+
         static bool LoadThumbnail(const std::filesystem::path& Path, Asset::EAssetType Type, Core::TArray<Uint8>& Thumbnail);
         static bool SaveThumbnail(const std::filesystem::path& Path, Asset::EAssetType Type, std::span<const Uint8> Thumbnail, std::filesystem::file_time_type SavedTime, Core::FString& Error);
     };

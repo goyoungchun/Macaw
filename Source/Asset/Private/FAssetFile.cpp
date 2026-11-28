@@ -215,6 +215,10 @@ namespace Asset {
         return Writer.Commit(Error);
     }
 
+    Uint64 Asset::FAssetFile::GetMaximumPayloadSize() {
+        return MaximumPayload;
+    }
+
     /**
      * @brief 에셋 종류와 데이터 무결성을 검사하여 페이로드를 읽습니다.
      */

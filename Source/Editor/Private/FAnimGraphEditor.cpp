@@ -7,29 +7,23 @@
 #include "Core/Types.h"
 #include "FAnimGraphEditor.h"
 #include "Editor/FEditorToolkitHost.h"
-#include "FAnimGraphNodeBuilder.h"
 #include "Asset/FAssetManager.h"
 #include "Asset/Animation/UAnimGraph.h"
 #include "Core/FilePath.h"
 #include "CoreUObject/Reflection/NewObject.h"
 #include "Editor/FAssetThumbnailCache.h"
 #include "Editor/FEditorAssetCatalog.h"
-#include "Engine/Animation/FAnimGraphNodeRegistry.h"
 
 #include "EditorStyle.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <imgui_node_editor.h>
 
 #include <algorithm>
-#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <format>
 #include <utility>
-
-namespace ed = ax::NodeEditor;
 
 namespace Editor {
 
@@ -47,169 +41,6 @@ namespace Editor {
          */
         constexpr char VariablePayload[]{"MACAW_ANIM_GRAPH_VARIABLE"};
 
-        // 노드 에디터 식별자 규칙입니다. 그래프 노드는 (식별자 + 1) << 8이고, 그 아래 8비트는 핀입니다.
-        // 0xFF는 출력 핀, 1~254는 입력 핀 순서 + 1입니다. Output 노드와 그 입력 핀은 그래프 노드와 겹치지 않는 작은 값입니다.
-        // 링크는 받는 입력 핀 하나에 하나뿐이므로 입력 핀 식별자를 링크 식별자로도 씁니다.
-
-        /**
-         * @brief 최종 출력 노드의 예약 키입니다.
-         */
-        constexpr std::uintptr_t OutputNode{1};
-
-        /**
-         * @brief 최종 출력 노드의 입력 핀 키입니다.
-         */
-        constexpr std::uintptr_t OutputInputPin{1};
-
-        /**
-         * @brief 출력 핀을 입력 핀·노드 키와 구분하는 비트입니다.
-         */
-        constexpr std::uintptr_t OutputPinBits{0xFF};
-
-        /**
-         * @brief 변수 Getter 노드를 다른 키와 구분하는 비트입니다.
-         */
-        constexpr std::uintptr_t GetterBit{std::uintptr_t{1} << 61};
-
-        /**
-         * @brief Float 값 입력 핀을 다른 키와 구분하는 비트입니다.
-         */
-        constexpr std::uintptr_t FloatInputBit{std::uintptr_t{1} << 60};
-
-        /**
-         * @brief 변수 Getter ID를 편집기 노드 키로 인코딩합니다.
-         * @param Id 조회 또는 변경할 항목 ID입니다.
-         * @return Getter 노드를 식별하는 키입니다.
-         */
-        std::uintptr_t GetterKey(Int32 Id) {
-            return GetterBit | ((static_cast<std::uintptr_t>(Id) + 1) << 8);
-        }
-
-        /**
-         * @brief 노드 편집기 키에서 변수 Getter ID를 복원합니다.
-         * @param Key 해석할 노드 편집기 식별 키입니다.
-         * @return 원본 Getter ID입니다.
-         */
-        Int32 DecodeGetter(std::uintptr_t Key) {
-            return (Key & GetterBit) != 0 ? static_cast<Int32>(((Key & ~GetterBit) >> 8) - 1) : -1;
-        }
-
-        /**
-         * @brief 원본 또는 실행 노드를 편집기에서 식별할 키로 변환합니다.
-         * @param Id 조회 또는 변경할 항목 ID입니다.
-         * @return 노드를 식별하는 편집기 키입니다.
-         */
-        std::uintptr_t NodeKey(Int32 Id) {
-            return Id == Asset::UAnimGraph::OutputNodeId ? OutputNode : (static_cast<std::uintptr_t>(Id) + 1) << 8;
-        }
-
-        /**
-         * @brief 노드 키와 입력 번호를 편집기 입력 핀 키로 인코딩합니다.
-         * @param Node 키로 변환하거나 조회할 노드 ID입니다.
-         * @param Pin 대상 입력 핀 번호이며 첫 입력은 0입니다.
-         * @return 입력 핀을 식별하는 키입니다.
-         */
-        std::uintptr_t InputPinKey(Int32 Node, Index_t Pin) {
-            return Node == Asset::UAnimGraph::OutputNodeId ? OutputInputPin : NodeKey(Node) | static_cast<std::uintptr_t>(Pin + 1);
-        }
-
-        /**
-         * @brief 노드 키를 편집기 출력 핀 키로 인코딩합니다.
-         * @param Node 키로 변환하거나 조회할 노드 ID입니다.
-         * @return 출력 핀을 식별하는 키입니다.
-         */
-        std::uintptr_t OutputPinKey(Int32 Node) {
-            return NodeKey(Node) | OutputPinBits;
-        }
-
-        /**
-         * @brief 노드 ID와 파라미터 번호를 Float 입력 핀 키로 인코딩합니다.
-         * @param Node 키로 변환하거나 조회할 노드 ID입니다.
-         * @param Parameter 조회하거나 연결할 파라미터 이름 또는 인덱스입니다.
-         * @return 다른 노드·핀 종류와 구분되는 편집기 키입니다.
-         */
-        std::uintptr_t FloatInputKey(Int32 Node, Index_t Parameter) {
-            return FloatInputBit | InputPinKey(Node, static_cast<Int32>(Parameter));
-        }
-
-        /**
-         * @brief 파라미터가 Float 값 노드 연결을 지원하는지 확인합니다.
-         * @param Info 등록된 노드 파라미터 메타데이터입니다.
-         * @return Float 연결을 허용하는 파라미터이면 true입니다.
-         */
-        bool IsBindableFloat(const Engine::FAnimGraphParameterInfo& Info) {
-            return Info.mType == Engine::EAnimGraphParameterType::Float && Info.mBindable;
-        }
-
-        /**
-         * @brief 노드의 파라미터 번호에 해당하는 연결 가능한 Float 입력을 찾습니다.
-         * @param Node 조회·연결·갱신할 노드입니다.
-         * @param Parameter 조회하거나 연결할 파라미터 이름 또는 인덱스입니다.
-         * @return 레지스트리 소유의 파라미터 메타데이터이며 없으면 nullptr입니다.
-         */
-        const Engine::FAnimGraphParameterInfo* FindFloatInput(const Asset::FAnimGraphNode* Node, Int32 Parameter) {
-            const Engine::FAnimGraphNodeType* Type{Node != nullptr ? Engine::FAnimGraphNodeRegistry::Find(Node->mType) : nullptr};
-
-            if (Type == nullptr || Parameter < 0 || static_cast<std::size_t>(Parameter) >= Type->mParameters.size()) {
-                return nullptr;
-            }
-
-            const Engine::FAnimGraphParameterInfo& Info{Type->mParameters[Parameter]};
-
-            return IsBindableFloat(Info) ? &Info : nullptr;
-        }
-
-        /**
-         * @brief 노드 편집기 핀 키에서 복원한 노드 ID, 핀 번호와 입출력 방향입니다.
-         * @ingroup Editor
-         */
-        struct FPinRef {
-        public:
-
-            /**
-             * @brief 핀 키에서 복원한 포즈 노드 ID입니다.
-             */
-            Int32 mNode{};
-
-            /**
-             * @brief 노드 내부 입력 핀 번호입니다.
-             */
-            Int32 mPin{};
-
-            /**
-             * @brief 출력 핀이면 true, 입력 핀이면 false입니다.
-             */
-            bool mOutput{};
-        };
-
-        /**
-         * @brief 편집기 핀 키에서 노드·핀 번호·입출력 방향을 복원합니다.
-         * @param Key 해석할 노드 편집기 식별 키입니다.
-         * @return 해석한 핀 정보입니다.
-         */
-        FPinRef DecodePin(std::uintptr_t Key) {
-            if (Key == OutputInputPin) {
-                return {Asset::UAnimGraph::OutputNodeId, 0, false};
-            }
-
-            const std::uintptr_t Low{Key & 0xFF};
-
-            return {static_cast<Int32>((Key >> 8) - 1), Low == OutputPinBits ? 0 : static_cast<Int32>(Low) - 1, Low == OutputPinBits};
-        }
-
-        /**
-         * @brief 노드 편집기 키에서 원본 노드 ID를 복원합니다.
-         * @param Key 해석할 노드 편집기 식별 키입니다.
-         * @return 원본 노드 ID입니다.
-         */
-        Int32 DecodeNode(std::uintptr_t Key) {
-            if ((Key & GetterBit) != 0) {
-                return -2;
-            }
-
-            return Key == OutputNode ? Asset::UAnimGraph::OutputNodeId : static_cast<Int32>((Key >> 8) - 1);
-        }
-
         /**
          * @brief 정규화한 경로가 지정 루트 내부에 속하는지 검사합니다.
          * @param Path 처리할 에셋 또는 파일 경로입니다.
@@ -222,44 +53,12 @@ namespace Editor {
             return !Relative.empty() && *Relative.begin() != L"..";
         }
 
-        /**
-         * @brief Float 값을 노드 UI에서 읽기 쉬운 문자열로 변환합니다.
-         * @param Value 표시·비교하거나 적용할 값입니다.
-         * @return 표시용 숫자 문자열입니다.
-         */
-        Core::FString FormatFloat(float Value) {
-            return std::format("{}", Value);
-        }
-
-        // 노드 본문에 보일 파라미터 요약입니다. 경로는 파일 이름만 보여 줍니다.
-
-        /**
-         * @brief 저장된 값 또는 기본값으로 노드 파라미터의 표시 문자열을 만듭니다.
-         * @param Info 등록된 노드 파라미터 메타데이터입니다.
-         * @param Node 조회·연결·갱신할 노드입니다.
-         * @return 속성 UI에 표시할 값 문자열입니다.
-         */
-        Core::FString DisplayParameterValue(const Engine::FAnimGraphParameterInfo& Info, const Asset::FAnimGraphNode& Node) {
-            const Core::FString* Value{Node.FindParameter(Info.mName)};
-            const Core::FString Text{Value != nullptr ? *Value : Info.mDefault};
-
-            if (Info.mType == Engine::EAnimGraphParameterType::AnimSequence || Info.mType == Engine::EAnimGraphParameterType::BlendSpace || Info.mType == Engine::EAnimGraphParameterType::PhysicsAsset) {
-                return Text.empty() ? Core::FString{"(없음)"} : Core::FilePath::ToUtf8(Core::FilePath::FromUtf8(Text).stem());
-            }
-
-            return Text;
-        }
     }
 
     FAnimGraphEditor::FAnimGraphEditor(Asset::FAssetManager* Assets, Editor::FEditorAssetCatalog* Catalog, Editor::FAssetThumbnailCache* Thumbnails)
         : mAssets{Assets},
           mCatalog{Catalog},
           mThumbnails{Thumbnails} {
-        ed::Config Config{};
-
-        Config.SettingsFile = nullptr;
-        mEditor = ed::CreateEditor(&Config);
-        mGraphContexts.emplace("Initial", mEditor);
     }
 
     FAnimGraphEditor::~FAnimGraphEditor() {
@@ -279,13 +78,10 @@ namespace Editor {
         mEditing = mRootEditing.get();
         mEditing->CopyFrom(*Source);
         mEditing->SetName(Source->GetName());
-        mContextNode = 0;
 
         mPath = Path;
         mDirty = false;
         mOpen = true;
-        mApplyPositions = true;
-        mSelectedNode = -2;
         mNewVariable.fill('\0');
         mError.clear();
 
@@ -338,6 +134,7 @@ namespace Editor {
         mOpen = false;
         mEditing = nullptr;
         mNavigation.clear();
+        ClearGraphContexts();
         mRootEditing.reset();
     }
 
@@ -575,586 +372,104 @@ namespace Editor {
         return Remove;
     }
 
-    Index_t FAnimGraphEditor::FindVariableIndex(const Core::FString& Name) const {
-        const auto& Variables{mEditing->GetVariables()};
-        const auto Found{std::find_if(Variables.begin(), Variables.end(), [&Name](const Asset::FAnimGraphVariable& Variable) {
-            return Variable.mName == Name;
-        })};
-
-        return Found == Variables.end() ? InvalidIndex : static_cast<Index_t>(Found - Variables.begin());
-    }
-
-    void FAnimGraphEditor::DrawValueGetters() {
-        Core::TArray<Int32> Bound{};
-
-        for (const Asset::FAnimGraphNode& Node : mEditing->GetNodes()) {
-            const Engine::FAnimGraphNodeType* Type{Engine::FAnimGraphNodeRegistry::Find(Node.mType)};
-
-            if (Type == nullptr) {
-                continue;
-            }
-
-            for (const Engine::FAnimGraphParameterInfo& Info : Type->mParameters) {
-                if (!IsBindableFloat(Info)) {
-                    continue;
-                }
-
-                const Core::FString* Binding{Node.FindParameter(Info.mName + ".Binding")};
-
-                if (Binding == nullptr) {
-                    continue;
-                }
-
-                if (const Asset::FAnimGraphVariableGetter* Getter{mEditing->FindBoundGetter(Node, Info.mName)}; Getter != nullptr) {
-                    Bound.push_back(Getter->mId);
-                } else if (const Int32 Id{mEditing->AddVariableGetter(*Binding, Node.mX - 245.0f, Node.mY - 170.0f)}; Id >= 0) {
-                    ed::SetNodePosition(ed::NodeId{GetterKey(Id)}, {Node.mX - 245.0f, Node.mY - 170.0f});
-                    Bound.push_back(Id);
-                }
-            }
-        }
-
-        for (const Asset::FAnimGraphVariableGetter& Getter : mEditing->GetVariableGetters()) {
-            const Index_t Index{FindVariableIndex(Getter.mVariable)};
-
-            if (Index == InvalidIndex) {
-                continue;
-            }
-
-            const std::uintptr_t Key{GetterKey(Getter.mId)};
-
-            if (mApplyPositions) {
-                ed::SetNodePosition(ed::NodeId{Key}, {Getter.mX, Getter.mY});
-            }
-
-            const Asset::FAnimGraphVariable& Variable{mEditing->GetVariables()[Index]};
-            const Core::FString Value{FormatFloat(Variable.mDefault)};
-            const bool Connected{std::find(Bound.begin(), Bound.end(), Getter.mId) != Bound.end()};
-
-            Editor::FAnimGraphNodeBuilder::DrawFloatGetter(ed::NodeId{Key}, ed::PinId{Key | OutputPinBits}, Variable.mName.c_str(), Value.c_str(), Connected);
-        }
-    }
-
-    void FAnimGraphEditor::DrawValueLinks() {
-        const ImVec4 Color{Editor::FAnimGraphNodeBuilder::FloatColor()};
-
-        for (const Asset::FAnimGraphNode& Node : mEditing->GetNodes()) {
-            const Engine::FAnimGraphNodeType* Type{Engine::FAnimGraphNodeRegistry::Find(Node.mType)};
-
-            if (Type == nullptr) {
-                continue;
-            }
-
-            for (Index_t Index{}; Index < Type->mParameters.size(); ++Index) {
-                const Engine::FAnimGraphParameterInfo& Info{Type->mParameters[Index]};
-                const Asset::FAnimGraphVariableGetter* Getter{IsBindableFloat(Info) ? mEditing->FindBoundGetter(Node, Info.mName) : nullptr};
-
-                if (Getter != nullptr) {
-                    const std::uintptr_t Input{FloatInputKey(Node.mId, Index)};
-                    const std::uintptr_t Output{GetterKey(Getter->mId) | OutputPinBits};
-
-                    ed::Link(ed::LinkId{Input}, ed::PinId{Output}, ed::PinId{Input}, Color, 2.0f);
-                }
-            }
+    void FAnimGraphEditor::TrackGraphEdit(const TGL::FEditResult& Edit) {
+        if (Edit.mStatus == TGL::EEditStatus::Applied) {
+            mDirty = true;
+            mError.clear();
+        } else if (!Edit.mMessage.empty()) {
+            mError = Edit.mMessage;
         }
     }
 
     void FAnimGraphEditor::DrawGraph() {
-        const ImVec2 CanvasOrigin{ImGui::GetCursorScreenPos()};
-        const ImVec2 CanvasSize{ImGui::GetContentRegionAvail()};
-        ed::SetCurrentEditor(mEditor);
-        Editor::FAnimGraphNodeBuilder::ApplyStyle();
-        ed::Begin("AnimGraphCanvas", CanvasSize);
+        auto& Document{mPoseDocuments[mView.mKey]};
+        auto& Editor{mGraphEditors[mView.mKey]};
 
-        if (mApplyPositions) {
-            ed::SetNodePosition(ed::NodeId{OutputNode}, {mEditing->GetOutputX(), mEditing->GetOutputY()});
-
-            for (const Asset::FAnimGraphNode& Node : mEditing->GetNodes()) {
-                ed::SetNodePosition(ed::NodeId{NodeKey(Node.mId)}, {Node.mX, Node.mY});
-            }
+        if (!Document) {
+            Document = std::make_unique<FAnimPoseGraphDocument>();
+            Editor = std::make_unique<TGL::FGraphEditor>();
+            Document->Bind(*mEditing);
+        } else {
+            Document->Refresh();
         }
 
-        const ImVec4 PoseColor{Editor::FAnimGraphNodeBuilder::PoseColor()};
-        const ImVec4 FloatColor{Editor::FAnimGraphNodeBuilder::FloatColor()};
-        const auto HasOutput{[this](Int32 Id) {
-            return std::any_of(mEditing->GetLinks().begin(), mEditing->GetLinks().end(), [Id](const Asset::FAnimGraphLink& Link) {
-                return Link.mFromNode == Id;
-            });
+        const auto Apply{[this, &Document, &Editor](const TGL::FEdit& Edit) {
+            TrackGraphEdit(Editor->SubmitEdit(*Document, Edit));
         }};
 
-        // Output Pose 노드입니다.
-        Editor::FAnimGraphNodeBuilder OutputBuilder{};
+        const ImVec2 Origin{ImGui::GetCursorScreenPos()};
+        const ImVec2 Size{ImGui::GetContentRegionAvail()};
+        const TGL::FGraphEvents Events{Editor->Draw("AnimGraphCanvas", *Document, *Document, Document.get(), Size)};
 
-        OutputBuilder.FitHeader("Output Pose", "Output Pose");
-        OutputBuilder.FitPins("Result");
-        OutputBuilder.Begin(ed::NodeId{OutputNode}, 160.0f);
-        OutputBuilder.Header("Output Pose", "Output Pose");
-        OutputBuilder.InputPin(ed::PinId{OutputInputPin}, "Result", mEditing->FindInput(Asset::UAnimGraph::OutputNodeId, 0) != Asset::UAnimGraph::OutputNodeId, PoseColor);
-        OutputBuilder.End();
-
-        DrawValueGetters();
-
-        // 블루프린트처럼 색 헤더 아래 첫 줄에 첫 입력 핀과 출력 핀을 나란히 두고, 그 아래에 파라미터 요약을 보여 줍니다.
-        for (const Asset::FAnimGraphNode& Node : mEditing->GetNodes()) {
-            const Engine::FAnimGraphNodeType* Type{Engine::FAnimGraphNodeRegistry::Find(Node.mType)};
-            const char* TypeTitle{Type != nullptr ? Type->mTitle.c_str() : Node.mType.c_str()};
-            const char* Title{Node.mName.empty() ? TypeTitle : Node.mName.c_str()};
-            const std::size_t PinCount{Type != nullptr ? Type->mPoseInputs.size() : 0};
-            const Core::FString UnknownType{Type == nullptr ? "알 수 없는 노드 종류: " + Node.mType : Core::FString{}};
-            Core::TArray<Core::FString> Parameters{};
-            Editor::FAnimGraphNodeBuilder Builder{};
-
-            Builder.FitHeader(Title, TypeTitle);
-            Builder.FitPins(PinCount > 0 ? Type->mPoseInputs.front().c_str() : nullptr, "Pose");
-
-            for (Index_t Pin{1}; Pin < PinCount; ++Pin) {
-                Builder.FitPins(Type->mPoseInputs[Pin].c_str());
-            }
-
-            if (Type == nullptr) {
-                Builder.FitText(UnknownType.c_str());
-            } else {
-                Parameters.reserve(Type->mParameters.size());
-
-                for (const Engine::FAnimGraphParameterInfo& Info : Type->mParameters) {
-                    Core::FString Value{DisplayParameterValue(Info, Node)};
-
-                    if (IsBindableFloat(Info)) {
-                        const Core::FString* Binding{Node.FindParameter(Info.mName + ".Binding")};
-
-                        Value = Binding != nullptr ? Info.mName : Info.mName + "  " + Value;
-                        Builder.FitPins(Value.c_str());
-                    } else {
-                        Builder.FitProperty(Info.mName.c_str(), Value.c_str());
-                    }
-
-                    Parameters.push_back(std::move(Value));
-                }
-            }
-
-            Builder.Begin(ed::NodeId{NodeKey(Node.mId)}, 210.0f);
-            Builder.Header(Title, TypeTitle);
-
-            for (Index_t Pin{}; Pin < PinCount; ++Pin) {
-                const bool Connected{mEditing->FindInput(Node.mId, Pin) != Asset::UAnimGraph::OutputNodeId};
-
-                Builder.InputPin(ed::PinId{InputPinKey(Node.mId, Pin)}, Type->mPoseInputs[Pin].c_str(), Connected, PoseColor);
-
-                if (Pin == 0) {
-                    Builder.OutputPin(ed::PinId{OutputPinKey(Node.mId)}, "Pose", HasOutput(Node.mId), PoseColor, true);
-                }
-            }
-
-            if (PinCount == 0) {
-                Builder.OutputPin(ed::PinId{OutputPinKey(Node.mId)}, "Pose", HasOutput(Node.mId), PoseColor, false);
-            }
-
-            if (Type == nullptr) {
-                Builder.BeginBody();
-                Builder.DrawText(UnknownType.c_str(), {1.0f, 0.45f, 0.4f, 1.0f});
-            } else {
-                for (Index_t Index{}; Index < Parameters.size(); ++Index) {
-                    const Engine::FAnimGraphParameterInfo& Info{Type->mParameters[Index]};
-
-                    if (IsBindableFloat(Info)) {
-                        const Core::FString* Binding{Node.FindParameter(Info.mName + ".Binding")};
-                        const bool Connected{Binding != nullptr && FindVariableIndex(*Binding) != InvalidIndex};
-
-                        Builder.InputPin(ed::PinId{FloatInputKey(Node.mId, Index)}, Parameters[Index].c_str(), Connected, FloatColor);
-                    }
-                }
-
-                if (std::any_of(Type->mParameters.begin(), Type->mParameters.end(), [](const Engine::FAnimGraphParameterInfo& Info) {
-                    return !IsBindableFloat(Info);
-                })) {
-                    Builder.BeginBody();
-                }
-
-                for (Index_t Index{}; Index < Parameters.size(); ++Index) {
-                    if (const Engine::FAnimGraphParameterInfo& Info{Type->mParameters[Index]}; !IsBindableFloat(Info)) {
-                        Builder.DrawProperty(Info.mName.c_str(), Parameters[Index].c_str());
-                    }
-                }
-            }
-
-            Builder.End();
+        if (Events.mEdit) {
+            TrackGraphEdit(*Events.mEdit);
         }
 
-        for (const Asset::FAnimGraphLink& Link : mEditing->GetLinks()) {
-            const std::uintptr_t Input{InputPinKey(Link.mToNode, Link.mToPin)};
-
-            ed::Link(ed::LinkId{Input}, ed::PinId{OutputPinKey(Link.mFromNode)}, ed::PinId{Input}, PoseColor, 2.0f);
+        if (!Events.mVisible) {
+            return;
         }
 
-        DrawValueLinks();
-
-        if (mFitRequested && !mApplyPositions) {
-            ed::NavigateToContent(0.0f);
-            mFitRequested = false;
+        if (Events.mContextItem && std::holds_alternative<TGL::FNodeId>(*Events.mContextItem)) {
+            ImGui::OpenPopup("AnimGraphNodeMenu");
         }
 
-        // 핀을 끌어 새 링크를 만듭니다. 출력 핀과 입력 핀을 하나씩 잇고, 같은 노드나 순환 연결은 거부합니다.
-        if (ed::BeginCreate({0.98f, 0.72f, 0.2f, 1.0f}, 2.0f)) {
-            ed::PinId Start{};
-            ed::PinId End{};
+        TGL::FNodeId OpenMachine{};
+        ImGui::SetNextWindowSizeConstraints({360.0f, 0.0f}, {500.0f, ImGui::GetIO().DisplaySize.y});
 
-            if (ed::QueryNewLink(&Start, &End) && Start && End) {
-                std::uintptr_t From{Start.Get()};
-                std::uintptr_t To{End.Get()};
+        if (ImGui::BeginPopup("AnimGraphNodeMenu")) {
+            const auto Selection{Editor->GetSelection()};
+            const auto* Id{Selection.size() == 1 ? std::get_if<TGL::FNodeId>(&Selection.front()) : nullptr};
 
-                if ((From & OutputPinBits) != OutputPinBits) {
-                    std::swap(From, To);
+            if (Id != nullptr) {
+                const TGL::FNodeId NodeId{*Id};
+                const Int32 PoseId{FAnimPoseGraphDocument::GetPoseNodeId(NodeId)};
+                const TGL::FNodeView* Node{TGL::FindNode(Document->ReadView(), NodeId)};
+                const bool CanDelete{Node != nullptr && Node->mDeletable};
+
+                if (Node != nullptr) {
+                    ImGui::SeparatorText(Node->mTitle.c_str());
                 }
 
-                if (((From | To) & (GetterBit | FloatInputBit)) != 0) {
-                    const Asset::FAnimGraphVariableGetter* Getter{mEditing->FindVariableGetter(DecodeGetter(From))};
-                    const FPinRef Input{(To & FloatInputBit) != 0 ? DecodePin(To & ~FloatInputBit) : FPinRef{-2, -1, false}};
-                    Asset::FAnimGraphNode* Target{mEditing->FindNode(Input.mNode)};
-                    const Engine::FAnimGraphParameterInfo* Info{FindFloatInput(Target, Input.mPin)};
+                TrackGraphEdit(Editor->DrawDetails(*Document, Document.get(), [this](const TGL::FPropertyView& Property, TGL::FPropertyValue& Value) {
+                    const Asset::EAssetType Type{Property.mCustomEditor == "AnimSequence" ? Asset::EAssetType::AnimSequence : Property.mCustomEditor == "BlendSpace" ? Asset::EAssetType::BlendSpace : Asset::EAssetType::PhysicsAsset};
 
-                    if (Getter == nullptr || Info == nullptr) {
-                        ed::RejectNewItem({1.0f, 0.3f, 0.3f, 1.0f}, 2.0f);
-                    } else if (ed::AcceptNewItem(FloatColor, 3.0f)) {
-                        if (mEditing->FindBoundGetter(*Target, Info->mName) != Getter) {
-                            Target->SetParameter(Info->mName + ".Binding", Getter->mVariable, Getter->mId);
-                            mDirty = true;
-                        }
-                    }
-                } else {
-                    const FPinRef A{DecodePin(From)};
-                    const FPinRef B{DecodePin(To)};
+                    return mCatalog != nullptr && mThumbnails != nullptr && mPicker.Draw(*mCatalog, *mThumbnails, Property.mName.c_str(), std::get<std::string>(Value), Type, {}, "None", "Inherited", false);
+                }));
 
-                    if (!A.mOutput || B.mOutput || (B.mNode != Asset::UAnimGraph::OutputNodeId && mEditing->WouldCreateCycle(A.mNode, B.mNode))) {
-                        ed::RejectNewItem({1.0f, 0.3f, 0.3f, 1.0f}, 2.0f);
-                    } else if (ed::AcceptNewItem({0.4f, 0.9f, 0.5f, 1.0f}, 3.0f) && mEditing->Connect(A.mNode, B.mNode, B.mPin)) {
-                        mDirty = true;
-                    }
+                if (mEditing->FindStateMachine(PoseId) != nullptr && ImGui::MenuItem("Open State Machine")) {
+                    OpenMachine = NodeId;
                 }
-            }
-        }
 
-        ed::EndCreate();
+                if (ImGui::MenuItem("삭제", "Delete", false, CanDelete)) {
+                    Apply(TGL::FDeleteSelection{{NodeId}});
+                }
 
-        if (ed::BeginDelete()) {
-            ed::LinkId Link{};
-            ed::NodeId Node{};
-
-            while (ed::QueryDeletedLink(&Link)) {
-                if (ed::AcceptDeletedItem()) {
-                    const bool FloatLink{(Link.Get() & FloatInputBit) != 0};
-                    const FPinRef Input{DecodePin(Link.Get() & ~FloatInputBit)};
-
-                    if (FloatLink) {
-                        Asset::FAnimGraphNode* Target{mEditing->FindNode(Input.mNode)};
-
-                        if (const Engine::FAnimGraphParameterInfo* Info{FindFloatInput(Target, Input.mPin)}; Info != nullptr) {
-                            const Core::FString BindingKey{Info->mName + ".Binding"};
-
-                            if (Target->FindParameter(BindingKey) != nullptr) {
-                                Target->SetParameter(BindingKey, {});
-                                mDirty = true;
-                            }
-                        }
-                    } else {
-                        mDirty |= mEditing->Disconnect(Input.mNode, Input.mPin);
-                    }
+                if (ImGui::MenuItem("입력 연결 끊기", nullptr, false, PoseId != -2)) {
+                    Apply(TGL::FDisconnectInputs{NodeId});
                 }
             }
 
-            while (ed::QueryDeletedNode(&Node)) {
-                const Int32 Id{DecodeNode(Node.Get())};
-
-                // Output 노드는 지울 수 없습니다.
-                if (Id == Asset::UAnimGraph::OutputNodeId) {
-                    ed::RejectDeletedItem();
-                } else if (ed::AcceptDeletedItem()) {
-                    if ((Node.Get() & GetterBit) != 0) {
-                        mDirty |= mEditing->RemoveVariableGetter(DecodeGetter(Node.Get()));
-                    } else {
-                        mDirty |= mEditing->RemoveNode(Id);
-                    }
-
-                    if (mSelectedNode == Id) {
-                        mSelectedNode = -2;
-                    }
-                }
-            }
+            ImGui::EndPopup();
         }
 
-        ed::EndDelete();
-
-        // 캔버스 좌표에서 마우스 위치를 기억해 두고, 팝업은 노드 에디터를 잠시 멈춘 화면 좌표에서 그립니다.
-        const ImVec2 CanvasMouse{ImGui::GetMousePos()};
-        ed::NodeId ContextNode{};
-        Int32 OpenMachineId{-1};
-
-        ed::Suspend();
-
-        const ImRect DropArea{CanvasOrigin, {CanvasOrigin.x + CanvasSize.x, CanvasOrigin.y + CanvasSize.y}};
-
-        if (ImGui::BeginDragDropTargetCustom(DropArea, ImGui::GetID("AnimGraphVariableDrop"))) {
+        if (ImGui::BeginDragDropTargetCustom(ImRect{Origin, {Origin.x + Size.x, Origin.y + Size.y}}, ImGui::GetID("AnimGraphVariableDrop"))) {
             if (const ImGuiPayload* Payload{ImGui::AcceptDragDropPayload(VariablePayload)}; Payload != nullptr && Payload->Data != nullptr && Payload->DataSize > 1 && static_cast<const char*>(Payload->Data)[Payload->DataSize - 1] == '\0') {
                 const Core::FString Name{static_cast<const char*>(Payload->Data), static_cast<std::size_t>(Payload->DataSize - 1)};
-
-                if (const Int32 Id{mEditing->AddVariableGetter(Name, CanvasMouse.x, CanvasMouse.y)}; Id >= 0) {
-                    ed::SetNodePosition(ed::NodeId{GetterKey(Id)}, CanvasMouse);
-                    mDirty = true;
-                } else {
-                    mError = "Get 노드를 추가할 수 없습니다.";
-                }
+                Apply(TGL::FCreateNode{FAnimPoseGraphDocument::GetterAction(Name), Events.mPointerPosition});
             }
 
             ImGui::EndDragDropTarget();
         }
 
-        if (ed::ShowNodeContextMenu(&ContextNode)) {
-            mContextNode = ContextNode.Get();
-            mSelectedNode = DecodeNode(mContextNode);
-            ed::SelectNode(ContextNode);
-            ImGui::OpenPopup("AnimGraphNodeMenu");
-        } else if (ed::ShowBackgroundContextMenu()) {
-            mCreateX = CanvasMouse.x;
-            mCreateY = CanvasMouse.y;
-            ImGui::OpenPopup("AnimGraphCreateNode");
-        }
-
-        if (ImGui::BeginPopup("AnimGraphCreateNode")) {
-            ImGui::TextDisabled("노드 추가");
-            ImGui::Separator();
-
-            for (const Engine::FAnimGraphNodeType& Type : Engine::FAnimGraphNodeRegistry::GetNodeTypes()) {
-                if (ImGui::MenuItem(Type.mTitle.c_str())) {
-                    const Int32 Id{mEditing->AddNode(Type.mType, Type.mTitle, mCreateX, mCreateY)};
-
-                    if (Id >= 0) {
-                        ed::SetNodePosition(ed::NodeId{NodeKey(Id)}, {mCreateX, mCreateY});
-                        mSelectedNode = Id;
-                        mDirty = true;
-                    } else {
-                        mError = "노드 수가 한도에 도달했습니다.";
-                    }
-                }
+        if (Events.mActivated) {
+            if (const auto* Node{std::get_if<TGL::FNodeId>(&*Events.mActivated)}) {
+                OpenMachine = *Node;
             }
-
-            ImGui::EndPopup();
         }
 
-        ImGui::SetNextWindowSizeConstraints({360.0f, 0.0f}, {500.0f, ImGui::GetIO().DisplaySize.y});
-
-        if (ImGui::BeginPopup("AnimGraphNodeMenu")) {
-            const Int32 Id{DecodeNode(mContextNode)};
-            const Int32 Getter{DecodeGetter(mContextNode)};
-            const bool CanDelete{mEditing->FindVariableGetter(Getter) != nullptr || mEditing->FindNode(Id) != nullptr};
-            mSelectedNode = Id;
-            ImGui::PushItemWidth(220.0f);
-
-            if (const auto* Variable{mEditing->FindVariableGetter(Getter)}) {
-                ImGui::SeparatorText("Variable Getter");
-                ImGui::Text("Variable: %s", Variable->mVariable.c_str());
-            } else if (Id == Asset::UAnimGraph::OutputNodeId) {
-                ImGui::SeparatorText("Output Pose");
-            } else {
-                DrawSelection();
-            }
-
-            ImGui::PopItemWidth();
-            ImGui::Separator();
-
-            if (const auto* Node{mEditing->FindNode(Id)}; Node != nullptr && Node->mType == "StateMachine" && ImGui::MenuItem("Open State Machine")) {
-                OpenMachineId = Id;
-            }
-
-            if (ImGui::MenuItem("삭제", "Delete", false, CanDelete)) {
-                mDirty |= Getter >= 0 ? mEditing->RemoveVariableGetter(Getter) : mEditing->RemoveNode(Id);
-                mSelectedNode = -2;
-            }
-
-            if (ImGui::MenuItem("입력 연결 끊기", nullptr, false, Id != -2)) {
-                for (Index_t Pin{}; Pin < 255; ++Pin) {
-                    mDirty |= mEditing->Disconnect(Id, Pin);
-                }
-
-                if (Asset::FAnimGraphNode* Target{mEditing->FindNode(Id)}; Target != nullptr) {
-                    const auto Removed{std::erase_if(Target->mParameters, [](const Asset::FAnimGraphParameter& Parameter) {
-                        return Parameter.mName.ends_with(".Binding");
-                    })};
-
-                    mDirty |= Removed > 0;
-                }
-            }
-
-            ImGui::EndPopup();
+        if (OpenMachine) {
+            OpenStateMachine(FAnimPoseGraphDocument::GetPoseNodeId(OpenMachine));
         }
-
-        ed::Resume();
-
-        Core::TStaticArray<ed::NodeId, 2> Selected{};
-        const int SelectedCount{ed::GetSelectedNodes(Selected.data(), static_cast<int>(Selected.size()))};
-
-        if (SelectedCount == 1) {
-            mSelectedNode = DecodeNode(Selected[0].Get());
-        } else if (SelectedCount == 0 && !ImGui::IsPopupOpen("AnimGraphNodeMenu")) {
-            mSelectedNode = -2;
-        }
-
-        // 사용자가 옮긴 노드 위치를 편집 사본에 반영합니다. 위치를 적용하는 프레임에는 아직 노드 에디터 값이 이전 상태이므로 건너뜁니다.
-        if (!mApplyPositions) {
-            const ImVec2 Output{ed::GetNodePosition(ed::NodeId{OutputNode})};
-
-            if (std::abs(Output.x - mEditing->GetOutputX()) > 0.5f || std::abs(Output.y - mEditing->GetOutputY()) > 0.5f) {
-                mEditing->SetNodePosition(Asset::UAnimGraph::OutputNodeId, Output.x, Output.y);
-                mDirty = true;
-            }
-
-            for (const Asset::FAnimGraphNode& Node : mEditing->GetNodes()) {
-                const ImVec2 Position{ed::GetNodePosition(ed::NodeId{NodeKey(Node.mId)})};
-
-                if (std::isfinite(Position.x) && (std::abs(Position.x - Node.mX) > 0.5f || std::abs(Position.y - Node.mY) > 0.5f)) {
-                    mEditing->SetNodePosition(Node.mId, Position.x, Position.y);
-                    mDirty = true;
-                }
-            }
-
-            for (const Asset::FAnimGraphVariableGetter& Getter : mEditing->GetVariableGetters()) {
-                const ImVec2 Position{ed::GetNodePosition(ed::NodeId{GetterKey(Getter.mId)})};
-
-                if (std::abs(Position.x - Getter.mX) > 0.5f || std::abs(Position.y - Getter.mY) > 0.5f) {
-                    mDirty |= mEditing->SetVariableGetterPosition(Getter.mId, Position.x, Position.y);
-                }
-            }
-        } else {
-            mApplyPositions = false;
-            mFitRequested = true;
-        }
-
-        const std::uintptr_t DoubleClickedKey{ed::GetDoubleClickedNode().Get()};
-        const Int32 DoubleClicked{DecodeNode(DoubleClickedKey)};
-        const auto* OpenNode{mEditing->FindNode(DoubleClicked)};
-        const bool OpenMachine{(DoubleClickedKey & GetterBit) == 0 && OpenNode != nullptr && OpenNode->mType == "StateMachine"};
-        ed::End();
-        ed::SetCurrentEditor(nullptr);
-
-        if (OpenMachineId >= 0 || OpenMachine) {
-            OpenStateMachine(OpenMachineId >= 0 ? OpenMachineId : DoubleClicked);
-        }
-    }
-
-    void FAnimGraphEditor::DrawSelection() {
-        ImGui::SeparatorText("Node Properties");
-
-        Asset::FAnimGraphNode* Node{mEditing->FindNode(mSelectedNode)};
-
-        if (Node == nullptr) {
-            return;
-        }
-
-        const Engine::FAnimGraphNodeType* Type{Engine::FAnimGraphNodeRegistry::Find(Node->mType)};
-
-        ImGui::PushID(Node->mId);
-        ImGui::TextDisabled("%s", Type != nullptr ? Type->mTitle.c_str() : Node->mType.c_str());
-
-        Core::TStaticArray<char, 64> Name{};
-
-        std::copy_n(Node->mName.begin(), std::min(Node->mName.size(), Name.size() - 1), Name.begin());
-
-        if (ImGui::InputText("Name", Name.data(), Name.size())) {
-            Node->mName = Name.data();
-            mDirty = true;
-        }
-
-        if (Type == nullptr) {
-            ImGui::PopID();
-
-            return;
-        }
-
-        if (!Type->mParameters.empty()) {
-            ImGui::SeparatorText("Parameters");
-        }
-
-        for (const Engine::FAnimGraphParameterInfo& Info : Type->mParameters) {
-            const Core::FString* Stored{Node->FindParameter(Info.mName)};
-            Core::FString Value{Stored != nullptr ? *Stored : Info.mDefault};
-
-            ImGui::PushID(Info.mName.c_str());
-
-            switch (Info.mType) {
-                case Engine::EAnimGraphParameterType::Float: {
-                    const Core::FString BindingKey{Info.mName + ".Binding"};
-                    const Core::FString* Binding{Node->FindParameter(BindingKey)};
-                    float Number{};
-
-                    std::from_chars(Value.data(), Value.data() + Value.size(), Number);
-
-                    if (Info.mBindable) {
-                        ImGui::SetNextItemWidth(110.0f);
-
-                        if (ImGui::BeginCombo("##Binding", Binding != nullptr ? Binding->c_str() : "(값)")) {
-                            const Core::FString SelectedBinding{Binding != nullptr ? *Binding : Core::FString{}};
-
-                            if (ImGui::Selectable("(값)", Binding == nullptr)) {
-                                Node->SetParameter(BindingKey, {});
-                                mDirty = true;
-                            }
-
-                            for (const Asset::FAnimGraphVariable& Variable : mEditing->GetVariables()) {
-                                if (Variable.mType == Asset::EAnimGraphVariableType::Float && ImGui::Selectable(Variable.mName.c_str(), SelectedBinding == Variable.mName) && SelectedBinding != Variable.mName) {
-                                    Node->SetParameter(BindingKey, Variable.mName);
-                                    mDirty = true;
-                                }
-                            }
-
-                            ImGui::EndCombo();
-                        }
-
-                        Binding = Node->FindParameter(BindingKey);
-                        ImGui::SameLine();
-                    }
-
-                    ImGui::BeginDisabled(Binding != nullptr);
-                    ImGui::SetNextItemWidth(-ImGui::CalcTextSize(Info.mName.c_str()).x - ImGui::GetStyle().ItemInnerSpacing.x);
-
-                    const bool Edited{Info.mMin < Info.mMax ? ImGui::SliderFloat(Info.mName.c_str(), &Number, Info.mMin, Info.mMax, "%.3f") : ImGui::DragFloat(Info.mName.c_str(), &Number, 0.01f, 0.0f, 0.0f, "%.3f")};
-
-                    if (Edited && std::isfinite(Number)) {
-                        Node->SetParameter(Info.mName, FormatFloat(Number));
-                        mDirty = true;
-                    }
-
-                    ImGui::EndDisabled();
-
-                    break;
-                }
-
-                case Engine::EAnimGraphParameterType::Bool: {
-                    bool Flag{Value == "true"};
-
-                    if (ImGui::Checkbox(Info.mName.c_str(), &Flag)) {
-                        Node->SetParameter(Info.mName, Flag ? "true" : "false");
-                        mDirty = true;
-                    }
-
-                    break;
-                }
-
-                case Engine::EAnimGraphParameterType::AnimSequence:
-                case Engine::EAnimGraphParameterType::BlendSpace:
-                case Engine::EAnimGraphParameterType::PhysicsAsset: {
-                    const Asset::EAssetType AssetType{Info.mType == Engine::EAnimGraphParameterType::AnimSequence ? Asset::EAssetType::AnimSequence : Info.mType == Engine::EAnimGraphParameterType::BlendSpace ? Asset::EAssetType::BlendSpace : Asset::EAssetType::PhysicsAsset};
-
-                    if (mCatalog != nullptr && mThumbnails != nullptr && mPicker.Draw(*mCatalog, *mThumbnails, Info.mName.c_str(), Value, AssetType, {}, "None")) {
-                        Node->SetParameter(Info.mName, Value);
-                        mDirty = true;
-                    }
-
-                    break;
-                }
-            }
-
-            ImGui::PopID();
-        }
-
-        ImGui::PopID();
     }
 
 }

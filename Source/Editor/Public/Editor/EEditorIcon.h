@@ -195,7 +195,22 @@ namespace Editor {
         CameraSpeed,
         Reset,
         ParticleSystem,
-        SkyDome
+        SkyDome,
+        Marquee,
+        PaintBrush,
+        PaintBucket,
+        Eyedropper,
+        Hand,
+        Zoom,
+        Export,
+        Undo,
+        Redo,
+        Compare,
+        Eraser,
+        Crop,
+        Cut,
+        Copy,
+        Paste
     };
 
 }

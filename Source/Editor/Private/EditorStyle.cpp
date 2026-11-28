@@ -579,6 +579,101 @@ namespace Editor {
             DrawList->AddCircleFilled(Point(10.0f, 14.0f), 0.95f * Scale, Color);
 
             break;
+        case EIcon::Marquee:
+            for (float Offset{3.0f}; Offset < 17.0f; Offset += 5.0f) {
+                const float End{std::min(Offset + 3.0f, 17.0f)};
+                Line(Offset, 3.0f, End, 3.0f);
+                Line(Offset, 17.0f, End, 17.0f);
+                Line(3.0f, Offset, 3.0f, End);
+                Line(17.0f, Offset, 17.0f, End);
+            }
+            break;
+        case EIcon::PaintBrush: {
+            const Core::TStaticArray<ImVec2, 5> Handle{Point(7.0f, 11.0f), Point(15.0f, 3.0f), Point(17.0f, 3.0f), Point(17.0f, 5.0f), Point(9.0f, 13.0f)};
+            DrawList->AddPolyline(Handle.data(), static_cast<int>(Handle.size()), Color, Thickness, ImDrawFlags_Closed);
+            DrawList->AddBezierCubic(Point(7.0f, 11.0f), Point(4.0f, 10.0f), Point(5.0f, 15.5f), Point(2.5f, 17.0f), Color, Thickness);
+            DrawList->AddBezierCubic(Point(2.5f, 17.0f), Point(6.5f, 17.5f), Point(10.5f, 16.0f), Point(9.0f, 13.0f), Color, Thickness);
+            break;
+        }
+        case EIcon::PaintBucket: {
+            const Core::TStaticArray<ImVec2, 4> Bucket{Point(3.0f, 10.0f), Point(9.0f, 4.0f), Point(15.0f, 10.0f), Point(9.0f, 16.0f)};
+            DrawList->AddPolyline(Bucket.data(), static_cast<int>(Bucket.size()), Color, Thickness, ImDrawFlags_Closed);
+            Line(6.0f, 2.5f, 11.0f, 7.5f);
+            Line(3.0f, 10.0f, 15.0f, 10.0f);
+            DrawList->AddCircleFilled(Point(16.0f, 15.5f), 1.7f * Scale, Color);
+            break;
+        }
+        case EIcon::Eyedropper: {
+            const Core::TStaticArray<ImVec2, 6> Dropper{Point(3.0f, 17.0f), Point(4.0f, 13.0f), Point(13.5f, 3.5f), Point(16.5f, 3.5f), Point(16.5f, 6.5f), Point(7.0f, 16.0f)};
+            DrawList->AddPolyline(Dropper.data(), static_cast<int>(Dropper.size()), Color, Thickness, ImDrawFlags_Closed);
+            Line(9.0f, 6.0f, 14.0f, 11.0f);
+            break;
+        }
+        case EIcon::Hand: {
+            const Core::TStaticArray<ImVec2, 15> Palm{Point(7.0f, 17.5f), Point(3.0f, 12.0f), Point(4.0f, 10.5f), Point(7.0f, 12.5f), Point(7.0f, 4.0f), Point(9.0f, 4.0f), Point(9.0f, 8.0f), Point(9.0f, 2.5f), Point(11.0f, 2.5f), Point(11.0f, 8.0f), Point(13.0f, 4.0f), Point(14.5f, 4.5f), Point(14.5f, 9.0f), Point(17.0f, 7.5f), Point(15.0f, 17.5f)};
+            DrawList->AddPolyline(Palm.data(), static_cast<int>(Palm.size()), Color, Thickness, ImDrawFlags_Closed);
+            break;
+        }
+        case EIcon::Zoom:
+            DrawList->AddCircle(Point(8.3f, 8.3f), 5.4f * Scale, Color, 0, Thickness);
+            Line(12.3f, 12.3f, 17.5f, 17.5f);
+            break;
+        case EIcon::Export:
+            Line(4.0f, 10.0f, 4.0f, 17.0f);
+            Line(4.0f, 17.0f, 16.0f, 17.0f);
+            Line(16.0f, 17.0f, 16.0f, 10.0f);
+            Line(10.0f, 13.0f, 10.0f, 3.0f);
+            Line(6.5f, 6.5f, 10.0f, 3.0f);
+            Line(10.0f, 3.0f, 13.5f, 6.5f);
+            break;
+        case EIcon::Undo:
+        case EIcon::Redo: {
+            const bool Reverse{Icon == EIcon::Redo};
+            const auto TurnPoint{[&Point, Reverse](float X, float Y) {
+                return Point(Reverse ? 20.0f - X : X, Y);
+            }};
+            DrawList->AddLine(TurnPoint(7.0f, 4.0f), TurnPoint(3.0f, 8.0f), Color, Thickness);
+            DrawList->AddLine(TurnPoint(3.0f, 8.0f), TurnPoint(7.0f, 12.0f), Color, Thickness);
+            DrawList->AddBezierCubic(TurnPoint(3.5f, 8.0f), TurnPoint(14.5f, 5.5f), TurnPoint(20.0f, 10.0f), TurnPoint(15.0f, 16.0f), Color, Thickness);
+            break;
+        }
+        case EIcon::Compare:
+            DrawList->AddRect(Point(2.5f, 4.0f), Point(17.5f, 16.0f), Color, 1.0f * Scale, Thickness);
+            Line(10.0f, 4.0f, 10.0f, 16.0f);
+            DrawList->AddTriangleFilled(Point(13.0f, 12.5f), Point(15.5f, 12.5f), Point(15.5f, 7.5f), Color);
+            break;
+        case EIcon::Eraser: {
+            const Core::TStaticArray<ImVec2, 6> Eraser{Point(2.5f, 12.0f), Point(12.0f, 2.5f), Point(17.5f, 8.0f), Point(8.0f, 17.5f), Point(6.0f, 17.5f), Point(2.5f, 14.0f)};
+            DrawList->AddPolyline(Eraser.data(), static_cast<int>(Eraser.size()), Color, Thickness, ImDrawFlags_Closed);
+            Line(7.0f, 7.5f, 12.5f, 13.0f);
+            Line(8.0f, 17.5f, 18.0f, 17.5f);
+            break;
+        }
+        case EIcon::Crop:
+            Line(5.0f, 2.0f, 5.0f, 15.0f);
+            Line(5.0f, 15.0f, 18.0f, 15.0f);
+            Line(2.0f, 5.0f, 15.0f, 5.0f);
+            Line(15.0f, 5.0f, 15.0f, 18.0f);
+            break;
+        case EIcon::Cut:
+            DrawList->AddCircle(Point(5.0f, 5.5f), 2.4f * Scale, Color, 0, Thickness);
+            DrawList->AddCircle(Point(5.0f, 14.5f), 2.4f * Scale, Color, 0, Thickness);
+            Line(7.0f, 7.0f, 17.5f, 15.0f);
+            Line(7.0f, 13.0f, 17.5f, 5.0f);
+            break;
+        case EIcon::Copy:
+            DrawList->AddRect(Point(7.5f, 7.5f), Point(17.0f, 17.5f), Color, 1.0f * Scale, Thickness);
+            Line(3.0f, 13.0f, 3.0f, 3.0f);
+            Line(3.0f, 3.0f, 12.5f, 3.0f);
+            Line(12.5f, 3.0f, 12.5f, 5.0f);
+            Line(3.0f, 13.0f, 5.0f, 13.0f);
+            break;
+        case EIcon::Paste:
+            DrawList->AddRect(Point(4.0f, 4.5f), Point(16.0f, 18.0f), Color, 1.0f * Scale, Thickness);
+            DrawList->AddRect(Point(7.0f, 2.0f), Point(13.0f, 7.0f), Color, 1.0f * Scale, Thickness);
+            Line(7.0f, 10.5f, 13.0f, 10.5f);
+            Line(7.0f, 14.0f, 13.0f, 14.0f);
+            break;
         }
     }
 

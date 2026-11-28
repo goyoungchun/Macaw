@@ -61,6 +61,18 @@ namespace Editor {
             Core::TArray<Core::FString> mValues{};
         };
 
+        struct FNewImage {
+            std::filesystem::path mDirectory{};
+            Core::TStaticArray<char, 256> mName{};
+
+            Core::TStaticArray<float, 4> mColor{1.0f, 1.0f, 1.0f, 1.0f};
+            Core::FString mError{};
+
+            int mWidth{512};
+            int mHeight{512};
+            int mBackground{};
+        };
+
     public:
         /**
          * @brief FContentBrowserWidget의 초기 상태와 전달받은 의존성을 구성합니다.
@@ -236,6 +248,10 @@ namespace Editor {
         void CreateMaterial();
         void CreateMaterialIn(const std::filesystem::path& Directory);
 
+        void BeginNewImage(const std::filesystem::path& Directory);
+        void DrawNewImagePopup();
+        bool CreateImage();
+
         /**
          * @brief 현재 폴더에 새 애니메이션 그래프 에셋을 만듭니다.
          */
@@ -325,6 +341,9 @@ namespace Editor {
         std::filesystem::path mSelectedContentPath{};
         std::filesystem::path mCutContentPath{};
         std::filesystem::path mContextPasteDirectory{};
+
+        FNewImage mNewImage{};
+        bool mOpenNewImage{};
 
         /**
          * @brief 콘텐츠 브라우저에 표시할 최근 오류입니다.

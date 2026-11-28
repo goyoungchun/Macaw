@@ -10,6 +10,7 @@
 #include "FPhysicsAssetEditing.h"
 #include "Asset/FPhysicsAssetUtils.h"
 #include "Viewer/FAssetViewer.h"
+#include "TGL/GraphEditor.h"
 
 #include "Core/Math/FRotator.h"
 #include "Core/Math/FTransform.h"
@@ -25,10 +26,6 @@ namespace Asset {
 }
 
 struct ImVec2;
-
-namespace ax::NodeEditor {
-    struct EditorContext;
-}
 
 namespace Engine {
     class FPrimitiveDrawInterface;
@@ -453,9 +450,11 @@ namespace Editor {
         PhysicsAssetEditing::FShapeRef mSelectedShape{};
 
         /**
-         * @brief 바디·관절 그래프의 노드 에디터 컨텍스트이며 처음 그릴 때 만듭니다.
+         * @brief 현재 그래프 중심에 대한 바디·관절의 노드 및 링크 스냅샷입니다.
          */
-        ax::NodeEditor::EditorContext* mGraphEditor{};
+        TGL::FGraphSnapshot mGraphDocument{};
+        TGL::FReadOnlyGraphSchema mGraphSchema{mGraphDocument}; ///< 물리 관계 표시에서 구조 편집을 비활성화하는 스키마입니다.
+        std::unique_ptr<TGL::FGraphEditor> mGraphEditor{}; ///< 바디·관절 관계를 표시하는 공용 편집기이며 처음 그릴 때 생성합니다.
 
         /**
          * @brief Graph 창이 보여 줄 중심 바디들의 번호이며 선택과 따로 바뀝니다. 비어 있으면 선택한 바디를 씁니다.

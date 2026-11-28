@@ -11,5 +11,6 @@
   "Viewer": { "Public": ["Engine"], "Private": [] },
   "Script": { "Public": [], "Private": ["Core"] },
   "NativeIDE": { "Public": [], "Private": ["Core", "Script"] },
-  "Editor": { "Public": ["Engine", "Platform", "Viewer"], "Private": ["Serialization", "Renderer", "NativeIDE"] }
+  "TGL": { "Public": [], "Private": [] },
+  "Editor": { "Public": ["Engine", "Platform", "Viewer"], "Private": ["Serialization", "Renderer", "NativeIDE", "TGL"] }
 }

@@ -10,13 +10,12 @@
 
 #include "Core/Types.h"
 #include "Editor/FAssetPicker.h"
+#include "FAnimAssetGraphDocuments.h"
+#include "FAnimTransitionGraphEditor.h"
+#include "TGL/GraphEditor.h"
 
 #include <filesystem>
 #include <memory>
-
-namespace ax::NodeEditor {
-    struct EditorContext;
-}
 
 namespace Asset {
     class FAssetManager;
@@ -86,11 +85,6 @@ namespace Editor {
              * @brief 현재 보기에서 편집할 전이 ID입니다.
              */
             Int32 mTransition{-1};
-
-            /**
-             * @brief 현재 보기에서 선택한 상태 또는 전이 ID입니다.
-             */
-            Int32 mSelection{-2};
 
             /**
              * @brief UI에 표시할 이름입니다.
@@ -259,26 +253,10 @@ namespace Editor {
         void DrawGraph();
 
         /**
-         * @brief 포즈 그래프의 변수 Getter 노드를 표시합니다.
+         * @brief 공용 편집 요청의 결과에 따라 저장 필요 상태나 사용자가 볼 오류를 갱신합니다.
+         * @param Edit TGL 문서의 편집 결과입니다.
          */
-        void DrawValueGetters();
-
-        /**
-         * @brief 변수 Getter에서 노드 파라미터로 이어지는 값 연결을 표시합니다.
-         */
-        void DrawValueLinks();
-
-        /**
-         * @brief 이름에 대응하는 그래프 변수 인덱스를 찾습니다.
-         * @param Name 찾을 그래프 변수 이름입니다.
-         * @return 변수 인덱스이며 없으면 InvalidIndex입니다.
-         */
-        Index_t FindVariableIndex(const Core::FString& Name) const;
-
-        /**
-         * @brief 선택한 노드의 이름과 파라미터를 그립니다.
-         */
-        void DrawSelection();
+        void TrackGraphEdit(const TGL::FEditResult& Edit);
 
         /**
          * @brief 중첩 그래프의 탐색 경로와 상위 보기 이동 UI를 표시합니다.
@@ -294,11 +272,6 @@ namespace Editor {
          * @brief Bool 전이 조건 노드와 값 연결을 그리고 편집 입력을 처리합니다.
          */
         void DrawTransitionRule();
-
-        /**
-         * @brief 선택한 상태 또는 전이의 설정 편집 UI를 표시합니다.
-         */
-        void DrawMachineSelection();
 
         /**
          * @brief 선택한 전이 조건 노드의 상수·변수·플레이어 설정을 표시합니다.
@@ -357,11 +330,6 @@ namespace Editor {
         Editor::FAssetPicker mPicker{};
 
         /**
-         * @brief 노드 에디터 컨텍스트입니다.
-         */
-        ax::NodeEditor::EditorContext* mEditor{};
-
-        /**
          * @brief 편집 사본입니다.
          */
         std::unique_ptr<Asset::UAnimGraph> mRootEditing{};
@@ -382,14 +350,12 @@ namespace Editor {
         Core::TArray<FGraphView> mNavigation{};
 
         /**
-         * @brief 그래프 경로별로 소유하는 노드 편집기 컨텍스트입니다.
+         * @brief 중첩 보기 경로별 포즈 그래프 문서입니다.
          */
-        Core::TMap<Core::FString, ax::NodeEditor::EditorContext*> mGraphContexts{};
-
-        /**
-         * @brief 컨텍스트 메뉴를 연 노드 편집기 키입니다.
-         */
-        std::uintptr_t mContextNode{};
+        Core::TMap<Core::FString, std::unique_ptr<Editor::FAnimPoseGraphDocument>> mPoseDocuments{};
+        Core::TMap<Core::FString, std::unique_ptr<Editor::FAnimStateMachineGraphDocument>> mMachineDocuments{}; ///< 중첩 보기 경로별 상태 머신 문서입니다.
+        Core::TMap<Core::FString, std::unique_ptr<TGL::FGraphEditor>> mGraphEditors{}; ///< 포즈와 상태 머신 캔버스의 선택·배치를 보기 경로별로 보관합니다.
+        Core::TMap<Core::FString, std::unique_ptr<Editor::FAnimTransitionGraphEditor>> mRuleEditors{}; ///< 전이 경로별 전이 조건 편집기입니다.
 
         /**
          * @brief Content 기준 경로입니다.
@@ -412,21 +378,6 @@ namespace Editor {
         bool mSaveRequested{};
 
         /**
-         * @brief 선택한 노드 식별자이며 없으면 -2입니다.
-         */
-        Int32 mSelectedNode{-2};
-
-        /**
-         * @brief 다음 그리기에서 저장된 위치를 노드 에디터에 적용할지 여부입니다.
-         */
-        bool mApplyPositions{};
-
-        /**
-         * @brief 위치를 적용한 다음 프레임에 화면을 그래프에 맞출지 여부입니다.
-         */
-        bool mFitRequested{};
-
-        /**
          * @brief 저장하지 않은 변경이 있는지 여부입니다.
          */
         bool mDirty{};
@@ -435,16 +386,6 @@ namespace Editor {
          * @brief 창이 열려 있는지 여부입니다.
          */
         bool mOpen{};
-
-        /**
-         * @brief 노드 추가 메뉴를 연 캔버스 위치입니다. 새 노드를 이 위치에 놓습니다.
-         */
-        float mCreateX{};
-
-        /**
-         * @brief 새 노드를 배치할 그래프 Y 좌표입니다.
-         */
-        float mCreateY{};
 
         /**
          * @brief 새 변수 이름 입력 버퍼입니다.

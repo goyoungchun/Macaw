@@ -2010,6 +2010,16 @@ namespace Asset {
         return true;
     }
 
+    bool FAssetManager::SaveTexture(const std::filesystem::path& Path, UTexture2D& Texture, UTexture2D& Updated, Core::FString& Error) {
+        Texture.SwapImageData(Updated);
+        if (SaveTexture(Path, Texture, Error)) {
+            return true;
+        }
+
+        Texture.SwapImageData(Updated);
+        return false;
+    }
+
     bool FAssetManager::IsTextureSource(const std::filesystem::path& Path) {
         const auto Extension{Core::FilePath::ToLowerExtension(Path)};
 

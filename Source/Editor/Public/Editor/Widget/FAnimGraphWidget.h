@@ -9,11 +9,7 @@
 #include "Core/Types.h"
 #include "Editor/Widget/FEditorContextWidget.h"
 
-#include <unordered_set>
-
-namespace ax::NodeEditor {
-    struct EditorContext;
-}
+#include <memory>
 
 namespace Engine {
     class UAnimInstance;
@@ -33,6 +29,12 @@ namespace Editor {
      * 처음 보는 노드만 배치하고(그래프 에셋이면 에디터에서 놓은 위치, 아니면 자동 배치), 이후에는 사용자가 옮긴 위치를 에디터를 끌 때까지 유지합니다.
      */
     class FAnimGraphWidget final : public Editor::FEditorContextWidget {
+    private:
+        /**
+         * @brief 런타임 문서 스냅샷, 공용 편집기와 현재 소스의 배치 상태입니다.
+         */
+        struct FGraphState;
+
     public:
         /**
          * @brief 패널과 노드 에디터 컨텍스트를 만듭니다.
@@ -89,25 +91,14 @@ namespace Editor {
 
     private:
         /**
-         * @brief 노드 에디터 컨텍스트입니다. 패널이 소유합니다.
+         * @brief 패널이 소유하는 TGL 문서와 캔버스 상태입니다.
          */
-        ax::NodeEditor::EditorContext* mEditor{};
-
-        /**
-         * @brief 이미 위치를 정한 노드의 안정 식별자입니다.
-         * @details 플레이할 때마다 노드 객체는 새로 만들어지지만 식별자는 같으므로, 여기 있는 노드는 다시 배치하지 않고 사용자가 옮긴 위치를 유지합니다.
-         */
-        std::unordered_set<Uint64> mPlacedNodes{};
+        std::unique_ptr<FGraphState> mGraph{};
 
         /**
          * @brief 다음 그리기에서 모든 노드를 다시 배치할지 여부입니다.
          */
         bool mLayoutRequested{};
-
-        /**
-         * @brief 배치 다음 프레임에 그래프 전체가 보이도록 화면을 맞출지 여부입니다. 노드 크기는 그린 뒤에 정해지므로 한 프레임 늦춥니다.
-         */
-        bool mFitRequested{};
 
         /**
          * @brief 변수 영역의 너비이며 픽셀 단위입니다.
