@@ -8,6 +8,7 @@
 #include "Editor/Widget/FPlaceActorsWidget.h"
 #include "Editor/FEditorContext.h"
 #include "Editor/FAssetDragDrop.h"
+#include "EditorStyle.h"
 #include "Engine/FProject.h"
 #include "Asset/FAssetManager.h"
 #include "Asset/UTexture2D.h"
@@ -156,6 +157,12 @@ namespace Editor {
                 continue;
             }
 
+            if (Name == "ALandscape") {
+                DrawEntry(Name, "Landscape", "SceneComponent", Editor::EPlaceActorIcon::None, Editor::EEditorIcon::Landscape);
+
+                continue;
+            }
+
             if (Name == "APawn") {
                 DrawEntry(Name, "Pawn", "SceneComponent", Editor::EPlaceActorIcon::Pawn);
 
@@ -174,7 +181,7 @@ namespace Editor {
     /**
      * @brief 아이콘·설명과 드래그 페이로드를 갖는 액터 프리셋 항목을 그립니다.
      */
-    void Editor::FPlaceActorsWidget::DrawEntry(const Core::FString& Preset, const Core::FString& Label, const char* Components, Editor::EPlaceActorIcon Icon) {
+    void Editor::FPlaceActorsWidget::DrawEntry(const Core::FString& Preset, const Core::FString& Label, const char* Components, Editor::EPlaceActorIcon Icon, std::optional<Editor::EEditorIcon> VectorIcon) {
         const ImGuiTextFilter Filter{mSearch.data()};
 
         if (!Filter.PassFilter(Label.c_str())) {
@@ -183,12 +190,18 @@ namespace Editor {
 
         ImGui::PushID(Preset.c_str());
 
-        if (ID3D11ShaderResourceView* Resource{mIcons[static_cast<Index_t>(Icon)].Get()}; Resource != nullptr) {
-            ImGui::Image(ImTextureRef{static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(Resource))}, {32.0f, 32.0f});
+        constexpr float RowHeight{ 32.0f };
+
+        if (VectorIcon) {
+            ImGui::Dummy({ RowHeight, RowHeight });
+            EditorStyle::DrawIcon(*VectorIcon, ImGui::GetItemRectMin(), RowHeight, ImGui::GetColorU32(ImGuiCol_Text));
+            ImGui::SameLine();
+        } else if (ID3D11ShaderResourceView* Resource{mIcons[static_cast<Index_t>(Icon)].Get()}; Resource != nullptr) {
+            ImGui::Image(ImTextureRef{static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(Resource))}, { RowHeight, RowHeight });
             ImGui::SameLine();
         }
 
-        ImGui::Selectable(Label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick, {0.0f, 32.0f});
+        ImGui::Selectable(Label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick, { 0.0f, RowHeight });
 
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             GetEditorContext()->SpawnActorPreset(Preset);

@@ -434,6 +434,15 @@ namespace Editor {
             DrawList->PathStroke(Color, ImDrawFlags_None, Thickness);
 
             break;
+        case EIcon::Landscape: {
+            const Core::TStaticArray<ImVec2, 5> Ridge{ Point(2.0f, 14.0f), Point(7.0f, 5.0f), Point(11.0f, 10.5f), Point(14.0f, 7.5f), Point(18.0f, 14.0f) };
+
+            DrawList->AddPolyline(Ridge.data(), static_cast<int>(Ridge.size()), Color, Thickness, ImDrawFlags_None);
+            Line(2.0f, 17.0f, 18.0f, 17.0f);
+
+            break;
+        }
+
         case EIcon::Sequence:
             DrawList->AddRect(Point(2.0f, 4.0f), Point(18.0f, 16.0f), Color, Scale, ImDrawFlags_None, Thickness);
             Line(7.0f, 4.0f, 7.0f, 16.0f);

@@ -25,6 +25,7 @@
 #include "Engine/ULevel.h"
 #include "Engine/AActor.h"
 #include "Engine/ADecalActor.h"
+#include "Engine/Landscape/ALandscape.h"
 #include "Engine/ALevelSequenceActor.h"
 #include "Engine/AParticleSystemActor.h"
 #include "Engine/APawn.h"
@@ -688,6 +689,8 @@ namespace Editor {
             Icon = EActorIcon::SkyAtmosphere;
         } else if (Actor.IsA<Engine::AWindSourceActor>()) {
             Icon = EActorIcon::Wind;
+        } else if (Actor.IsA<Engine::ALandscape>()) {
+            Icon = EActorIcon::EmptyActor;
         } else if (Actor.GetClass() == Engine::AActor::StaticClass() && Root->GetClass() == Engine::USceneComponent::StaticClass()) {
             for (const auto& Component : Actor.GetComponents()) {
                 if (Component->IsA<Engine::UPrimitiveComponent>()) {

@@ -11,6 +11,7 @@
 #include "Asset/FAssetManager.h"
 #include "Asset/UTexture2D.h"
 #include "Engine/AActor.h"
+#include "Engine/Landscape/ALandscape.h"
 #include "Engine/ALevelSequenceActor.h"
 #include "Engine/AParticleSystemActor.h"
 #include "Engine/APawn.h"
@@ -22,6 +23,7 @@
 #include "Engine/Component/UBillboardTextComponent.h"
 #include "Engine/Component/UCameraComponent.h"
 #include "Engine/Component/UHeightFogComponent.h"
+#include "Engine/Landscape/ULandscapeComponent.h"
 #include "Engine/Component/ULightComponentBase.h"
 #include "Engine/Component/UMeshComponent.h"
 #include "Engine/Component/UParticleSystemComponent.h"
@@ -164,6 +166,10 @@ namespace Editor {
          * @return 객체를 대표하는 에디터 아이콘입니다.
          */
         EditorStyle::EIcon ObjectIcon(CoreUObject::UObject* Object) {
+            if (Object->IsA<Engine::ALandscape>() || Object->IsA<Engine::ULandscapeComponent>()) {
+                return EditorStyle::EIcon::Landscape;
+            }
+
             if (CoreUObject::Cast<Engine::ALevelSequenceActor>(Object) != nullptr) {
                 return EditorStyle::EIcon::Sequence;
             }

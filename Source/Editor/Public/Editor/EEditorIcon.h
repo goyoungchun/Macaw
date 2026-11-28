@@ -210,7 +210,8 @@ namespace Editor {
         Crop,
         Cut,
         Copy,
-        Paste
+        Paste,
+        Landscape
     };
 
 }
